@@ -9,9 +9,28 @@ Es un proyecto aparte de `../Elektron-Emu/` (MM Voice). No comparten build ni RO
 
 ## Estado
 
-Todavía no hay código. El análisis de la ROM y el plan están en `NOTAS.md`: la CPU es
-un 68331, el mismo que emula Gearmulator para el Nord Lead 2X (`source/nord/n2x`), y
-esa emulación es la plantilla.
+**El OS 3.03 arranca en el 68331 emulado y llega a su bucle principal.** Faltan los DSP,
+el panel y el MIDI. El mapa de memoria, el cargador y el plan están en `NOTAS.md`. La
+plantilla es la emulación del Nord Lead 2X de Gearmulator (`source/nord/n2x`).
+
+## Compilar y probar
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target g1boot -j$(nproc)
+./build/tools/g1boot Roms/NORD-MODULAR-RACK-VER-3.03.BIN 60     # 60 M de instrucciones
+./build/tools/g1boot Roms/NORD-MODULAR-RACK-VER-3.03.BIN dis C800 C900   # desensamblar
+```
+
+`g1boot` dice por dónde va el PC, en qué bucle se queda, los chip-selects programados y
+cada acceso a hardware que aún no se emula. Ojo: el OS corre en RAM (`$100000`) copiado
+desde la ROM en `$C800`, así que la dirección de RAM X está en la ROM en `X - $100000 + $C800`.
+
+| Ruta | Qué es |
+| --- | --- |
+| `g1Lib/g1mc.*` | La CPU (68331) con su mapa de memoria: ROM, RAM y flash. |
+| `g1Lib/g1flash.h` | La flash AMD Am29F080 de `$300000`. |
+| `tools/g1boot.cpp` | Arranque sin interfaz y desensamblador. |
 
 ## Reglas
 

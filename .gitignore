@@ -4,3 +4,5 @@ Roms/
 *.syx
 *.zip
 build/
+build-*/
+bin/

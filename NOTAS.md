@@ -23,6 +23,40 @@ Lo que se ve dentro (2026-09-18):
 | `$60000`–`$68xxx` | Más código/datos. |
 | `$6C000`–`$7FFFF` | Vacío (`0xFF`). |
 
+## Arranque emulado (2026-09-18)
+
+`tools/g1boot` ejecuta la ROM en el 68331 de Gearmulator y **el OS 3.03 llega a su bucle
+principal**. Lo que se ha aprendido por el camino:
+
+**El cargador** (`$000000`–`$0007FF`) mira el panel al encender: selecciona filas en `$202005`
+y lee `$201800`. Según las teclas pulsadas elige:
+
+| Teclas (filas leídas) | Qué hace |
+| --- | --- |
+| ninguna | Copia a RAM el OS de la flash de `$300000` (longitud en `+8`, datos desde `+$20`) y salta a `$100000`. Si la flash está vacía (`$FFFFFFFF`), va al modo actualización. |
+| D1=`$7F`, D2=`$BF` | Modo actualización por MIDI: copia a RAM el programa de `$0800` (48 KB, *Update utility*). |
+| D1=`$7F`, D3=`$F7` | Arranca el **OS de fábrica que va en la propia ROM** (`$C800`, `$1CE01` palabras largas). |
+| D3=`$EF` y D1=`$F7` / `$FB` | Tests de fábrica y de RAM. |
+
+**El mapa de memoria** (chip-selects que programa el OS):
+
+| Dirección | CS | Qué es |
+| --- | --- | --- |
+| `$000000` | BOOT | ROM de 512 KB (cargador, utilidad de actualización, OS de fábrica) |
+| `$100000`–`$1FFFFF` | 8/9/10 | RAM de 1 MB (el OS corre aquí) |
+| `$200000`, `$200008`, `$200010`, `$200018` | 0 | **Los 4 DSP56303 por HI08**, 8 registros cada uno: host command en `+1` (CVR, valor `$CD`), estado en `+2` (ISR), palabra de 24 bits en `+4/+6` |
+| `$200020`–`$20003F` | 0 | Probablemente la tarjeta de expansión (otros 4 DSP); el cargador escribe en `$200038` |
+| `$201000` | 1 | Escritura de 8 bits, muy frecuente: ¿display? |
+| `$201800` | 4 | Lectura de la matriz de botones |
+| `$202000`–`$202007` | 2 | Filas de botones y LEDs |
+| `$202800` | 3 | Lectura: ¿potenciómetros (ADC)? |
+| `$300000` | 5/7 | **Flash de 1 MB** (8 bits): el OS instalado y los patches |
+
+**La flash:** el OS acepta un Intel 28F008 (`$89/$A6`), un Fujitsu MBM29F080 (`$04/$D5`) o
+un AMD Am29F080 (`$01/$D5`), y si no se para en un bucle infinito. Se emula el AMD
+(`g1Lib/g1flash.h`). En el primer arranque el OS formatea la zona de patches: borra 10
+sectores y escribe 64 KB.
+
 ## El hardware
 
 - **CPU: Motorola 68331.** Lo dice el propio código: escribe en SIM (`$FFFAxx`), en
@@ -43,8 +77,7 @@ hilos, que es lo que ya hace Gearmulator con el Virus TI.
 
 ## Pasos
 
-1. **Arranque:** montar `g1Lib` copiando la estructura de `n2xLib`, cargar la flash
-   y ver hasta dónde llega el 68331 (log de accesos a registros desconocidos).
+1. ~~**Arranque:** que el 68331 llegue al OS.~~ Hecho: llega al bucle principal.
 2. **DSP:** localizar cómo sube el código a los DSP (HI08) y cuántos inicializa.
 3. **MIDI:** conectar el puerto serie del QSM a un MIDI virtual y que NME detecte el sinte.
 4. **Patch:** mandar un patch desde NME y que suene.
