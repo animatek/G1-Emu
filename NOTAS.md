@@ -57,6 +57,29 @@ un AMD Am29F080 (`$01/$D5`), y si no se para en un bucle infinito. Se emula el A
 (`g1Lib/g1flash.h`). En el primer arranque el OS formatea la zona de patches: borra 10
 sectores y escribe 64 KB.
 
+## Los DSP (2026-09-18)
+
+**Los 4 DSP56303 arrancan con el programa del OS** (`g1Lib/g1dsp`). Cómo funciona:
+
+- **8 puertos HI08** en `$200000 + 8·n`: DSP 0–3 en la placa base y 4–7 en la expansión. El OS
+  tiene la tabla de punteros en `$15BD68` y guarda cuántos DSP hay en `$1AB91C`.
+- **El cargador** solo envía un programa de 52 palabras a los DSP 3 y 7. Ese programa configura
+  el PLL y los dos ESSI, manda `$155` dos veces por ellos (¿inicializa el códec?), levanta HF2
+  ("estoy aquí"), espera HF0 de la CPU y vuelve a su ROM (`jmp $FF0000`). Así detecta el OS la
+  expansión: mira si el DSP 7 levantó HF2.
+- **El OS** carga cada DSP con un arranque HI08 estándar (longitud `$205`, dirección 0). Hay tres
+  programas: el del DSP 0 (`$144644`), el de los intermedios (`$144C18`) y el del último
+  (`$1451EC`). Después manda tablas de 128 palabras, cada una seguida de un *host command*
+  (`$BF`, `$B2`, `$B3`…). La rutina de envío (`$10C0E0`) espera TXDE y, si no llega en 10
+  intentos, **descarta la palabra en silencio**: por eso sin DSP el OS seguía como si nada.
+- **Emulación:** todo en un hilo. Cada DSP avanza ~6 ciclos por ciclo de CPU (la CPU va a
+  20,97 MHz tras programar el SYNCR) y se pone al día cuando la CPU toca su puerto. Las banderas
+  HF0/HF1 del ICR van al HSR del DSP y HF2/HF3 vuelven al ISR. El salto a `$FF0000` rearma la
+  ROM de arranque. Los ESSI reciben silencio continuo (como un códec) y su salida se descarta.
+- **Resultado:** DSP 0–2 arrancan una vez y DSP 3 dos (cargador + OS). Los cuatro quedan en su
+  bucle (`$16C`) generando tramas de audio. Velocidad: **~88% del tiempo real** en un núcleo del
+  5700X, sin patch cargado.
+
 ## El hardware
 
 - **CPU: Motorola 68331.** Lo dice el propio código: escribe en SIM (`$FFFAxx`), en
@@ -78,7 +101,7 @@ hilos, que es lo que ya hace Gearmulator con el Virus TI.
 ## Pasos
 
 1. ~~**Arranque:** que el 68331 llegue al OS.~~ Hecho: llega al bucle principal.
-2. **DSP:** localizar cómo sube el código a los DSP (HI08) y cuántos inicializa.
+2. ~~**DSP:** que el OS cargue sus programas en los DSP.~~ Hecho: los 4 arrancan.
 3. **MIDI:** conectar el puerto serie del QSM a un MIDI virtual y que NME detecte el sinte.
 4. **Patch:** mandar un patch desde NME y que suene.
 

@@ -7,7 +7,12 @@
 
 #include "mc68k/mc68k.h"
 
+#include "g1dsp.h"
 #include "g1flash.h"
+
+#include "mc68k/hdi08.h"
+
+#include <memory>
 
 #include <array>
 #include <cstdint>
@@ -36,6 +41,11 @@ namespace g1
 	static constexpr uint32_t g_romOsOffset = 0xc800;
 	static constexpr uint32_t g_romOsLongs = 0x1ce01;
 
+	// 8 puertos HI08 en $200000 + 8*n: DSP 0-3 en la placa base, 4-7 en la expansion.
+	static constexpr uint32_t g_hostPorts = 8;
+	static constexpr uint32_t g_dspCount = 4;			// G1 sin tarjeta de expansion
+	static constexpr uint32_t g_dspCyclesPerUcCycle = 6;	// aproximado: DSP ~100 MHz, CPU ~16 MHz
+
 	struct UnknownAccess
 	{
 		uint32_t reads = 0;
@@ -49,6 +59,7 @@ namespace g1
 	public:
 		explicit Microcontroller(const std::vector<uint8_t>& _rom);
 
+		uint32_t exec() override;
 		uint16_t readImm16(uint32_t _addr) override;
 		uint16_t read16(uint32_t _addr) override;
 		uint8_t read8(uint32_t _addr) override;
@@ -59,17 +70,32 @@ namespace g1
 		const std::map<uint32_t, UnknownAccess>& unknownAccesses() const { return m_unknown; }
 		uint32_t romWrites() const { return m_romWrites; }
 
+		// Traza de los accesos a los puertos HI08 ($200000-$20003F), en orden.
+		struct HostAccess { uint32_t addr; uint32_t value; uint32_t pc; bool write; uint8_t size; };
+		std::vector<HostAccess>& hostTrace() { return m_hostTrace; }
+
 		// Deja en la flash el OS de fabrica de la ROM, como lo dejaria una actualizacion.
 		void installRomOsInFlash();
 		Flash& getFlash() { return m_flash; }
+		Dsp& getDsp(uint32_t _i) { return *m_dsps[_i]; }
+		uint64_t ucCycles() const { return m_ucCycles; }
 
 	private:
 		bool isInternalPeripheral(uint32_t _addr) const { return (_addr & 0xfff000) == 0xfff000; }
+		static bool isHostPort(uint32_t _addr) { return _addr >= g_dspAddress && _addr < g_dspAddress + g_hostPorts * 8; }
+		mc68k::Hdi08& hostPort(uint32_t _addr) { return m_hostPorts[(_addr - g_dspAddress) >> 3]; }
+		static mc68k::PeriphAddress hostReg(uint32_t _addr) { return static_cast<mc68k::PeriphAddress>(_addr & 7); }
+		void traceHost(uint32_t _addr, bool _write, uint32_t _value);
+		void catchUpDsps();
 		void logUnknown(uint32_t _addr, bool _write, uint32_t _value);
 
 		std::vector<uint8_t> m_mem;		// ROM + RAM en un solo bloque
 		Flash m_flash;					// $300000
 		std::map<uint32_t, UnknownAccess> m_unknown;
+		std::vector<HostAccess> m_hostTrace;
+		std::array<mc68k::Hdi08, g_hostPorts> m_hostPorts;
+		std::array<std::unique_ptr<Dsp>, g_dspCount> m_dsps;
+		uint64_t m_ucCycles = 0;
 		uint32_t m_romWrites = 0;
 	};
 }

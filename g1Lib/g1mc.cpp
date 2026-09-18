@@ -12,6 +12,8 @@ namespace g1
 	Microcontroller::Microcontroller(const std::vector<uint8_t>& _rom) : m_mem(g_memSize, 0)
 	{
 		std::copy_n(_rom.begin(), std::min<size_t>(_rom.size(), g_romSize), m_mem.begin());
+		for(uint32_t i = 0; i < g_dspCount; ++i)
+			m_dsps[i] = std::make_unique<Dsp>(m_hostPorts[i], i);
 		reset();	// lee la pila y el PC de los vectores en $0 y $4
 	}
 
@@ -31,6 +33,29 @@ namespace g1
 		return mc68k::memoryOps::readU16(m_mem.data(), _addr & (g_memSize - 1));
 	}
 
+	uint32_t Microcontroller::exec()
+	{
+		const auto cycles = Mc68k::exec();
+		m_ucCycles += cycles;
+		for(auto& port : m_hostPorts)
+			port.exec(cycles);
+		if((m_ucCycles & 0x3ff) < cycles)	// cada ~1000 ciclos de CPU
+			catchUpDsps();
+		return cycles;
+	}
+
+	void Microcontroller::catchUpDsps()
+	{
+		for(auto& dsp : m_dsps)
+			dsp->catchUp(m_ucCycles * g_dspCyclesPerUcCycle);
+	}
+
+	void Microcontroller::traceHost(const uint32_t _addr, const bool _write, const uint32_t _value)
+	{
+		if(m_hostTrace.size() < 200000)
+			m_hostTrace.push_back({_addr, _value, getPC(), _write, 0});
+	}
+
 	void Microcontroller::logUnknown(const uint32_t _addr, const bool _write, const uint32_t _value)
 	{
 		auto& a = m_unknown[_addr];
@@ -47,6 +72,12 @@ namespace g1
 			return mc68k::memoryOps::readU16(m_mem.data(), addr);
 		if(isInternalPeripheral(addr))
 			return Mc68k::read16(addr);
+		if(isHostPort(addr))
+		{
+			traceHost(addr, false, 0);
+			catchUpDsps();
+			return hostPort(addr).read16(hostReg(addr));
+		}
 		if(addr >= g_flashAddress && addr < g_flashAddress + g_flashSize - 1)
 			return static_cast<uint16_t>((m_flash.read(addr - g_flashAddress) << 8) | m_flash.read(addr - g_flashAddress + 1));
 		logUnknown(addr, false, 0);
@@ -62,6 +93,12 @@ namespace g1
 			return m_mem[addr];
 		if(isInternalPeripheral(addr))
 			return Mc68k::read8(addr);
+		if(isHostPort(addr))
+		{
+			traceHost(addr, false, 0);
+			catchUpDsps();
+			return hostPort(addr).read8(hostReg(addr));
+		}
 		if(addr >= g_flashAddress && addr < g_flashAddress + g_flashSize)
 			return m_flash.read(addr - g_flashAddress);
 		logUnknown(addr, false, 0);
@@ -87,6 +124,13 @@ namespace g1
 		if(isInternalPeripheral(addr))
 		{
 			Mc68k::write16(addr, _val);
+			return;
+		}
+		if(isHostPort(addr))
+		{
+			traceHost(addr, true, _val);
+			catchUpDsps();
+			hostPort(addr).write16(hostReg(addr), _val);
 			return;
 		}
 		if(addr >= g_flashAddress && addr < g_flashAddress + g_flashSize - 1)
@@ -115,6 +159,13 @@ namespace g1
 		if(isInternalPeripheral(addr))
 		{
 			Mc68k::write8(addr, _val);
+			return;
+		}
+		if(isHostPort(addr))
+		{
+			traceHost(addr, true, _val);
+			catchUpDsps();
+			hostPort(addr).write8(hostReg(addr), _val);
 			return;
 		}
 		if(addr >= g_flashAddress && addr < g_flashAddress + g_flashSize)

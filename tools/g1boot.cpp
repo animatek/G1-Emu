@@ -73,6 +73,7 @@ int main(int argc, char** argv)
 	const uint64_t steps = (argc > 2 ? std::stoull(argv[2]) : 20) * 1000000ull;
 	mc.installRomOsInFlash();
 	std::printf("reset: PC=$%06x SP=$%06x\n", mc.getPC(), mc.getAReg(7));
+	std::fflush(stdout);
 
 	std::array<uint32_t, 64> lastPcs{};	// ultimos PCs, para ver como se llega a un fallo
 	size_t lastPcPos = 0;
@@ -105,7 +106,11 @@ int main(int argc, char** argv)
 		if(report != lastReport)
 		{
 			lastReport = report;
-			std::printf("  %3u%%  PC=$%06x  ciclos=%llu\n", report * 10, mc.getPC(), static_cast<unsigned long long>(cycles));
+			std::printf("  %3u%%  PC=$%06x  ciclos=%llu  DSP:", report * 10, mc.getPC(), static_cast<unsigned long long>(cycles));
+			for(uint32_t d = 0; d < g1::g_dspCount; ++d)
+				std::printf(" %u:%s/%06x", d, mc.getDsp(d).booted() ? "on" : "boot", mc.getDsp(d).dsp().getPC().toWord());
+			std::printf("\n");
+			std::fflush(stdout);
 		}
 	}
 
@@ -118,6 +123,52 @@ int main(int argc, char** argv)
 		char dis[128];
 		mc.disassemble(hot[i].second, dis);
 		std::printf("  $%06x  %10llu  %s\n", hot[i].second, static_cast<unsigned long long>(hot[i].first), dis);
+	}
+
+	// Traza HI08: por cada puerto, las primeras escrituras (palabras de 24 bits reconstruidas)
+	{
+		std::map<uint32_t, std::vector<std::string>> perPort;
+		std::map<uint32_t, uint32_t> pendingHigh;
+		for(const auto& a : mc.hostTrace())
+		{
+			const auto port = a.addr & ~7u;
+			auto& v = perPort[port];
+			if(v.size() >= 40 && !(port == 0x200018 && v.size() < 140)) continue;
+			char buf[64];
+			const auto reg = a.addr & 7;
+			if(!a.write) { std::snprintf(buf, sizeof(buf), "r%u", reg); if(v.empty() || v.back() != buf) v.push_back(buf); continue; }
+			if(reg == 4) { pendingHigh[port] = a.value; continue; }
+			if(reg == 6) std::snprintf(buf, sizeof(buf), "TX:%06x", ((pendingHigh[port] & 0xff) << 16) | (a.value & 0xffff));
+			else std::snprintf(buf, sizeof(buf), "w%u=%02x", reg, a.value & 0xff);
+			v.push_back(buf);
+		}
+		std::printf("\ntraza HI08 (primeros eventos por puerto):\n");
+		for(auto& [port, v] : perPort)
+		{
+			std::printf("  $%06x:", port);
+			for(auto& e : v) std::printf(" %s", e.c_str());
+			std::printf("\n");
+		}
+	}
+
+	// Tablas de punteros a los puertos HI08 que usa el OS (RAM)
+	std::printf("\npunteros en RAM:");
+	for(uint32_t a : {0x15bd60u, 0x15bd70u, 0x15bd80u, 0x15bd90u, 0x144640u})
+	{
+		std::printf("\n  $%06x:", a);
+		for(uint32_t i = 0; i < 16; i += 4)
+			std::printf(" %08x", (static_cast<uint32_t>(mc.read16(a + i)) << 16) | mc.read16(a + i + 2));
+	}
+	std::printf("\n  num DSP ($1ab91c) = %u\n", mc.read8(0x1ab91c));
+
+	std::printf("\nDSP:\n");
+	for(uint32_t i = 0; i < g1::g_dspCount; ++i)
+	{
+		auto& d = mc.getDsp(i);
+		std::printf("  DSP%u  arrancado=%d veces=%u paradas=%llu tramas=%llu  PC=$%06x  ciclos=%llu  HCR=%06x HSR=%06x\n", i, d.booted(), d.bootCount(),
+			static_cast<unsigned long long>(d.stalls()), static_cast<unsigned long long>(d.audioFrames()),
+			d.dsp().getPC().toWord(), static_cast<unsigned long long>(d.dsp().getCycles()),
+			d.hdi08().readControlRegister(), d.hdi08().readStatusRegister());
 	}
 
 	printChipSelects(mc);

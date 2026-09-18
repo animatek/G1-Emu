@@ -1,0 +1,78 @@
+[Header]
+Version=Nord Modular patch 3.0
+0 127 0 127 2 0 0 1 4000 2 0 0 0 0 15 2 1 1 1 1 1 1 1 
+[/Header]
+[ModuleDump]
+1 
+1 7 2 3 
+2 4 2 9 
+[/ModuleDump]
+[ModuleDump]
+0 
+[/ModuleDump]
+[CurrentNoteDump]
+64 0 0 64 0 0 
+[/CurrentNoteDump]
+[CableDump]
+1 
+0 2 0 0 1 0 1 
+0 2 1 0 1 0 1 
+[/CableDump]
+[CableDump]
+0 
+[/CableDump]
+[ParameterDump]
+1 
+1 7 10 64 64 64 64 0 0 0 0 0 0 
+2 4 3 100 0 0 
+[/ParameterDump]
+[ParameterDump]
+0 
+[/ParameterDump]
+[MorphMapDump]
+0 0 0 0 
+[/MorphMapDump]
+[KeyboardAssignment]
+0 0 0 0 
+[/KeyboardAssignment]
+[KnobMapDump]
+2 1 0 0 
+2 1 1 1 
+[/KnobMapDump]
+[CtrlMapDump]
+[/CtrlMapDump]
+[CustomDump]
+1 
+1 1 0 
+[/CustomDump]
+[CustomDump]
+0 
+[/CustomDump]
+[NameDump]
+1 
+1 OscA
+2 2Output
+[/NameDump]
+[NameDump]
+0 
+[/NameDump]
+[NME]
+Id=ca890bd7-ae8d-4a10-9b76-a4eed12aad9e
+[/NME]
+[Notes]
+HORIZONTES - original de cero / Codex / 2026-09-13
+Slot D; banco 4, posicion 13.
+Re menor armonica: D E F G A Bb C#. A4=440 Hz, fine=64.
+Autonomo: no necesita notas MIDI ni mantener teclas. Una voz.
+Contramelodia aguda continua. Notas de azar suave y un pedal D5; la mezcla deriva sin golpes ni silencios programados. La FM conserva relaciones armonicas enteras.
+KeyQuant usa E como cero: osciladores modulados en E, transpuestos solo por octavas.
+Knobs:
+1: Destello de armonicos
+2: Extension de la nube
+3: Pedal D5 / contramelodia
+4: Resonancia
+5: Color cristalino
+6: Ambito de la contramelodia
+7: Velocidad del azar
+8: Volumen
+[/Notes]
