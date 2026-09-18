@@ -10,8 +10,9 @@ Es un proyecto aparte de `../Elektron-Emu/` (MM Voice). No comparten build ni RO
 ## Estado
 
 **El OS 3.03 arranca en el 68331 emulado y carga sus programas en los 4 DSP56303**, que
-quedan corriendo; todo va al ~88% del tiempo real. Faltan el MIDI (para NME), sacar el
-audio del DSP 3 y el panel. El mapa de memoria, el cargador y el plan están en `NOTAS.md`. La
+quedan corriendo; todo va al ~88% del tiempo real. **Contesta al saludo de NME por el PC
+PORT.** Faltan: exponer el PC PORT y el MIDI como puertos MIDI virtuales, sacar el audio del
+DSP 3 y el panel. El mapa de memoria, el cargador y el plan están en `NOTAS.md`. La
 plantilla es la emulación del Nord Lead 2X de Gearmulator (`source/nord/n2x`).
 
 ## Compilar y probar
@@ -31,6 +32,7 @@ desde la ROM en `$C800`, así que la dirección de RAM X está en la ROM en `X -
 | --- | --- |
 | `g1Lib/g1mc.*` | La CPU (68331) con su mapa de memoria: ROM, RAM y flash. |
 | `g1Lib/g1flash.h` | La flash AMD Am29F080 de `$300000`. |
+| `g1Lib/g1duart.h` | El PC PORT: DUART SCN2681 en bus paralelo (puerto GP + puerto E). |
 | `g1Lib/g1dsp.*` | Un DSP56303 con su ROM de arranque HI08, conectado al puerto host de la CPU. |
 | `tools/dspdis.cpp` | Desensamblador de DSP56300 (palabras en hex por stdin). |
 | `tools/g1boot.cpp` | Arranque sin interfaz y desensamblador. |

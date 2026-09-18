@@ -9,11 +9,14 @@
 
 namespace g1
 {
-	Microcontroller::Microcontroller(const std::vector<uint8_t>& _rom) : m_mem(g_memSize, 0)
+	Microcontroller::Microcontroller(const std::vector<uint8_t>& _rom) : m_mem(g_memSize, 0), m_sci(getQSM(), static_cast<float>(g_sciRate))
 	{
 		std::copy_n(_rom.begin(), std::min<size_t>(_rom.size(), g_romSize), m_mem.begin());
 		for(uint32_t i = 0; i < g_dspCount; ++i)
 			m_dsps[i] = std::make_unique<Dsp>(m_hostPorts[i], i);
+
+		// Bus del DUART: el puerto E lleva /CS, /RD, /WR y la direccion del registro.
+		getPortE().setWriteTXCallback([this](const mc68k::Port& _port) { onPortE(_port.read()); });
 		reset();	// lee la pila y el PC de los vectores en $0 y $4
 	}
 
@@ -41,7 +44,47 @@ namespace g1
 			port.exec(cycles);
 		if((m_ucCycles & 0x3ff) < cycles)	// cada ~1000 ciclos de CPU
 			catchUpDsps();
+		execPcPort();
+		while(m_ucCycles >= m_nextSciSample)	// la UART avanza al ritmo de su reloj
+		{
+			m_sci.process(1);
+			m_nextSciSample += g_ucCyclesPerSciSample;
+		}
 		return cycles;
+	}
+
+	// Flanco de bajada de /RD o /WR con /CS activo = acceso a un registro del DUART.
+	void Microcontroller::onPortE(const uint8_t _value)
+	{
+		const auto prev = m_prevPortE;
+		m_prevPortE = _value;
+		if(_value & 0x01)	// /CS inactivo
+			return;
+		const auto reg = static_cast<uint8_t>(((_value >> 3) & 1) | (((_value >> 6) & 1) << 1) | (((_value >> 7) & 1) << 2));
+		const bool rd = (prev & 0x02) && !(_value & 0x02);
+		const bool wr = (prev & 0x04) && !(_value & 0x04);
+		if(rd)
+			getPortGP().writeRX(m_pcPort.read(reg));
+		else if(wr)
+			m_pcPort.write(reg, getPortGP().read());
+	}
+
+	// RxRDY del DUART va a la patilla PAI. El OS deja PACNT en $FF con la interrupcion de
+	// desbordamiento (PAOVI, bit 5 de TMSK2) activa: el primer pulso la dispara. El 68331
+	// real lo hace en su GPT; el de Gearmulator no emula el acumulador, asi que va aqui.
+	void Microcontroller::execPcPort()
+	{
+		if(m_ucCycles < m_nextPcPortByte || !m_pcPort.hasRx())
+			return;
+		const auto tmsk2 = Mc68k::read8(0xfff921);
+		const auto tflg2 = Mc68k::read8(0xfff923);
+		if(!(tmsk2 & 0x20) || (tflg2 & 0x20))
+			return;
+		Mc68k::write8(0xfff90d, 0x00);						// PACNT desborda
+		Mc68k::write8(0xfff923, static_cast<uint8_t>(tflg2 | 0x20));	// PAOVF
+		getGPT().injectInterrupt(0xa);						// PAOV: el OS pone su manejador en IVBA+$A
+		++m_pcPortIrqs;
+		m_nextPcPortByte = m_ucCycles + g_ucCyclesPerSerialByte;
 	}
 
 	void Microcontroller::catchUpDsps()
@@ -71,7 +114,10 @@ namespace g1
 		if(addr < g_memSize)
 			return mc68k::memoryOps::readU16(m_mem.data(), addr);
 		if(isInternalPeripheral(addr))
+		{
+			if(addr == 0xfffc0e) ++m_sciDataReads;
 			return Mc68k::read16(addr);
+		}
 		if(isHostPort(addr))
 		{
 			traceHost(addr, false, 0);
@@ -92,7 +138,10 @@ namespace g1
 		if(addr < g_memSize)
 			return m_mem[addr];
 		if(isInternalPeripheral(addr))
+		{
+			if(addr == 0xfffc0e || addr == 0xfffc0f) ++m_sciDataReads;
 			return Mc68k::read8(addr);
+		}
 		if(isHostPort(addr))
 		{
 			traceHost(addr, false, 0);
@@ -123,6 +172,7 @@ namespace g1
 		}
 		if(isInternalPeripheral(addr))
 		{
+			if(addr == 0xfffc0e) ++m_sciDataWrites;
 			Mc68k::write16(addr, _val);
 			return;
 		}
@@ -158,6 +208,7 @@ namespace g1
 		}
 		if(isInternalPeripheral(addr))
 		{
+			if(addr == 0xfffc0e || addr == 0xfffc0f) ++m_sciDataWrites;
 			Mc68k::write8(addr, _val);
 			return;
 		}

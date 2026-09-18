@@ -80,6 +80,31 @@ sectores y escribe 64 KB.
   bucle (`$16C`) generando tramas de audio. Velocidad: **~88% del tiempo real** en un núcleo del
   5700X, sin patch cargado.
 
+## Los puertos MIDI y el PC PORT (2026-09-18)
+
+El G1 tiene **dos puertos serie independientes**: MIDI IN/OUT para tocar y PC PORT IN/OUT,
+dedicado al SysEx del editor. En la placa van así:
+
+- **MIDI IN/OUT = la SCI del 68331** (UART interna, `SCCR0=$15` → 31.207 baudios a 20,97 MHz,
+  interrupción de recepción a nivel 3, vector `$42`). Un *IAm* del editor por aquí se lee pero
+  no se contesta.
+- **PC PORT = un DUART SCN2681/68681 externo**, colgado de un bus paralelo hecho con puertos de
+  la CPU:
+  - datos: puerto GP del temporizador (`$FFF906/7`), DDRGP `$FF` para escribir y `$00` para leer;
+  - control: puerto E (`$FFFA11`). Bit 0 = /CS, bit 1 = /RD, bit 2 = /WR, bits 3/6/7 = A0/A1/A2;
+  - inicialización del canal A: CR `$0A,$10`, MR1/MR2 `$13/$07` (8N1), CSR `$EE`, ACR `$FF`,
+    IMR `$00`, y CR `$20,$30,$50,$C0,$90`; al final CR `$05` (RX y TX activos);
+  - aviso de byte recibido: RxRDY → patilla PAI. El OS deja PACNT en `$FF` con PAOVI activo
+    (TMSK2 bit 5), y el desbordamiento salta al vector **IVBA+`$A`** (`$5A`, GPT ICR=`$0250`,
+    nivel 2). El manejador (`$117364`) lee RHR, reconstruye el SysEx y lo reparte.
+  - El GPT de Gearmulator no emula el acumulador de pulsos: se hace en `g1mc.cpp`.
+- VBR = `$1AB4E0` (tabla de vectores en RAM).
+
+**Resultado:** al arrancar, el G1 emulado se anuncia por el PC PORT
+(`F0 33 50 06 00 07 08 08 F7` y `F0 33 50 06 00 05 01 00 00 00 7F F7`) y, al recibir el *IAm*
+de NME (`F0 33 00 06 00 03 03 F7`), contesta `F0 33 00 06 01 03 03 3F 7F 7F 01 F7`: emisor 1,
+versión 3.3, número de serie y ID de aparato. Es el saludo completo que espera NME.
+
 ## El hardware
 
 - **CPU: Motorola 68331.** Lo dice el propio código: escribe en SIM (`$FFFAxx`), en
@@ -102,7 +127,8 @@ hilos, que es lo que ya hace Gearmulator con el Virus TI.
 
 1. ~~**Arranque:** que el 68331 llegue al OS.~~ Hecho: llega al bucle principal.
 2. ~~**DSP:** que el OS cargue sus programas en los DSP.~~ Hecho: los 4 arrancan.
-3. **MIDI:** conectar el puerto serie del QSM a un MIDI virtual y que NME detecte el sinte.
+3. ~~**MIDI:** que el G1 conteste al editor.~~ Hecho por el PC PORT (DUART). Falta exponerlo
+   como puerto MIDI virtual del sistema para que NME lo vea, y el MIDI normal por la SCI.
 4. **Patch:** mandar un patch desde NME y que suene.
 
 ## Nombre

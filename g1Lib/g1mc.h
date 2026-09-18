@@ -9,8 +9,10 @@
 
 #include "g1dsp.h"
 #include "g1flash.h"
+#include "g1duart.h"
 
 #include "mc68k/hdi08.h"
+#include "hardwareLib/sciMidi.h"
 
 #include <memory>
 
@@ -44,7 +46,11 @@ namespace g1
 	// 8 puertos HI08 en $200000 + 8*n: DSP 0-3 en la placa base, 4-7 en la expansion.
 	static constexpr uint32_t g_hostPorts = 8;
 	static constexpr uint32_t g_dspCount = 4;			// G1 sin tarjeta de expansion
-	static constexpr uint32_t g_dspCyclesPerUcCycle = 6;	// aproximado: DSP ~100 MHz, CPU ~16 MHz
+	static constexpr uint32_t g_dspCyclesPerUcCycle = 6;	// aproximado: DSP ~100 MHz, CPU ~21 MHz
+	static constexpr uint32_t g_ucClock = 20971520;			// SYNCR=$D300 con cristal de 32768 Hz
+	static constexpr uint32_t g_sciRate = 44100;			// ritmo al que SciMidi mueve bytes
+	static constexpr uint32_t g_ucCyclesPerSciSample = g_ucClock / g_sciRate;
+	static constexpr uint32_t g_ucCyclesPerSerialByte = g_ucClock / 3125;	// 10 bits a 31250 baudios
 
 	struct UnknownAccess
 	{
@@ -78,6 +84,16 @@ namespace g1
 		void installRomOsInFlash();
 		Flash& getFlash() { return m_flash; }
 		Dsp& getDsp(uint32_t _i) { return *m_dsps[_i]; }
+
+		// La UART de la CPU (SCI del QSM, a 31250 baudios). Por ella habla el OS; falta
+		// confirmar si es el PC PORT (editor) o el MIDI, porque el G1 tiene los dos.
+		hwLib::SciMidi& getSci() { return m_sci; }
+		uint32_t sciDataReads() const { return m_sciDataReads; }
+
+		// PC PORT (el del editor): DUART en bus paralelo, ver g1duart.h.
+		Duart& getPcPort() { return m_pcPort; }
+		uint32_t pcPortIrqs() const { return m_pcPortIrqs; }
+		uint32_t sciDataWrites() const { return m_sciDataWrites; }
 		uint64_t ucCycles() const { return m_ucCycles; }
 
 	private:
@@ -87,6 +103,8 @@ namespace g1
 		static mc68k::PeriphAddress hostReg(uint32_t _addr) { return static_cast<mc68k::PeriphAddress>(_addr & 7); }
 		void traceHost(uint32_t _addr, bool _write, uint32_t _value);
 		void catchUpDsps();
+		void onPortE(uint8_t _value);
+		void execPcPort();
 		void logUnknown(uint32_t _addr, bool _write, uint32_t _value);
 
 		std::vector<uint8_t> m_mem;		// ROM + RAM en un solo bloque
@@ -96,6 +114,14 @@ namespace g1
 		std::array<mc68k::Hdi08, g_hostPorts> m_hostPorts;
 		std::array<std::unique_ptr<Dsp>, g_dspCount> m_dsps;
 		uint64_t m_ucCycles = 0;
+		hwLib::SciMidi m_sci;
+		uint64_t m_nextSciSample = 0;
+		uint32_t m_sciDataReads = 0;
+		Duart m_pcPort;
+		uint8_t m_prevPortE = 0xff;
+		uint64_t m_nextPcPortByte = 0;
+		uint32_t m_pcPortIrqs = 0;
+		uint32_t m_sciDataWrites = 0;
 		uint32_t m_romWrites = 0;
 	};
 }

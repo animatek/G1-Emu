@@ -80,8 +80,20 @@ int main(int argc, char** argv)
 	std::map<uint32_t, uint64_t> pcHits;	// PC -> veces, para ver en que bucle se queda
 	uint64_t cycles = 0;
 	uint32_t lastReport = 0;
+	// A mitad de la ejecucion se manda el saludo de NME (IAm, version 3.3) por la UART
+	// y se apunta todo lo que el OS saque por ella.
+	std::vector<uint8_t> sciOut;
+	bool iamSent = false;
 	for(uint64_t i = 0; i < steps; ++i)
 	{
+		if(!iamSent && i >= steps / 2)
+		{
+			iamSent = true;
+			mc.getPcPort().receive({0xf0, 0x33, 0x00, 0x06, 0x00, 0x03, 0x03, 0xf7});
+			std::printf("  >> IAm enviado por el PC PORT en la instruccion %llu\n", static_cast<unsigned long long>(i));
+		}
+		if((i & 0xfff) == 0)
+			mc.getSci().read(sciOut);
 		const auto pc = mc.getPC();
 		if(i > steps / 2)
 			++pcHits[pc];
@@ -113,6 +125,29 @@ int main(int argc, char** argv)
 			std::fflush(stdout);
 		}
 	}
+
+	mc.getSci().read(sciOut);
+	std::printf("\nQSM: QMCR=%04x QILR/QIVR=%04x SCCR0=%04x SCCR1=%04x SCSR=%04x  PORTQS/PQSPAR=%04x DDRQS=%04x\n",
+		mc.read16(0xfffc00), mc.read16(0xfffc04), mc.read16(0xfffc08), mc.read16(0xfffc0a), mc.read16(0xfffc0c),
+		mc.read16(0xfffc14), mc.read16(0xfffc16));
+	std::printf("SIM: SIMCR=%04x  PORTE=%02x DDRE=%02x PEPAR=%02x  PORTF=%02x DDRF=%02x PFPAR=%02x  GPT: TMSK=%04x TFLG=%04x TCTL=%04x\n",
+		mc.read16(0xfffa00), mc.read8(0xfffa11), mc.read8(0xfffa15), mc.read8(0xfffa17),
+		mc.read8(0xfffa19), mc.read8(0xfffa1d), mc.read8(0xfffa1f),
+		mc.read16(0xfff920), mc.read16(0xfff922), mc.read16(0xfff91e));
+	std::printf("SCDR: %u lecturas, %u escrituras de la CPU\n", mc.sciDataReads(), mc.sciDataWrites());
+	std::vector<uint8_t> pcOut;
+	mc.getPcPort().takeTx(pcOut);
+	auto& pc = mc.getPcPort();
+	std::printf("PC PORT: %u interrupciones, %u bytes leidos por el OS, %u enviados; escrituras MR=%u CSR=%u CR=%u THR=%u ACR=%u IMR=%u\n",
+		mc.pcPortIrqs(), pc.rxCount(), pc.txCount(), pc.writes(0), pc.writes(1), pc.writes(2), pc.writes(3), pc.writes(4), pc.writes(5));
+	std::printf("PC PORT -> fuera (%zu bytes):", pcOut.size());
+	for(size_t k = 0; k < std::min<size_t>(pcOut.size(), 300); ++k)
+		std::printf(" %02x", pcOut[k]);
+	std::printf("\n");
+	std::printf("SCI -> fuera (%zu bytes):", sciOut.size());
+	for(size_t k = 0; k < std::min<size_t>(sciOut.size(), 300); ++k)
+		std::printf(" %02x", sciOut[k]);
+	std::printf("\n");
 
 	std::vector<std::pair<uint64_t, uint32_t>> hot;
 	for(auto& [pc, n] : pcHits) hot.push_back({n, pc});

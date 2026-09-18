@@ -2,6 +2,13 @@
 
 ## 2026-09-18
 
+- **El G1 emulado contesta al saludo de NME.** Hay dos puertos, como en el aparato: el MIDI
+  IN/OUT es la SCI de la CPU (conectada con `SciMidi`), y el PC PORT del editor es un DUART
+  SCN2681 externo en un bus paralelo hecho con el puerto GP y el puerto E. `g1Lib/g1duart.h`
+  lo emula, y el aviso de byte recibido (RxRDY → PAI → interrupción PAOV, vector IVBA+`$A`) se
+  emula en la CPU porque el GPT de Gearmulator no tiene acumulador de pulsos. Al *IAm*
+  `F0 33 00 06 00 03 03 F7` responde `F0 33 00 06 01 03 03 3F 7F 7F 01 F7`.
+
 - **Los 4 DSP56303 arrancan con el programa del OS** (`g1Lib/g1dsp`). Hay 8 puertos HI08 y los 4
   de la placa base llevan DSP detrás; las banderas HF van y vuelven, hay host commands y el salto
   a `$FF0000` vuelve a la ROM de arranque. Para que nada se bloquee en un solo hilo, los ESSI
