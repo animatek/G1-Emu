@@ -1,0 +1,6 @@
+Roms/
+*.bin
+*.BIN
+*.syx
+*.zip
+build/
