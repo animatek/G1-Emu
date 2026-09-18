@@ -2,6 +2,11 @@
 
 ## 2026-09-18
 
+- **`g1run` / `g1.sh`: el G1 emulado en tiempo real con puertos MIDI virtuales.** El cliente ALSA
+  "G1-Emu" tiene dos puertos, "PC Port" (editor) y "MIDI". La flash se guarda en
+  `~/.local/share/Animatek/G1-Emu/flash.bin` al salir y cuando el OS escribe en ella. Probado
+  con `aseqsend`/`aseqdump`: el IAm por el PC Port recibe su respuesta. Va al ~94% del tiempo real.
+
 - **El G1 emulado contesta al saludo de NME.** Hay dos puertos, como en el aparato: el MIDI
   IN/OUT es la SCI de la CPU (conectada con `SciMidi`), y el PC PORT del editor es un DUART
   SCN2681 externo en un bus paralelo hecho con el puerto GP y el puerto E. `g1Lib/g1duart.h`

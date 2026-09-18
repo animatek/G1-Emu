@@ -11,8 +11,19 @@ Es un proyecto aparte de `../Elektron-Emu/` (MM Voice). No comparten build ni RO
 
 **El OS 3.03 arranca en el 68331 emulado y carga sus programas en los 4 DSP56303**, que
 quedan corriendo; todo va al ~88% del tiempo real. **Contesta al saludo de NME por el PC
-PORT.** Faltan: exponer el PC PORT y el MIDI como puertos MIDI virtuales, sacar el audio del
-DSP 3 y el panel. El mapa de memoria, el cargador y el plan están en `NOTAS.md`. La
+PORT**, y `g1run` lo corre en tiempo real (~94%) con puertos MIDI virtuales de ALSA. Faltan
+el audio del DSP 3 y el panel.
+
+## Usarlo
+
+```bash
+./g1.sh      # arranca el G1 emulado; Ctrl+C guarda la flash y sale
+```
+
+Crea el cliente ALSA **G1-Emu** con dos puertos, como el aparato: **PC Port** (el del editor:
+en NME se elige como entrada y salida) y **MIDI** (el MIDI IN/OUT normal). La flash (OS +
+patches guardados) vive en `~/.local/share/Animatek/G1-Emu/flash.bin`; si no existe, se crea
+con el OS de fábrica de la ROM. El mapa de memoria, el cargador y el plan están en `NOTAS.md`. La
 plantilla es la emulación del Nord Lead 2X de Gearmulator (`source/nord/n2x`).
 
 ## Compilar y probar
@@ -35,6 +46,7 @@ desde la ROM en `$C800`, así que la dirección de RAM X está en la ROM en `X -
 | `g1Lib/g1duart.h` | El PC PORT: DUART SCN2681 en bus paralelo (puerto GP + puerto E). |
 | `g1Lib/g1dsp.*` | Un DSP56303 con su ROM de arranque HI08, conectado al puerto host de la CPU. |
 | `tools/dspdis.cpp` | Desensamblador de DSP56300 (palabras en hex por stdin). |
+| `app/g1run.cpp`, `app/alsamidi.h`, `g1.sh` | El G1 en tiempo real con MIDI virtual (ALSA) y flash persistente. |
 | `tools/g1boot.cpp` | Arranque sin interfaz y desensamblador. |
 
 ## Reglas

@@ -27,3 +27,4 @@ add_subdirectory(${GEARMULATOR_DIR}/source gearmulator EXCLUDE_FROM_ALL)
 
 add_subdirectory(g1Lib)
 add_subdirectory(tools)
+add_subdirectory(app)
