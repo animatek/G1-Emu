@@ -15,8 +15,10 @@
 #include "alsamidi.h"
 #include "g1Lib/g1mc.h"
 
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -108,6 +110,34 @@ int main(int argc, char** argv)
 	uint32_t savedErased = mc.getFlash().erasedSectors();
 	uint64_t pcIn = 0, pcOut = 0, midiIn = 0, midiOut = 0;
 
+	// Todo lo que entra por el PC Port se apunta para poder reproducir sesiones sin NME.
+	std::ofstream pcLog(std::filesystem::path(flashPath).parent_path() / "pcport-in.bin", std::ios::binary | std::ios::app);
+	std::vector<uint64_t> lastFrames(g1::g_dspCount, 0);
+
+	// La salida del DSP 3 (ESSI0 = salidas 1/2, ESSI1 = 3/4) se graba en un WAV de 4 canales
+	// a 96 kHz y 24 bits, para escucharla mientras no hay audio en tiempo real.
+	const auto wavPath = std::filesystem::path(flashPath).parent_path() / "salida.wav";
+	std::ofstream wav(wavPath, std::ios::binary | std::ios::trunc);
+	wav.write(std::string(44, '\0').data(), 44);	// cabecera, se rellena al salir
+	uint64_t wavFrames = 0;
+	std::array<int32_t, 4> wavFrame{};
+	mc.getDsp(3).setAudioCallback([&](const uint32_t _essi, const int32_t _l, const int32_t _r)
+	{
+		wavFrame[_essi * 2] = _l;
+		wavFrame[_essi * 2 + 1] = _r;
+		if(_essi != 1)	// se escribe la trama al completar el ESSI1
+			return;
+		char buf[12];
+		for(int c = 0; c < 4; ++c)
+		{
+			buf[c * 3] = static_cast<char>(wavFrame[c] & 0xff);
+			buf[c * 3 + 1] = static_cast<char>((wavFrame[c] >> 8) & 0xff);
+			buf[c * 3 + 2] = static_cast<char>((wavFrame[c] >> 16) & 0xff);
+		}
+		wav.write(buf, sizeof(buf));
+		++wavFrames;
+	});
+
 	std::vector<std::vector<uint8_t>> incoming;
 	std::vector<uint8_t> out;
 
@@ -118,6 +148,8 @@ int main(int argc, char** argv)
 		if(!incoming[pcPort].empty())
 		{
 			pcIn += incoming[pcPort].size();
+			pcLog.write(reinterpret_cast<const char*>(incoming[pcPort].data()), static_cast<std::streamsize>(incoming[pcPort].size()));
+			pcLog.flush();
 			mc.getPcPort().receive(incoming[pcPort]);
 			incoming[pcPort].clear();
 		}
@@ -160,9 +192,30 @@ int main(int argc, char** argv)
 			std::printf("[%6.0fs] velocidad %5.1f%%  DSP:", elapsed, 100.0 * emu / wall);
 			for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 				std::printf(" %s", mc.getDsp(d).booted() ? "on" : "--");
+			std::printf("  HI08 palabras/HC/respuestas:");
+			for(uint32_t d = 0; d < g1::g_dspCount; ++d)
+				std::printf(" %llu/%llu/%llu", static_cast<unsigned long long>(mc.getDsp(d).hostWords()),
+					static_cast<unsigned long long>(mc.getDsp(d).hostCommands()), static_cast<unsigned long long>(mc.getDsp(d).wordsToHost()));
 			std::printf("  PC Port in/out %llu/%llu  MIDI in/out %llu/%llu\n",
 				static_cast<unsigned long long>(pcIn), static_cast<unsigned long long>(pcOut),
 				static_cast<unsigned long long>(midiIn), static_cast<unsigned long long>(midiOut));
+			// Audio: tramas por segundo y picos por DSP / ESSI / slot / linea TX
+			std::printf("          audio:");
+			for(uint32_t d = 0; d < g1::g_dspCount; ++d)
+			{
+				auto& dsp = mc.getDsp(d);
+				const auto frames = dsp.audioFrames();
+				std::printf("  DSP%u %.0f tr/s", d, (frames - lastFrames[d]) / wall / 2.0);	// 2 ESSI
+				lastFrames[d] = frames;
+				const auto& m = dsp.meter();
+				for(uint32_t e = 0; e < 2; ++e)
+					for(uint32_t sl = 0; sl < g1::Dsp::MeterSlots; ++sl)
+						for(uint32_t l = 0; l < g1::Dsp::MeterLines; ++l)
+							if(m[e][sl][l] > 256)
+								std::printf(" [E%u s%u tx%u %.0fdB]", e, sl, l, 20.0 * std::log10(m[e][sl][l] / 8388608.0));
+				dsp.resetMeter();
+			}
+			std::printf("\n");
 			std::fflush(stdout);
 			lastReport = now;
 			lastReportCycles = mc.ucCycles();
@@ -178,5 +231,18 @@ int main(int argc, char** argv)
 
 	saveFlash(mc, flashPath);
 	std::printf("\nflash guardada en %s\n", flashPath.c_str());
+
+	// Cabecera WAV: PCM, 4 canales, 96 kHz, 24 bits
+	{
+		const uint32_t rate = 96000, channels = 4, bytes = 3;
+		const uint32_t dataSize = static_cast<uint32_t>(wavFrames * channels * bytes);
+		auto u32 = [&](uint32_t v) { wav.write(reinterpret_cast<const char*>(&v), 4); };
+		auto u16 = [&](uint16_t v) { wav.write(reinterpret_cast<const char*>(&v), 2); };
+		wav.seekp(0);
+		wav.write("RIFF", 4); u32(36 + dataSize); wav.write("WAVEfmt ", 8); u32(16); u16(1); u16(channels);
+		u32(rate); u32(rate * channels * bytes); u16(channels * bytes); u16(bytes * 8);
+		wav.write("data", 4); u32(dataSize);
+		std::printf("audio grabado en %s (%.1f s)\n", wavPath.c_str(), wavFrames / 96000.0);
+	}
 	return 0;
 }

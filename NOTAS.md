@@ -105,6 +105,32 @@ dedicado al SysEx del editor. En la placa van así:
 de NME (`F0 33 00 06 00 03 03 F7`), contesta `F0 33 00 06 01 03 03 3F 7F 7F 01 F7`: emisor 1,
 versión 3.3, número de serie y ID de aparato. Es el saludo completo que espera NME.
 
+## El audio (2026-09-19, en curso)
+
+- **Salida:** solo el DSP 3 transmite hacia fuera. Los dos ESSI van en modo de 2 slots por
+  trama (estéreo) por TX0. Muy probablemente ESSI0 = salidas 1/2 y ESSI1 = 3/4.
+- **Frecuencia:** 96 kHz. El DSP emulado va a ~125,8 MHz; el reloj del ESSI cuenta palabras,
+  así que es 1 palabra cada 655 ciclos (2 por trama).
+- **Reloj de proceso:** la patilla **IRQD** de cada DSP (vector `$16`) recibe el reloj de
+  muestra. Su rutina (`$200`) solo incrementa `X:$1`, y el bucle principal procesa un bloque
+  cuando pasa de 3 (bloques de 4 muestras). Se emula con una IRQD por trama, solo si el DSP
+  la tiene habilitada.
+- **DMA:** DMA2/3 llevan ESSI0/1 RX a `$6C0`/`$6C9` (8 palabras), DMA4/5 sacan `$6C0`/`$6C2`
+  hacia ESSI0/1 TX, y DMA0 copia de memoria a memoria. Los temporizadores del DSP están en
+  `X:$FFFF8x` (no son DMA).
+- **Arranque doble del DSP 3:** el OS empieza a mandar el segundo arranque en cuanto el
+  programa del cargador ve HF0. Lo que queda en el puerto al volver a `$FF0000` se entrega a
+  la ROM de arranque; sin eso, el programa del DSP 3 quedaba incompleto.
+- **Cadena de audio (hipótesis, sin confirmar):** ESSI de DSP n → ESSI de DSP n+1. Conectada,
+  no cambia nada todavía.
+- **Por qué no suena:** el bloque que ejecuta cada DSP es una rutina que guarda registros,
+  rearma los DMA y vuelve, con **6 `NOP` (`$18B–$190`) donde iría la llamada al código del
+  patch**. Siguen vacíos. Crear OscA → 2Output solo manda 12 palabras (todas al DSP 0),
+  ningún DSP ha devuelto nunca una palabra a la CPU y NME ve 0 voces. Parece que el OS no
+  llega a compilar ni cargar el patch; quizá espera una respuesta de los DSP que no llega.
+- **Herramienta:** `g1boot ROM N replay pcport-in.bin` reproduce una sesión de NME grabada
+  por `g1run`, mantiene una nota por MIDI IN y vuelca estado, búferes y DMA de cada DSP.
+
 ## El hardware
 
 - **CPU: Motorola 68331.** Lo dice el propio código: escribe en SIM (`$FFFAxx`), en

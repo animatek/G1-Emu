@@ -17,6 +17,8 @@
 #include "dsp56kEmu/peripherals.h"
 
 #include <cstdint>
+#include <array>
+#include <functional>
 #include <memory>
 
 namespace mc68k { class Hdi08; }
@@ -37,6 +39,27 @@ namespace g1
 		uint32_t index() const { return m_index; }
 		uint64_t stalls() const { return m_stalls; }
 		uint64_t audioFrames() const { return m_audioFrames; }
+		uint64_t hostWords() const { return m_hostWords; }
+		uint64_t irqdCount() const { return m_irqdCount; }
+		uint64_t hostCommands() const { return m_hostCommands; }
+		uint64_t wordsToHost() const { return m_wordsToHost; }
+
+		// Medidor: pico (valor absoluto, 24 bits con signo) por ESSI, slot y linea TX
+		// desde el ultimo reset. Sirve para averiguar por donde sale el audio.
+		static constexpr uint32_t MeterSlots = 4, MeterLines = 3;
+		using Meter = std::array<std::array<std::array<uint32_t, MeterLines>, MeterSlots>, 2>;
+		const Meter& meter() const { return m_meter; }
+		void resetMeter() { m_meter = {}; }
+		uint32_t lastSlotCount(uint32_t _essi) const { return m_slotCount[_essi]; }
+
+		// Recibe cada trama que sale por un ESSI: (essi, slot 0 de TX0, slot 1 de TX0),
+		// en 24 bits con signo. Sirve para grabar o reproducir la salida.
+		using AudioCallback = std::function<void(uint32_t, int32_t, int32_t)>;
+		void setAudioCallback(AudioCallback _cb) { m_audioCallback = std::move(_cb); }
+
+		// Cadena de audio: lo que sale por los ESSI de este DSP entra por los del siguiente.
+		void setNext(Dsp* _next) { m_next = _next; }
+		uint64_t chainedFrames() const { return m_chainedFrames; }
 
 		// Ejecuta el DSP hasta llegar a _cycles ciclos (o hasta un tope si esta esperando).
 		void catchUp(uint64_t _cycles);
@@ -65,5 +88,12 @@ namespace g1
 		uint32_t m_bootCount = 0;
 		uint64_t m_stalls = 0;
 		uint64_t m_audioFrames = 0;
+		uint64_t m_hostWords = 0, m_hostCommands = 0, m_wordsToHost = 0;
+		uint64_t m_nextIrqd = 0, m_irqdCount = 0;
+		Meter m_meter{};
+		AudioCallback m_audioCallback;
+		Dsp* m_next = nullptr;
+		uint64_t m_chainedFrames = 0;
+		std::array<uint32_t, 2> m_slotCount{};
 	};
 }

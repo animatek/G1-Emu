@@ -72,6 +72,17 @@ int main(int argc, char** argv)
 
 	const uint64_t steps = (argc > 2 ? std::stoull(argv[2]) : 20) * 1000000ull;
 	mc.installRomOsInFlash();
+
+	// Historial de lo que sale por el ESSI0 de cada DSP (valores distintos, min, max)
+	struct Tap { int32_t mn = 0x7fffffff, mx = -0x7fffffff; std::map<int32_t, uint64_t> values; uint64_t n = 0; };
+	std::array<std::array<Tap, 2>, g1::g_dspCount> taps;
+	for(uint32_t d = 0; d < g1::g_dspCount; ++d)
+		mc.getDsp(d).setAudioCallback([&taps, d](const uint32_t _essi, const int32_t _l, const int32_t)
+		{
+			auto& t = taps[d][_essi];
+			t.mn = std::min(t.mn, _l); t.mx = std::max(t.mx, _l); ++t.n;
+			if(t.values.size() < 64) ++t.values[_l];
+		});
 	std::printf("reset: PC=$%06x SP=$%06x\n", mc.getPC(), mc.getAReg(7));
 	std::fflush(stdout);
 
@@ -84,6 +95,15 @@ int main(int argc, char** argv)
 	// y se apunta todo lo que el OS saque por ella.
 	std::vector<uint8_t> sciOut;
 	bool iamSent = false;
+	// g1boot ROM N replay FICHERO: a mitad de la ejecucion se mete por el PC Port todo lo
+	// que NME mando en una sesion (lo graba g1run en pcport-in.bin).
+	std::vector<uint8_t> replay;
+	if(argc > 4 && std::string(argv[3]) == "replay")
+	{
+		std::ifstream rf(argv[4], std::ios::binary);
+		replay.assign(std::istreambuf_iterator<char>(rf), std::istreambuf_iterator<char>());
+		iamSent = true;	// el replay ya trae su IAm
+	}
 	for(uint64_t i = 0; i < steps; ++i)
 	{
 		if(!iamSent && i >= steps / 2)
@@ -91,6 +111,18 @@ int main(int argc, char** argv)
 			iamSent = true;
 			mc.getPcPort().receive({0xf0, 0x33, 0x00, 0x06, 0x00, 0x03, 0x03, 0xf7});
 			std::printf("  >> IAm enviado por el PC PORT en la instruccion %llu\n", static_cast<unsigned long long>(i));
+		}
+		if(!replay.empty() && i == steps / 2)
+		{
+			mc.getSci().write({0x90, 60, 100});	// nota mantenida por el MIDI IN, canal 1
+			std::printf("  >> nota 60 on por MIDI IN\n");
+			for(uint32_t d = 0; d < g1::g_dspCount; ++d)
+				for(auto& t : taps[d]) t = {};
+		}
+		if(!replay.empty() && i == steps / 4)
+		{
+			mc.getPcPort().receive(replay);
+			std::printf("  >> replay: %zu bytes por el PC Port\n", replay.size());
 		}
 		if((i & 0xfff) == 0)
 			mc.getSci().read(sciOut);
@@ -196,7 +228,60 @@ int main(int argc, char** argv)
 	}
 	std::printf("\n  num DSP ($1ab91c) = %u\n", mc.read8(0x1ab91c));
 
-	std::printf("\nDSP:\n");
+	// Volcado de la memoria de programa de cada DSP (para desensamblar con dspdis)
+	for(uint32_t i = 0; i < g1::g_dspCount; ++i)
+	{
+		const auto path = "/tmp/g1_dsp" + std::to_string(i) + "_p.hex";
+		if(FILE* f = std::fopen(path.c_str(), "w"))
+		{
+			auto& mem = mc.getDsp(i).dsp().memory();
+			for(dsp56k::TWord a = 0; a < 0x1000; ++a)
+				std::fprintf(f, "%06x\n", mem.get(dsp56k::MemArea_P, a));
+			std::fclose(f);
+		}
+	}
+
+	std::printf("\nSalida ESSI (slot 0, TX0) por DSP:\n");
+	for(uint32_t d = 0; d < g1::g_dspCount; ++d)
+		for(uint32_t e = 0; e < 2; ++e)
+		{
+			auto& t = taps[d][e];
+			std::printf("  DSP%u E%u: %llu tramas, min %d max %d, %zu valores distintos:", d, e, static_cast<unsigned long long>(t.n), t.mn, t.mx, t.values.size());
+			int k = 0;
+			for(auto& [v, c] : t.values) { if(k++ >= 8) break; std::printf(" %06x(x%llu)", v & 0xffffff, static_cast<unsigned long long>(c)); }
+			std::printf("\n");
+		}
+
+	std::printf("\nDSP (palabras/HC/respuestas por HI08, picos de audio):\n");
+	for(uint32_t i = 0; i < g1::g_dspCount; ++i)
+	{
+		auto& d = mc.getDsp(i);
+		std::printf("  DSP%u  irqd=%llu x:1=%06x  %llu/%llu/%llu ", i, static_cast<unsigned long long>(d.irqdCount()), d.dsp().memory().get(dsp56k::MemArea_X, 1), static_cast<unsigned long long>(d.hostWords()),
+			static_cast<unsigned long long>(d.hostCommands()), static_cast<unsigned long long>(d.wordsToHost()));
+		const auto& m = d.meter();
+		for(uint32_t e = 0; e < 2; ++e)
+			for(uint32_t sl = 0; sl < g1::Dsp::MeterSlots; ++sl)
+				for(uint32_t l = 0; l < g1::Dsp::MeterLines; ++l)
+					if(m[e][sl][l])
+						std::printf(" [E%u s%u tx%u %06x]", e, sl, l, m[e][sl][l]);
+		std::printf("  slots E0=%u E1=%u\n", d.lastSlotCount(0), d.lastSlotCount(1));
+		auto& mem = d.dsp().memory();
+		std::printf("        X:$6C0..$6CF:");
+		for(dsp56k::TWord a = 0x6c0; a < 0x6d0; ++a) std::printf(" %06x", mem.get(dsp56k::MemArea_X, a));
+		std::printf("\n        Y:$6C0..$6CF:");
+		for(dsp56k::TWord a = 0x6c0; a < 0x6d0; ++a) std::printf(" %06x", mem.get(dsp56k::MemArea_Y, a));
+		// cuantas palabras distintas de cero hay en X/Y internas (señal de que se calcula algo)
+		uint32_t nzX = 0, nzY = 0;
+		for(dsp56k::TWord a = 0; a < 0x800; ++a) { nzX += mem.get(dsp56k::MemArea_X, a) != 0; nzY += mem.get(dsp56k::MemArea_Y, a) != 0; }
+		std::printf("\n        X:$6E0..$6EF:");
+		for(dsp56k::TWord a = 0x6e0; a < 0x6f0; ++a) std::printf(" %06x", mem.get(dsp56k::MemArea_X, a));
+		std::printf("\n        Y:$6E0..$6EF:");
+		for(dsp56k::TWord a = 0x6e0; a < 0x6f0; ++a) std::printf(" %06x", mem.get(dsp56k::MemArea_Y, a));
+		std::printf("\n        DMA DSTR=%06x", d.periph().getDMA().getDSTR());
+		for(dsp56k::TWord c = 0; c < 6; ++c)
+			std::printf("  c%u:DCR=%06x DSR=%06x DDR=%06x DCO=%06x", c, d.periph().getDMA().getDCR(c), d.periph().getDMA().getDSR(c), d.periph().getDMA().getDDR(c), d.periph().getDMA().getDCO(c));
+		std::printf("\n        X/Y internas no nulas: %u / %u   PC=$%06x SR=%06x\n", nzX, nzY, d.dsp().getPC().toWord(), d.dsp().getSR().toWord());
+	}
 	for(uint32_t i = 0; i < g1::g_dspCount; ++i)
 	{
 		auto& d = mc.getDsp(i);

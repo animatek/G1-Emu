@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-19
+
+- **NME se conecta al G1 emulado y construye patches** (Javier montó OscA → 2Output; el OS lo
+  confirma todo y hasta informa de la carga de DSP). Todavía **no suena**.
+- Audio: reloj del ESSI a 96 kHz, reloj de proceso por IRQD, medidores y grabación a WAV de la
+  salida del DSP 3 en `g1run` (`~/.local/share/Animatek/G1-Emu/salida.wav`), y registro de lo
+  que entra por el PC Port (`pcport-in.bin`) para reproducir sesiones.
+- Arreglado el arranque doble del DSP 3: su programa de sonido quedaba incompleto. Ahora las
+  palabras pendientes pasan a la ROM de arranque. Si la CPU consulta el estado con una palabra
+  pendiente, el DSP avanza hasta recogerla, para que el OS no la descarte.
+- `g1boot ... replay FICHERO`: reproduce una sesión de NME sin NME y vuelca DMA, búferes y
+  salida de cada DSP. Diagnóstico de por qué no suena, en `NOTAS.md`.
+
 ## 2026-09-18
 
 - **`g1run` / `g1.sh`: el G1 emulado en tiempo real con puertos MIDI virtuales.** El cliente ALSA

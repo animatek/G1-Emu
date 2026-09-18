@@ -14,6 +14,9 @@ namespace g1
 		std::copy_n(_rom.begin(), std::min<size_t>(_rom.size(), g_romSize), m_mem.begin());
 		for(uint32_t i = 0; i < g_dspCount; ++i)
 			m_dsps[i] = std::make_unique<Dsp>(m_hostPorts[i], i);
+		// Cadena de audio por los ESSI: DSP0 -> DSP1 -> DSP2 -> DSP3 -> codec (hipotesis)
+		for(uint32_t i = 0; i + 1 < g_dspCount; ++i)
+			m_dsps[i]->setNext(m_dsps[i + 1].get());
 
 		// Bus del DUART: el puerto E lleva /CS, /RD, /WR y la direccion del registro.
 		getPortE().setWriteTXCallback([this](const mc68k::Port& _port) { onPortE(_port.read()); });
