@@ -15,6 +15,16 @@ Windows. The technical details are in [`NOTES.md`](NOTES.md), the plan in
 [`ROADMAP.md`](ROADMAP.md) and what changes in [`CHANGELOG.md`](CHANGELOG.md). Contributions are
 welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## You are invited: this is a collaborative project
+
+G1-Emu was started by [Animatek](https://animatek.net), but it is a big project and it is meant to
+be built together. **Everyone is warmly invited to take part** — reverse engineering, C++, DSP
+code, testing patches against a real G1, recordings, documentation, builds for macOS and Windows,
+or simply reporting what sounds wrong. We love collaboration, and every person who joins makes the
+emulator bigger and better. There is room for all skill levels: see
+[`CONTRIBUTING.md`](CONTRIBUTING.md) and the open tasks in [`ROADMAP.md`](ROADMAP.md), and say
+hello in an issue.
+
 ## Please read this first
 
 - **Not affiliated with Clavia.** G1-Emu is an independent, open-source project. It is not

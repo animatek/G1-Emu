@@ -7,6 +7,11 @@ Older entries cite their commit by hand.
 
 ## 2026-09-19
 
+- **An open invitation to collaborate (Claude).** New section at the top of the README ("You are
+  invited: this is a collaborative project") and a warmer opening in `CONTRIBUTING.md`: the project
+  is meant to be built together and everyone is welcome, whatever their experience. Check: both
+  files reviewed.
+
 - **Disclaimer at startup and in the README (Claude).** `g1gui` shows a notice when it opens: an
   independent project not affiliated with Clavia DMI, no ROMs now or ever, and no support. It has a
   "Don't show this again" box, saved in the user settings (`~/.config/G1-Emu.settings`). The same

@@ -1,7 +1,13 @@
 # Contributing to G1-Emu
 
-Thanks for looking. G1-Emu is pre-alpha and there is plenty to do, from reverse engineering to
-testing patches. Everything in the repo is in English.
+**You are warmly invited to join.** G1-Emu is a collaborative project: it was started by Animatek,
+but it is far too big for one person, and it will only become a complete emulator if many people
+build it together. We love collaboration and we are very happy to welcome new contributors, whatever
+your experience: reverse engineering, C++, DSP, testing patches, recordings from a real G1,
+documentation or builds for other systems. Every contribution, big or small, makes the emulator
+bigger.
+
+G1-Emu is pre-alpha and there is plenty to do. Everything in the repo is in English.
 
 ## Before you start
 
