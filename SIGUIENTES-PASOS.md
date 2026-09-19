@@ -80,6 +80,20 @@ Con el OS real corriendo en el emulador tenemos un G1 "de laboratorio" sin encen
   solo expone sus knobs (necesita la ROM del usuario); **(2)** "compilar" el patch a C++ nativo
   con los módulos recreados de 3b (sin ROM, pero solo con los módulos que estén recreados).
 
+### 3d. Una interfaz para el G1 emulado
+
+- Ahora es una aplicación de consola. Más adelante: una ventana con el panel del rack (LEDs,
+  display, botones y knobs), que es lo que el OS ya pinta y lee en `$201000`, `$201800`,
+  `$202000–7` y `$202800` (sin emular todavía), además del estado de los DSP y el audio.
+
+### 3e. Otros modelos del G1: teclado y Micro Modular
+
+- **Nord Modular (teclado):** en principio es el rack con teclado. Debería servir casi todo; cambia
+  la ROM/OS y el panel.
+- **Micro Modular:** Javier cree que lleva un solo DSP. Si es así, es un "motor" más sencillo y
+  podría ser un buen primer G1 que suene: sin cadena ni bus entre DSP. **Por confirmar:** su
+  hardware (CPU, DSP, memoria) y conseguir su OS (ROM propia, distinta de la del rack).
+
 ## Para el agente de Codex
 
 Empieza por `CLAUDE.md` (compilar y usar), `NOTAS.md` (todo lo averiguado) y este fichero.
