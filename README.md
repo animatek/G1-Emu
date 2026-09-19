@@ -1,5 +1,7 @@
 # G1-Emu
 
+![G1-Emu: el panel del Nord Modular G1 emulado](docs/g1gui.png)
+
 **Emulador del Nord Modular G1** (rack, OS 3.03) sobre el núcleo de
 [Gearmulator](https://github.com/dsp56300/gearmulator): el sistema operativo original del aparato
 corriendo en un 68331 emulado y cuatro DSP56303 emulados, controlado desde

@@ -7,6 +7,9 @@ entradas antiguas citan su commit a mano.
 
 ## 2026-09-19
 
+- **Captura del panel en el README (Claude).** `docs/g1gui.png`, la ventana de `g1gui` recortada,
+  al principio del `README.md`. Verificación: imagen revisada (solo la ventana, sin fondo).
+
 - **Panel como el del aparato, mandos en su sitio y repo listo para ser público (Claude).**
   El ADC devolvía el canal elegido y no la conversión anterior: los mandos
   iban corridos uno y el volumen en marcha se leía de otro canal; arreglado. Identificados con
