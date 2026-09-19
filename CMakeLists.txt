@@ -23,8 +23,20 @@ endforeach()
 set(${CMAKE_PROJECT_NAME}_BUILD_JUCEPLUGIN OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(${GEARMULATOR_DIR}/source gearmulator EXCLUDE_FROM_ALL)
+# El CMake global de Gearmulator genera synthLib/buildconfig.h en su arbol
+# fuente. Incluimos solo los nucleos y el puente MIDI que necesita el G1.
+set(ASMJIT_NO_INSTALL TRUE)
+set(BUILD_SHARED_LIBS OFF)
+add_subdirectory(${GEARMULATOR_DIR}/source/dsp56300/source gearmulator/dsp56300 EXCLUDE_FROM_ALL)
+add_subdirectory(${GEARMULATOR_DIR}/source/mc68k gearmulator/mc68k EXCLUDE_FROM_ALL)
+add_library(g1Midi STATIC
+	${GEARMULATOR_DIR}/source/hardwareLib/sciMidi.cpp
+	${GEARMULATOR_DIR}/source/synthLib/midiBufferParser.cpp)
+target_include_directories(g1Midi PUBLIC ${GEARMULATOR_DIR}/source)
+target_link_libraries(g1Midi PUBLIC 68kEmu)
+include(cmake/Dsp56300.cmake)
 
+enable_testing()
 add_subdirectory(g1Lib)
 add_subdirectory(tools)
 add_subdirectory(app)

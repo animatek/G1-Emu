@@ -11,8 +11,9 @@ Es un proyecto aparte de `../Elektron-Emu/` (MM Voice). No comparten build ni RO
 
 **El OS 3.03 arranca en el 68331 emulado y carga sus programas en los 4 DSP56303**, que
 quedan corriendo; todo va al ~88% del tiempo real. **Contesta al saludo de NME por el PC
-PORT**, y `g1run` lo corre en tiempo real (~94%) con puertos MIDI virtuales de ALSA. Faltan
-el audio del DSP 3 y el panel.
+PORT**, y `g1run` lo corre en tiempo real (~94%) con puertos MIDI virtuales de ALSA. Con un
+patch y una nota, **el DSP 0 ya calcula el audio** (sale por su ESSI0 a la altura correcta);
+faltan llevarlo al DSP 3, que es la salida, y el panel.
 
 ## Usarlo
 
@@ -31,6 +32,8 @@ plantilla es la emulación del Nord Lead 2X de Gearmulator (`source/nord/n2x`).
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target g1boot -j$(nproc)
+cmake --build build --target g1dspcheck -j$(nproc)
+ctest --test-dir build -R '^g1dspcheck$' --output-on-failure
 ./build/tools/g1boot Roms/NORD-MODULAR-RACK-VER-3.03.BIN 60     # 60 M de instrucciones
 ./build/tools/g1boot Roms/NORD-MODULAR-RACK-VER-3.03.BIN dis C800 C900   # desensamblar
 ```

@@ -2,6 +2,27 @@
 
 ## 2026-09-19
 
+- **Primer audio del patch (Claude, cambio local, sin commit).** El replay de Codex no sonaba
+  por un fallo del propio replay: en la sesión grabada NME se reconectó a un G1 reiniciado, así
+  que la segunda subida de patch recibió otra vez pid 1; en el replay el OS da pid 2 y descarta
+  los mensajes siguientes (los módulos y la nota). `g1boot ... replay` reescribe ahora el pid
+  con el que asigna el OS (ACK `$36`) y rehace el checksum. Con eso el DSP 0 carga los módulos,
+  enlaza su código en `P:$197` y saca por el ESSI0 una onda periódica a **261 Hz** (Do central,
+  la nota del replay), saturada y escalonada. El DSP 1 la recibe; al DSP 3 aún no llega.
+  `G1_TAP=fichero` vuelca lo que sale por el ESSI0 de cada DSP. Verificación: compilado todo,
+  CTest pasa, replay de 60 M instrucciones con 19 mensajes reescritos, FFT de la salida.
+
+- **Codex — cambio local, sin commit:** validadas las extensiones pendientes del JIT
+  para MOVEM corto y DO FOREVER en copia de compilación, con límite de una iteración
+  DO por despacho. Corregida la inicialización de SR y la lectura del acumulador en
+  `g1dspcheck`; registrado en CTest. CMake incluye solo los núcleos y el puente MIDI
+  necesarios, evitando generar archivos dentro del clon externo de Gearmulator.
+  Verificación: compilados `g1boot`, `g1run`, `dspdis` y `g1dspcheck`; CTest pasa
+  MOVEM, invalidación JIT, DO FOREVER, IRQD y DO anidado (bloques 1/32); `git diff --check`.
+  Replay real de 60 M de instrucciones y 45 mensajes/705 bytes con nota pulsada:
+  cuatro DSP arrancados, salida todavía cero en DSP0–2 y `$155` en DSP3. Documentado
+  que falta revisar el enlace del código del patch; no se afirma que ya suene.
+
 - `SIGUIENTES-PASOS.md`: el plan para la siguiente sesión (sacar el audio, rendimiento) y las ideas
   de Javier (usar el G1 emulado para mejorar NME, recrear módulos a partir de su código DSP, un
   patch como plugin). `AGENTS.md` para Codex/opencode.

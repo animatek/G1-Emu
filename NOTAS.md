@@ -178,6 +178,27 @@ versión 3.3, número de serie y ID de aparato. Es el saludo completo que espera
   `G1_WATCH=123e94,1239e8 g1boot ...` cuenta los pasos del PC por esas direcciones y enseña
   los registros.
 
+## Comprobación del núcleo pendiente (2026-09-19, Codex)
+
+- Validadas las extensiones locales de MOVEM corto y DO FOREVER, con invalidación del
+  JIT, IRQD y bucles DO anidados, en bloques de 1 y 32 instrucciones. `g1dspcheck`
+  usa programas sintéticos sin ROM. La prueba debe inicializar SR directamente y
+  actualizar el modo del JIT; `writeReg(Reg_SR, ...)` no está implementado en este núcleo.
+  B0 se comprueba por la API de registros, porque el acumulador interno está desplazado.
+- Las correcciones se aplican a una copia de compilación en `build/g1-dsp`, nunca al
+  clon externo. CMake ahora incluye solo los núcleos y el puente SCI/MIDI: el CMake
+  global de Gearmulator intentaba generar `synthLib/buildconfig.h` en el clon.
+- Reproducción real: `g1boot ROM 60 replay /tmp/g1-replay-hold.bin`, con los primeros
+  **45 mensajes** del `pcport-in.bin` actual (705 bytes, hasta `56 00 3C`, sin soltar).
+  El fichero completo contiene 63 mensajes y reconexiones posteriores: quitar solo
+  el último mensaje **no** mantiene la nota. No se ha cambiado el registro original.
+- Los cuatro DSP arrancan; el OS lee los 705 bytes. Tras la nota MIDI adicional,
+  439.699 tramas por ESSI: DSP0–2 a cero y DSP3 fijo en `$155`. No hay sonido validado.
+  En el volcado final de DSP0 el vector apunta a `$175`, hay código de módulos desde
+  `$1A3`, pero `$18B–$190` siguen siendo NOP y `$197` da paso a restaurar registros/RTI.
+  **Revisar el enlace al código del patch** antes de dar por confirmada su ejecución
+  con estas correcciones. La hipótesis del bus ESSI sigue pendiente.
+
 ## El hardware
 
 - **CPU: Motorola 68331.** Lo dice el propio código: escribe en SIM (`$FFFAxx`), en
@@ -208,3 +229,27 @@ hilos, que es lo que ya hace Gearmulator con el Virus TI.
 
 Pendiente. Ideas sueltas: G1mulator, Nordulator, Modulator G1, NME Engine.
 Ojo: "Nord" y "Clavia" son marcas; mejor que el nombre no las lleve.
+
+## Primer audio del patch (2026-09-19, Claude)
+
+- **Corrección de lo anterior:** el patch sí se enlaza. El cargador del OS (`$122F72`) manda
+  por módulo `$BF` (dirección, vector `$7E`: `r0`), `$B2`/`$B3` (X/Y), una palabra suelta con
+  `$B7` (vector `$6E`: `movep` a `p:(r0)` sin incrementar) en `base + desplazamiento` y el
+  resto con `$B4` (`p:(r0)+`) desde `base`. El desplazamiento (byte con signo, `-$C`) es el del
+  módulo anterior: cada módulo sobrescribe el `NOP` de antes del epílogo del anterior. El primero
+  parchea `P:$197` de la rutina de bloque; el último acaba en su propio epílogo y `RTI`.
+- **Por qué el replay de Codex no sonaba:** `pcport-in.bin` trae dos sesiones. En la segunda NME
+  se reconectó a un G1 recién arrancado, que dio **pid 1** otra vez a la nueva subida de patch.
+  En el replay no hay reinicio: el OS da **pid 2** (`F0 33 58 06 02 36 02`), recarga la rutina
+  base (con los `NOP`) y descarta todo lo que lleva pid 1 (módulos y nota; responde `7F 02`).
+  `g1boot ... replay` reescribe ahora el pid de los mensajes Parameter (cc `$13`),
+  PatchModification (cc `$17`, salvo `$41`) y PatchPacket de un patch cargado (cc `$1C–$1F`
+  sin el bit de comando) con el último que dio el OS por ese slot, y rehace el checksum
+  (suma desde `F0` hasta el payload, `& $7F`).
+- **Resultado:** con los 45 primeros mensajes, el DSP 0 carga los módulos (`$1A3–$29C`), enlaza
+  `$197` y su ESSI0 saca una onda periódica de ~367 tramas: **261 Hz, el Do central** de la nota
+  60. Tiene forma de seno saturado a ±1, escalonada (cada valor dura 4 o 5 tramas) y con algunos
+  picos sueltos a 0. El DSP 1 recibe esas muestras en `X:$6C0` por la cadena provisional, pero
+  saca ceros; el DSP 3 sigue en `$155`.
+- **Herramienta:** `G1_TAP=fichero g1boot ...` guarda el slot 0 del ESSI0 de los 4 DSP, en
+  `int32` por DSP y trama.

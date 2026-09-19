@@ -47,6 +47,7 @@ namespace g1
 		config.dynamicPeripheralAddressing = false;
 		config.dynamicFastInterrupts = true;
 		config.maxInstructionsPerBlock = 32;
+		config.maxDoIterations = 1;
 		m_dsp.getJit().setConfig(config);
 
 		// Memoria de programa llena de RTS: un salto a basura no compila cosas raras.

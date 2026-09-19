@@ -81,9 +81,17 @@ int main(int argc, char** argv)
 	// Historial de lo que sale por el ESSI0 de cada DSP (valores distintos, min, max)
 	struct Tap { int32_t mn = 0x7fffffff, mx = -0x7fffffff; std::map<int32_t, uint64_t> values; uint64_t n = 0; };
 	std::array<std::array<Tap, 2>, g1::g_dspCount> taps;
+	// G1_TAP=fichero: las muestras del slot 0 del ESSI0 de cada DSP, en crudo (int32 por DSP y trama).
+	FILE* tapFile = std::getenv("G1_TAP") ? std::fopen(std::getenv("G1_TAP"), "wb") : nullptr;
+	std::array<int32_t, g1::g_dspCount> tapFrame{};
 	for(uint32_t d = 0; d < g1::g_dspCount; ++d)
-		mc.getDsp(d).setAudioCallback([&taps, d](const uint32_t _essi, const int32_t _l, const int32_t)
+		mc.getDsp(d).setAudioCallback([&taps, &tapFrame, tapFile, d](const uint32_t _essi, const int32_t _l, const int32_t)
 		{
+			if(tapFile && _essi == 0)
+			{
+				tapFrame[d] = _l;
+				if(d == g1::g_dspCount - 1) std::fwrite(tapFrame.data(), sizeof(int32_t), tapFrame.size(), tapFile);
+			}
 			auto& t = taps[d][_essi];
 			t.mn = std::min(t.mn, _l); t.mx = std::max(t.mx, _l); ++t.n;
 			if(t.values.size() < 64) ++t.values[_l];
@@ -134,6 +142,10 @@ int main(int argc, char** argv)
 	}
 	std::vector<std::vector<uint8_t>> replayMsgs;
 	size_t replayNext = 0;
+	std::vector<uint8_t> pcOutSoFar;	// lo que el OS ha mandado por el PC Port hasta ahora
+	size_t pcOutScan = 0;
+	std::array<int, 4> slotPid{-1, -1, -1, -1};
+	uint32_t pidRewrites = 0;
 	if(argc > 4 && std::string(argv[3]) == "replay")
 	{
 		std::ifstream rf(argv[4], std::ios::binary);
@@ -178,7 +190,34 @@ int main(int argc, char** argv)
 		}
 		if(!replayMsgs.empty() && replayNext < replayMsgs.size() && i >= steps / 10 && (i % 500000) == 0)
 		{
-			mc.getPcPort().receive(replayMsgs[replayNext++]);
+			// El pid de cada slot lo decide el OS al recibir un patch (ACK $36). La sesion
+			// grabada puede traer otros (NME se reconecto a un G1 reiniciado): se reescriben
+			// con los que ha dado este OS y se rehace el checksum.
+			mc.getPcPort().takeTx(pcOutSoFar);
+			for(; pcOutScan + 7 < pcOutSoFar.size(); ++pcOutScan)
+			{
+				const auto* m = &pcOutSoFar[pcOutScan];
+				if(m[0] == 0xf0 && m[1] == 0x33 && (m[2] >> 2) == 0x16 && m[3] == 0x06 && m[5] == 0x36)
+					slotPid[m[2] & 3] = m[6];
+			}
+			auto msg = replayMsgs[replayNext++];
+			if(msg.size() > 6 && msg[0] == 0xf0 && msg[1] == 0x33 && msg[3] == 0x06)
+			{
+				const auto cc = msg[2] >> 2;
+				const auto slot = msg[2] & 3;
+				uint8_t* pid = nullptr;
+				if((cc == 0x13 || cc == 0x17) && msg[4] != 0x41) pid = &msg[4];			// Parameter, PatchModification
+				else if(cc >= 0x1c && cc <= 0x1f && !(msg[4] & 0x40)) pid = &msg[4];	// PatchPacket de un patch ya cargado
+				if(pid && slotPid[slot] >= 0 && (*pid & 0x3f) != slotPid[slot])
+				{
+					*pid = static_cast<uint8_t>((*pid & 0x40) | slotPid[slot]);
+					uint32_t sum = 0;
+					for(size_t k = 0; k + 2 < msg.size(); ++k) sum += msg[k];
+					msg[msg.size() - 2] = static_cast<uint8_t>(sum & 0x7f);
+					++pidRewrites;
+				}
+			}
+			mc.getPcPort().receive(msg);
 			if(replayNext == replayMsgs.size())
 				std::printf("  >> replay: %zu mensajes enviados (el ultimo en la instruccion %llu)\n", replayMsgs.size(), static_cast<unsigned long long>(i));
 		}
@@ -279,8 +318,10 @@ int main(int argc, char** argv)
 		mc.read8(0xfffa19), mc.read8(0xfffa1d), mc.read8(0xfffa1f),
 		mc.read16(0xfff920), mc.read16(0xfff922), mc.read16(0xfff91e));
 	std::printf("SCDR: %u lecturas, %u escrituras de la CPU\n", mc.sciDataReads(), mc.sciDataWrites());
-	std::vector<uint8_t> pcOut;
+	std::vector<uint8_t> pcOut = pcOutSoFar;
 	mc.getPcPort().takeTx(pcOut);
+	if(pidRewrites)
+		std::printf("replay: %u mensajes con el pid reescrito (pid por slot: %d %d %d %d)\n", pidRewrites, slotPid[0], slotPid[1], slotPid[2], slotPid[3]);
 	auto& pc = mc.getPcPort();
 	std::printf("PC PORT: %u interrupciones, %u bytes leidos por el OS, %u enviados; escrituras MR=%u CSR=%u CR=%u THR=%u ACR=%u IMR=%u\n",
 		mc.pcPortIrqs(), pc.rxCount(), pc.txCount(), pc.writes(0), pc.writes(1), pc.writes(2), pc.writes(3), pc.writes(4), pc.writes(5));
