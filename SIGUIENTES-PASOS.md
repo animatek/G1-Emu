@@ -22,11 +22,15 @@ Estado al cerrar la sesión del 2026-09-19. El detalle técnico de todo lo averi
 1. ~~**Los escalones y los clics**~~ Hecho (2026-09-19, tarde): reloj real de los DSP y enlaces
    entre DSP a 9 palabras por muestra, por posición. El Do sale limpio por 1/2 (armónicos −82 dB,
    sin saltos). Ver `NOTAS.md`, «Sonido limpio».
-2. **El nivel:** sigue a −62 dBFS con el volumen al máximo, y **no** venía de los enlaces. Sale
-   de `Y:$5F` del DSP 3 = `$01FEAA` (0,0156, −36 dB) con el ADC a `$FF`, y de la voz a ±0,052 en
-   el DSP 0. Seguir cómo calcula el OS `Y:$5F` a partir de `$15EC20` (¿tabla, ADC de más de
-   8 bits?) y qué nivel da un OscA → 2Output en un G1 real. `g1run` sube +36 dB mientras tanto.
-3. **Probar patches más complejos** (mixer, filtros, relojes, secuenciadores) ahora que el
+2. ~~**El nivel**~~ Explicado: el OS limita el volumen maestro a −36 dB (tabla de 128 valores
+   indexada con ADC ÷ 2; ver `NOTAS.md`). El emulador no pierde nivel; `g1run` sube +36 dB para
+   deshacer ese tope. Queda comprobar con el G1 real, grabando el mismo OscA → 2Output con el
+   volumen al máximo, si el aparato suena más (etapa analógica).
+3. ~~**Módulos de control muertos**~~ Hecho: el JIT no seguía los cambios de LA (ver `NOTAS.md`).
+   Chorus, overdrive, envolventes, relojes y maestro/esclavo funcionan.
+3b. **Una prueba propia para cada módulo** que la batería no puede juzgar (LFO lentos, lógica,
+   secuenciadores con reloj, S&H, DrumSynth con disparo...), con `g1patchtest`.
+3c. **Probar patches más complejos** (mixer, filtros, relojes, secuenciadores) ahora que el
    enlace es fiable: lo que falle ya será de los módulos o del OS, no del transporte.
 4. **Carga de la CPU:** el replay va a 1,21× del tiempo real (antes 1,31×): el ESSI a su ritmo
    real cuesta un 8%. Si falta margen, el TX de los enlaces ya no hace falta (se lee de memoria).
@@ -79,6 +83,14 @@ Con el OS real corriendo en el emulador tenemos un G1 "de laboratorio" sin encen
 - **Reproducir cuelgues:** si NME se cuelga con el G1 real, grabar la sesión y reproducirla en
   el emulador para ver qué le pasó al OS.
 
+### 3a-bis. NME con varios G1 a la vez (idea de Javier, 2026-09-19)
+
+- El editor original editaba **hasta 4 Nord Modular a la vez**: su «MIDI Setup» tiene Port 1–4,
+  cada uno con su In/Out y su casilla Enabled. NME ahora solo maneja uno.
+- Con el G1 emulado tiene más sentido que nunca: editar el emulado y el real a la vez desde el
+  mismo NME (por ejemplo, comparar un patch en los dos). Es trabajo de NME, no del emulador.
+- Pendiente de pasar a Google Tasks («Issues para la IA»): `gws` tenía el token caducado.
+
 ### 3b. Recrear módulos a partir de su código DSP
 
 - El OS lleva el código DSP de cada módulo (tablas de recursos por tipo en `$1C3B0C`,
@@ -98,7 +110,16 @@ Con el OS real corriendo en el emulador tenemos un G1 "de laboratorio" sin encen
   solo expone sus knobs (necesita la ROM del usuario); **(2)** "compilar" el patch a C++ nativo
   con los módulos recreados de 3b (sin ROM, pero solo con los módulos que estén recreados).
 
-### 3d. Una interfaz para el G1 emulado
+### 3d. Una interfaz para el G1 emulado (en marcha)
+
+- **Hecho (2026-09-19):** el modelo del panel en el emulador: pantalla HD44780, 32 LEDs, matriz
+  de 24 botones y mandos por el ADC, con API para leerlos y moverlos desde otro hilo. Ver `NOTAS.md`.
+- **Falta:** casar cada bit con su botón y su LED y cada canal del ADC con su mando; sacar el bucle
+  de `g1run` a una clase que usen la consola y la ventana; y la ventana (propuesta: JUCE, como los
+  plugins de Gearmulator y NME, que además deja la puerta abierta a un plugin). Con la carga de
+  la CPU a la vista, como pidió Javier.
+
+### 3d-antes. Una interfaz para el G1 emulado (idea original)
 
 - Ahora es una aplicación de consola. Más adelante: una ventana con el panel del rack (LEDs,
   display, botones y knobs), que es lo que el OS ya pinta y lee en `$201000`, `$201800`,

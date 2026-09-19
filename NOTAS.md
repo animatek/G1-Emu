@@ -342,3 +342,109 @@ Ojo: "Nord" y "Clavia" son marcas; mejor que el nombre no las lleve.
   del seno) y un solo salto en toda la ejecución (el ataque de la nota); 3/4 en silencio, como
   manda el 2Output. Antes: −9 dB de armónicos, +6 dB de ruido y ~8.300 saltos por segundo.
 - **Nivel**, sin cambios: −62 dBFS. `Y:$5F` del DSP 3 = `$01FEAA` con el ADC del volumen a `$FF`.
+
+## El nivel: el OS limita el volumen maestro a −36 dB (2026-09-19, Claude)
+
+- **Cómo llega el volumen al DSP 3:** la CPU escribe `Y:$5F` del DSP 3 con el ayudante genérico
+  `$10C268` (dirección `$BF` + dato `$B6`). Lo llaman `$1102F8` (bajada al apagar),
+  `$1134AE` y `$113824`: una rampa que acerca el valor enviado (`$162CE2`) al objetivo
+  (`$162CDE`) 1/32 de la diferencia cada vez. Por eso la traza enseña `$01FD9C`, `$01FDA5`…
+- **El objetivo** lo pone `$11030C`: `tabla[$153CAC + 4·índice]`, 128 valores en largos (de −113
+  a **−36,1 dB** en `$7F` = `$01FEAA`). Lo que hay detrás (`$153EAC`) es otra cosa, no la mitad
+  alta de la tabla.
+- **El índice es ADC ÷ 2**, siempre: al encender, `$10427E(canal $12, …)` devuelve
+  `$15EC20[2·canal] >> 1`; al mover el mando, el evento `$100|canal` que genera `$104226` también
+  lleva `valor >> 1`, y `$102E46` lo pasa a la misma función. Con el mando al máximo, −36 dB.
+- **Descartado:** el resto de mandos del panel. Con los 20 canales del ADC a `$FF`
+  (`G1_ADCALL=ff`) el nivel no cambia.
+- **Conclusión:** los −62 dBFS de un OscA → 2Output son lo que calcula el OS (voz a ±0,052 en el
+  enlace, −26 dBFS, por −36 dB de volumen maestro). El emulador no pierde nivel. Si el G1 de
+  verdad suena más, la diferencia está después del DSP (etapa analógica) o en algo del patch que
+  aquí no se ve. Para saberlo: grabar el mismo patch del G1 real con el volumen al máximo.
+- `g1run` sube +36 dB por defecto: deshace justo el tope del volumen maestro, de modo que la
+  salida es el nivel del enlace (OscA → 2Output a unos −26 dBFS).
+- Herramientas nuevas en `g1boot`: `G1_FINDTX=palabra` (qué código de la CPU manda esa palabra a
+  un DSP) y `G1_ADCALL=valor` (todos los canales del ADC a ese valor).
+
+## Los módulos de ritmo de control: el fin de bucle movido (2026-09-19, Claude)
+
+- **Síntoma:** todo lo de ritmo de control (azul) se quedaba quieto: MasterOsc → OscSlv sin
+  oscilar, Keyboard → ADSR en silencio, ClkGen muerto, y el chorus y el overdrive «no hacían nada»
+  porque su LFO interno y su cantidad son de control (el chorus sacaba L = R; el overdrive,
+  la misma distorsión con el mando a 0 que a 127).
+- **Cómo lo monta el OS:** el bucle principal del DSP es `do forever` hasta `$174` (un `NOP`). Si
+  el patch lleva módulos de control, el OS escribe su código desde `$174`, mueve la rutina de
+  bloque detrás (y el vector `$16/$17` a la nueva dirección, guardada en DOR0) y **alarga el bucle
+  cambiando el registro LA** con un host command (vector `$7C`: `movep x:$FFFFC6,la`), sin tocar
+  la instrucción DO. El código de control corre cada 4 bloques (24 kHz) cuando `X:$1` pasa de 3.
+  Sus punteros (`r3`, `r4`) salen de DOR1 y DCO1, que el OS usa como almacén.
+- **El fallo, en Gearmulator:** el JIT se apunta el fin de bucle al compilar el DO (desde la
+  instrucción) y corta ahí los bloques; si luego cambia LA, no se entera. Solo se ejecutaba la
+  primera instrucción del código de control.
+- **Arreglo** (`g1dsp.cpp`, `onLaChanged`): después de cada bloque del JIT se mira LA; si ha
+  cambiado, se mueve el fin del bucle en el JIT (`removeLoop`/`addLoop`) y se tiran los bloques
+  compilados en el fin viejo y el nuevo. `G1_NO_LA_FIX=1` lo desactiva (para comparar).
+
+## DMA: dos modos que Gearmulator no hacía (2026-09-19, Claude)
+
+- **Fija → fija** (DAM `100 100`, un registro a una celda): no tenía rama y en Release daba el
+  bloque por hecho sin copiar. El DSP 0 lo usa para las entradas de audio.
+- **Bloque por petición sin borrar DE** (DTM=100): se ignoraba. El DMA3 del DSP 0 va así (con
+  interrupción al acabar cada palabra, vector `$1E`, que copia el otro canal).
+- Los dos, en `cmake/Dsp56300.cmake`. La batería de 101 módulos da lo mismo con y sin ellos.
+
+## Entradas y salidas (2026-09-19, Claude)
+
+- **Salidas:** el DSP 3 manda por cada ESSI dos palabras al revés: primero la par y luego la
+  impar. Palabra 0 = salida 2, 1 = salida 1, 2 = salida 4, 3 = salida 3 (comprobado con un 4Output
+  y una señal distinta en cada salida). Antes 1/2 salían bien de casualidad (el 2Output mandaba lo
+  mismo a las dos). Los auriculares del aparato son una copia de 1/2.
+- **Entradas:** entran por el codec al DSP 0, el único sin DSP delante: **R** por el ESSI0
+  (DMA2 → `X:$6C4`) y **L** por el ESSI1 (DMA3 → `X:$6C5`). De ahí siguen a los demás DSP por el
+  enlace, en los canales 4 y 5, y el módulo AudioIn las lee. `Dsp::setInputProvider`.
+- **`g1run` por JACK** (`app/jackaudio.h`, con pipewire-jack): cliente `G1-Emu` con `out_1..out_4`
+  e `in_L`/`in_R`; `out_1`/`out_2` se conectan solos a la tarjeta. De 96 kHz a lo que pida JACK
+  con interpolación lineal. Sin JACK, o con `G1_AUDIO=alsa`, sigue por ALSA (solo 1/2). Se resta
+  el `$155` del DSP 3 (continua).
+
+## Banco de pruebas: `g1patchtest` (2026-09-19, Claude)
+
+- `g1patchtest ROM patch.pch [--note N] [--seconds S] [--wav f.wav] [--input-sine Hz]`: arranca
+  el OS sin ventana, saluda como NME (IAm y los 16 mensajes de conexión), sube el `.pch` con el
+  código de NME (`PchFileIO` → `PatchSerializer` → `UploadPacketizer`), paquete a paquete esperando
+  cada ACK, toca la nota por el PC Port y mide las cuatro salidas y los 18 canales de cada enlace
+  entre DSP (qué DSP lleva la voz). Solo se compila si está `../Nomad2026`.
+- Variables: `G1_VERBOSE` (tráfico y registros), `G1_DUMP=carpeta` (memoria P/X/Y de los DSP),
+  `G1_PCWATCH=174,194` (veces que pasa cada DSP por esas direcciones), `G1_INTERP=máscara` (DSP
+  en el intérprete; no sirve con el bucle principal: el intérprete ejecuta un `do forever` entero
+  sin volver) y `G1_NO_LA_FIX`.
+- **Ojo con los conectores:** en el `.pch` van por su `index` de `modules.xml`, que no siempre es
+  el orden de la lista (en el Overdrive, `in` es la entrada 0 y `overdrive mod` la 1).
+- **Batería** de los 101 tipos de módulo con valores por defecto (OscA a la entrada si la tienen,
+  el gate del teclado si lo piden): 56 suenan, 24 dan una señal lenta o fija y 21 callan; casi
+  todos los de esos dos grupos son de control, lógica, LFO lentos o secuenciadores sin reloj, que
+  con esa prueba no pueden sonar. Falta una prueba propia para cada uno.
+
+## El panel: pantalla, LEDs y botones (2026-09-19, Claude)
+
+- **Pantalla:** LCD de caracteres con HD44780 en bus de 8 bits. Datos en `$202006`; control en
+  `$202007`: bit 0 = RS (0 orden, 1 carácter), bit 1 = E; el byte se recoge al bajar E. El OS lo
+  inicia con `$30` ×3 y `$38` y no lee el flag de ocupado. Las minúsculas con rabo (p, y...) son
+  caracteres propios en CGRAM (códigos `$08-$0F`): «Empty patch» sale como `Em\x0Bt\x0D \x0Batch`.
+  Emulado en `g1Lib/g1lcd.h`; `Microcontroller::getLcd()`. Con el patch cargado enseña el nombre y
+  las voces por slot: `( 1) --  --  --`.
+- **LEDs:** 32, en 4 filas de 8, multiplexados (`$104000`). El OS pone el byte de la fila en
+  `$202004` y la elige con el nibble bajo de `$202005` (bit 3 = fila 0 ... bit 0 = fila 3).
+  Activos a nivel bajo (`$FF` = todos apagados). Algunos parpadean. Cuadra con el panel: 18 de los
+  mandos, A-D, Store/System/Edit/Patch-Load, Panel Split y los 5 de Oct Shift. `ledRow(fila)`.
+- **Botones:** 3 filas de 8. Bits 4-6 de `$202005` eligen la fila (a nivel bajo) y `$201800`
+  devuelve sus 8 botones (pulsado = 0). `setButton(fila, bit, pulsado)`. Identificados pulsando
+  uno a uno (`G1_PROBE=1 g1patchtest ...`): fila 0 bits 3/4/5 = slots B/C/D (y 2, casi seguro, A),
+  bit 6 = Store, bit 7 = System; fila 1 bit 2 = Assign/Morph. El resto (Edit, Patch/Load, Shift,
+  Navigator, Panel Split, Oct Shift, Find) falta por casar; hay que mirar los LEDs varias veces
+  por el parpadeo.
+- **Mandos:** canales del ADC (`$202000` elige, `$202800` lee; ver arriba). `$30` es el volumen
+  maestro; los otros 18 de los 19 códigos restantes, los mandos 1-18 (orden por casar).
+- **`$201000` + PORTF:** otra matriz de 8 filas que el OS barre ~19.000 veces por segundo
+  (`$1177CA`), leyendo el puerto F de la CPU. Probablemente el teclado del Nord Modular con teclas;
+  en el rack no hay nada.

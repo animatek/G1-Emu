@@ -44,6 +44,7 @@ namespace g1
 		uint64_t audioFrames() const { return m_audioFrames; }
 		uint64_t hostWords() const { return m_hostWords; }
 		uint64_t irqdCount() const { return m_irqdCount; }
+		uint64_t laChanges() const { return m_laChanges; }	// veces que se ha movido el fin de un bucle
 		const std::map<uint32_t, uint64_t>& servicedVectors() const { return m_servicedVectors; }
 		uint32_t lastVector() const { return m_lastVector; }
 		std::map<uint32_t, uint64_t>& pcWatch() { return m_pcWatch; }
@@ -67,11 +68,22 @@ namespace g1
 		void setNext(Dsp* _next) { m_next = _next; if(_next) _next->m_hasUpstream = true; }
 		uint64_t chainedFrames() const { return m_chainedFrames; }
 
+		// Pico de cada canal que este DSP manda al siguiente (9 por ESSI0 y 9 por ESSI1), en
+		// 24 bits, desde el ultimo reset. Dice que DSP lleva la voz y por que canal.
+		using LinkPeak = std::array<uint32_t, 18>;
+		const LinkPeak& linkPeak() const { return m_linkPeak; }
+		void resetLinkPeak() { m_linkPeak = {}; }
+
 		// Recibe la salida de cada bloque (una muestra a 96 kHz): salidas 1/2 (ESSI0) y 3/4
 		// (ESSI1), en 24 bits con signo. Con el programa de sonido del DSP 3, es lo que va al
 		// codec. Se entrega en flushAudio.
 		using BlockCallback = std::function<void(int32_t, int32_t, int32_t, int32_t)>;
 		void setBlockCallback(BlockCallback _cb) { m_blockCallback = std::move(_cb); }
+
+		// Entradas de audio (L, R) en 24 bits con signo: se piden una vez por bloque (96 kHz), en el
+		// hilo de este DSP. Solo las usa el primer DSP de la cadena, que es el que recibe el codec.
+		using InputProvider = std::function<void(int32_t&, int32_t&)>;
+		void setInputProvider(InputProvider _p) { m_inputProvider = std::move(_p); }
 
 		// Ejecuta el DSP hasta llegar a _cycles ciclos (o hasta un tope si esta esperando).
 		// Puede ir en su propio hilo: lo que sale por los ESSI se queda en una cola propia.
@@ -92,6 +104,7 @@ namespace g1
 		void drainAudio();
 		bool irqdEnabled();
 		void tapBlock();
+		void onLaChanged();
 		void tapLink(uint64_t _block);
 		void readLink(uint32_t _essi, dsp56k::Audio::RxFrame& _frame);
 
@@ -106,6 +119,10 @@ namespace g1
 		std::unique_ptr<dsp56k::DspBoot> m_boot;
 
 		bool m_booted = false;
+		bool m_interpreter = false;	// G1_INTERP
+		dsp56k::TWord m_lastLa = 0;
+		bool m_noLaFix = false;
+		uint64_t m_laChanges = 0;
 		uint32_t m_bootCount = 0;
 		uint64_t m_stalls = 0;
 		uint64_t m_audioFrames = 0;
@@ -121,8 +138,11 @@ namespace g1
 		struct LinkBlock { uint64_t index; std::array<dsp56k::TWord, 18> words; };
 		std::vector<LinkBlock> m_linkOut;	// bloques de este DSP, pendientes de flushAudio
 		std::deque<LinkBlock> m_linkIn;		// bloques del DSP anterior
+		LinkPeak m_linkPeak{};
 		std::array<dsp56k::TWord, 2> m_craSeen{};
 		BlockCallback m_blockCallback;
+		InputProvider m_inputProvider;
+		std::array<int32_t, 2> m_input{};
 		using BlockFrame = std::array<dsp56k::TWord, 4>;
 		std::vector<BlockFrame> m_blocks;	// pendiente de flushAudio
 		struct StagedFrame { uint32_t slots; std::array<dsp56k::TWord, 4> v; };

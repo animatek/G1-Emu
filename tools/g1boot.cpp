@@ -106,6 +106,10 @@ int main(int argc, char** argv)
 			std::fwrite(f, sizeof(int32_t), 4, blockFile);
 		});
 	// G1_ADCMUX=codigo: ese canal del ADC (un mando) a $FF desde el encendido, para identificarlo
+	// G1_ADCALL=valor (hex): todos los canales del ADC a ese valor desde el encendido.
+	if(const char* all = std::getenv("G1_ADCALL"))
+		for(const uint8_t code : {0x31, 0x37, 0x2d, 0x32, 0x28, 0x2e, 0x33, 0x29, 0x2f, 0x34, 0x2a, 0x1a, 0x35, 0x2b, 0x1b, 0x36, 0x2c, 0x1c, 0x30, 0x18})
+			mc.setAdc(code, static_cast<uint8_t>(std::stoul(all, nullptr, 16)));
 	if(const char* mux = std::getenv("G1_ADCMUX"))
 		mc.setAdc(static_cast<uint8_t>(std::stoul(mux, nullptr, 16)), 0xff);
 	std::printf("reset: PC=$%06x SP=$%06x\n", mc.getPC(), mc.getAReg(7));
@@ -412,6 +416,31 @@ int main(int argc, char** argv)
 		}
 	}
 
+	// G1_FINDTX=palabra (hex): quien manda esa palabra de 24 bits a un DSP (puerto, PC de la CPU).
+	if(const char* ft = std::getenv("G1_FINDTX"))
+	{
+		const auto want = static_cast<uint32_t>(std::stoul(ft, nullptr, 16));
+		std::map<uint32_t, uint32_t> high;
+		uint32_t found = 0;
+		for(size_t k = 0; k < mc.hostTrace().size(); ++k)
+		{
+			const auto& a = mc.hostTrace()[k];
+			if(!a.write) continue;
+			const auto port = a.addr & ~7u, reg = a.addr & 7;
+			if(reg == 4) { high[port] = a.value; continue; }
+			if(reg != 6) continue;
+			const auto w = ((high[port] & 0xff) << 16) | (a.value & 0xffff);
+			if(w == want && found++ < 10)
+			{
+				std::printf("G1_FINDTX %06x -> $%06x desde PC=$%06x (evento %zu). Antes:", w, port, a.pc, k);
+				for(size_t j = k >= 12 ? k - 12 : 0; j < k; ++j)
+					if(mc.hostTrace()[j].write && (mc.hostTrace()[j].addr & ~7u) == port)
+						std::printf(" [r%u=%x pc=%06x]", mc.hostTrace()[j].addr & 7, mc.hostTrace()[j].value, mc.hostTrace()[j].pc);
+				std::printf("\n");
+			}
+		}
+		std::printf("G1_FINDTX: %u veces\n", found);
+	}
 	// Tablas de punteros a los puertos HI08 que usa el OS (RAM)
 	std::printf("\npunteros en RAM:");
 	for(uint32_t a : {0x15bd60u, 0x15bd70u, 0x15bd80u, 0x15bd90u, 0x144640u})

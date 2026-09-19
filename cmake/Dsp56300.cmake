@@ -82,6 +82,24 @@ g1_dsp_replace(dma.cpp
 	"constexpr bool g_delayedDmaTransfer = true;"
 	"constexpr bool g_delayedDmaTransfer = false;")
 
+# DMA por peticion en modo bloque sin borrar DE (DTM=100). El DSP 0 del G1 mete asi la entrada
+# de audio L: el DMA3 lleva el RX del ESSI1 a X:$6C5 (bloque de 1 palabra) y su interrupcion
+# (vector $1E) copia el RX del ESSI0 a X:$6C4. Gearmulator lo ignoraba en silencio (solo
+# aceptaba palabra o linea). Una peticion mueve el bloque entero; con DE puesto, sigue armado.
+g1_dsp_replace(dma.cpp
+	"const auto isSupportedTransferMode = tm == TransferMode::WordTriggerRequest || tm == TransferMode::WordTriggerRequestClearDE || tm == TransferMode::LineTriggerRequestClearDE;"
+	"const auto isSupportedTransferMode = tm == TransferMode::WordTriggerRequest || tm == TransferMode::WordTriggerRequestClearDE || tm == TransferMode::LineTriggerRequestClearDE || tm == TransferMode::BlockTriggerRequest || tm == TransferMode::BlockTriggerRequestClearDE;")
+g1_dsp_replace(dma.cpp
+	"		if(!bittest(m_dcr, De))\n			return;\n\n		if(execTransfer())\n			finishTransfer();"
+	"		if(!bittest(m_dcr, De))\n			return;\n\n		const auto btm = getTransferMode();\n		if(btm == TransferMode::BlockTriggerRequest || btm == TransferMode::BlockTriggerRequestClearDE)\n		{\n			while(!execTransfer()) {}\n			finishTransfer();\n			return;\n		}\n\n		if(execTransfer())\n			finishTransfer();")
+
+# DMA de direccion fija a direccion fija (DAM 100 100): un registro de periferico a una celda de
+# memoria. El DSP 0 lo usa para las entradas de audio (RX del ESSI1 -> X:$6C5). No tenia rama:
+# caia en el assert final y, en Release, daba el bloque por hecho sin copiar nada.
+g1_dsp_replace(dma.cpp
+	"		assert(false && \"DMA transfer mode not supported yet\");\n		return true;\n	}"
+	"		if(agmS == AddressGenMode::SingleCounterAnoUpdate && agmD == AddressGenMode::SingleCounterAnoUpdate)\n		{\n			memWrite(areaD, m_ddr, memRead(areaS, m_dsr));\n			if(isRequestTrigger() && m_dco)\n			{\n				--m_dco;\n				return false;\n			}\n			m_dco = m_dcomInit;\n			return true;\n		}\n\n		assert(false && \"DMA transfer mode not supported yet\");\n		return true;\n	}")
+
 foreach(source IN LISTS g1_dsp_files)
 	get_filename_component(name "${source}" NAME)
 	configure_file("${g1_dsp_prepare}/${name}" "${g1_dsp_overlay}/${name}" COPYONLY)

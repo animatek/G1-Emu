@@ -10,12 +10,17 @@
 // Crea el cliente ALSA "G1-Emu" con dos puertos, como el aparato:
 //   "PC Port" = el PC PORT del editor (NME se conecta aqui)
 //   "MIDI"    = el MIDI IN/OUT normal
-// La salida 1/2 (ESSI0 del DSP 3) suena por ALSA ("default", o G1_AUDIO=dispositivo;
-// G1_AUDIO=no la desactiva). G1_GAIN_DB sube el nivel (por defecto +36 dB, provisional:
-// el G1 emulado sale muy flojo, ver NOTAS.md).
+// El audio va por JACK (PipeWire) si hay servidor: cliente "G1-Emu" con out_1..out_4 e in_L/in_R,
+// como el panel trasero; out_1/out_2 se conectan solos a la tarjeta (G1_JACK_CONNECT=0 no).
+// Si no hay JACK, o con G1_AUDIO=alsa o G1_AUDIO=dispositivo, salidas 1/2 por ALSA.
+// G1_AUDIO=no lo desactiva. G1_GAIN_DB sube el nivel (por defecto +36 dB: deshace el tope
+// de -36 dB que el OS pone al volumen maestro, ver NOTAS.md).
 // Ctrl+C guarda la flash y sale.
 
 #include "alsaaudio.h"
+#ifdef G1_HAVE_JACK
+#include "jackaudio.h"
+#endif
 #include "alsamidi.h"
 #include "g1Lib/g1mc.h"
 
@@ -135,25 +140,53 @@ int main(int argc, char** argv)
 	const char* recordEnv = std::getenv("G1_RECORD");
 	const uint64_t wavMaxFrames = recordEnv ? static_cast<uint64_t>(std::atof(recordEnv) * 96000.0) : 0;
 	std::unique_ptr<g1app::AlsaAudio> audio;
+#ifdef G1_HAVE_JACK
+	std::unique_ptr<g1app::JackAudio> jack;
+#endif
 	const char* audioDev = std::getenv("G1_AUDIO");
 	if(!audioDev || std::string(audioDev) != "no")
 	{
 		const char* gainEnv = std::getenv("G1_GAIN_DB");
 		const float gainDb = gainEnv ? static_cast<float>(std::atof(gainEnv)) : 36.0f;
-		audio = std::make_unique<g1app::AlsaAudio>(audioDev ? audioDev : "default", std::pow(10.0f, gainDb / 20.0f));
-		if(audio->valid())
-			std::printf("audio: salida 1/2 por ALSA \"%s\" a 48 kHz, %+.0f dB\n", audioDev ? audioDev : "default", gainDb);
-		else
+		const float gain = std::pow(10.0f, gainDb / 20.0f);
+#ifdef G1_HAVE_JACK
+		if(!audioDev || std::string(audioDev) == "jack")
 		{
-			std::printf("audio: no puedo abrir \"%s\"; sigo sin sonido\n", audioDev ? audioDev : "default");
-			audio.reset();
+			jack = std::make_unique<g1app::JackAudio>("G1-Emu", gain);
+			if(jack->valid())
+			{
+				std::printf("audio: JACK \"G1-Emu\" a %u Hz, %+.0f dB: out_1..out_4 (1/2 a la tarjeta), in_L/in_R\n", jack->rate(), gainDb);
+				mc.getDsp(0).setInputProvider([&](int32_t& _l, int32_t& _r) { jack->pullInput(_l, _r); });
+			}
+			else
+				jack.reset();
+		}
+		if(!jack)
+#endif
+		{
+			const char* dev = (!audioDev || std::string(audioDev) == "alsa" || std::string(audioDev) == "jack") ? "default" : audioDev;
+			audio = std::make_unique<g1app::AlsaAudio>(dev, gain);
+			if(audio->valid())
+				std::printf("audio: salida 1/2 por ALSA \"%s\" a 48 kHz, %+.0f dB\n", dev, gainDb);
+			else
+			{
+				std::printf("audio: no puedo abrir \"%s\"; sigo sin sonido\n", dev);
+				audio.reset();
+			}
 		}
 	}
 	// Una muestra por bloque del DSP 3 (96 kHz): salidas 1/2 y 3/4, lo que va al codec.
+	// Las salidas llevan el desplazamiento X:$5F del DSP 3 ($155, casi nada); en el aparato lo
+	// quita el condensador de salida. Aqui se resta para no mandar continua a la tarjeta.
+	constexpr int32_t dc = 0x155;
 	mc.getDsp(3).setBlockCallback([&](const int32_t _o1, const int32_t _o2, const int32_t _o3, const int32_t _o4)
 	{
 		if(audio)
-			audio->push(_o1, _o2);
+			audio->push(_o1 - dc, _o2 - dc);
+#ifdef G1_HAVE_JACK
+		if(jack)
+			jack->push(_o1 - dc, _o2 - dc, _o3 - dc, _o4 - dc);
+#endif
 		if(wavFrames >= wavMaxFrames)
 			return;
 		wavFrame[0] = _o1;
@@ -248,12 +281,15 @@ int main(int argc, char** argv)
 								std::printf(" [E%u s%u tx%u %.0fdB]", e, sl, l, 20.0 * std::log10(m[e][sl][l] / 8388608.0));
 				dsp.resetMeter();
 			}
-			if(audio)
-			{
-				const auto peak = audio->peak();
-				std::printf("  salida %s  cortes %llu", peak > 0.0f ? (std::to_string(static_cast<int>(20.0f * std::log10(peak))) + " dB").c_str() : "silencio",
-					static_cast<unsigned long long>(audio->xruns()));
-			}
+			float peak = -1.0f;
+			uint64_t xruns = 0;
+			if(audio) { peak = audio->peak(); xruns = audio->xruns(); }
+#ifdef G1_HAVE_JACK
+			if(jack) { peak = jack->peak(); xruns = jack->xruns(); }
+#endif
+			if(peak >= 0.0f)
+				std::printf("  salida 1/2 %s  cortes %llu", peak > 0.0f ? (std::to_string(static_cast<int>(20.0f * std::log10(peak))) + " dB").c_str() : "silencio",
+					static_cast<unsigned long long>(xruns));
 			std::printf("\n");
 			std::fflush(stdout);
 			lastReport = now;

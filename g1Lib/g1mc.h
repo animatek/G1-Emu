@@ -10,6 +10,7 @@
 #include "g1dsp.h"
 #include "g1flash.h"
 #include "g1duart.h"
+#include "g1lcd.h"
 
 #include "mc68k/hdi08.h"
 #include "hardwareLib/sciMidi.h"
@@ -39,6 +40,10 @@ namespace g1
 	static constexpr uint32_t g_panelIn = 0x201800;			// CS4, lectura de la matriz de botones
 	static constexpr uint32_t g_panelOut = 0x202000;		// CS2, filas de botones y LEDs
 	static constexpr uint32_t g_panelAdc = 0x202800;		// CS3, ADC de los mandos (canal elegido en $202000)
+	static constexpr uint32_t g_panelLeds = 0x202004;		// LEDs: los 8 de la fila que se elija
+	static constexpr uint32_t g_panelRows = 0x202005;		// filas: LEDs (bits 0-3) y botones (4-6, a nivel bajo)
+	static constexpr uint32_t g_lcdData = 0x202006;		// LCD HD44780: bus de datos
+	static constexpr uint32_t g_lcdControl = 0x202007;		// LCD: bit 0 = RS, bit 1 = E
 	static constexpr uint8_t g_adcVolume = 0x30;			// codigo de multiplexor del volumen maestro
 	static constexpr uint32_t g_flashAddress = 0x300000;	// CS7, 1 MB, 8 bits: el OS instalado
 	static constexpr uint32_t g_flashSize = Flash::Size;
@@ -108,6 +113,17 @@ namespace g1
 		uint32_t sciDataWrites() const { return m_sciDataWrites; }
 		uint64_t ucCycles() const { return m_ucCycles; }
 
+		// El panel: pantalla, 32 LEDs (4 filas de 8), 24 botones (3 filas de 8) y los mandos,
+		// que son canales del ADC (setAdc). Todo se puede leer y escribir desde otro hilo.
+		const Lcd& getLcd() const { return m_lcd; }
+		uint8_t ledRow(const uint32_t _row) const { return m_leds[_row & 3].load(std::memory_order_relaxed); }
+		void setButton(const uint32_t _row, const uint32_t _bit, const bool _pressed)
+		{
+			auto& r = m_buttons[_row % 3];
+			const auto mask = static_cast<uint8_t>(1u << (_bit & 7));
+			_pressed ? r.fetch_or(mask) : r.fetch_and(static_cast<uint8_t>(~mask));
+		}
+
 	private:
 		bool isInternalPeripheral(uint32_t _addr) const { return (_addr & 0xfff000) == 0xfff000; }
 		static bool isHostPort(uint32_t _addr) { return _addr >= g_dspAddress && _addr < g_dspAddress + g_hostPorts * 8; }
@@ -138,6 +154,11 @@ namespace g1
 		uint16_t m_picr = 0, m_pitr = 0;
 		std::array<uint8_t, 256> m_adc{};	// en el constructor: volumen al maximo, mandos a cero
 		uint8_t m_adcSelect = 0;
+		uint8_t m_ledLatch = 0, m_panelRows = 0xff;
+		std::array<std::atomic<uint8_t>, 4> m_leds{};
+		std::array<std::atomic<uint8_t>, 3> m_buttons{};	// 1 = pulsado
+		uint8_t buttonRow() const;
+		Lcd m_lcd;
 		uint64_t m_pitAccum = 0;
 
 		// Un hilo por DSP (el 0 va en el de la CPU). En cada sincronizacion la CPU publica el

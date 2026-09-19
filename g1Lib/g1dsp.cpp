@@ -1,8 +1,10 @@
 #include "g1dsp.h"
 
 #include "mc68k/hdi08.h"
+#include "dsp56kEmu/jit.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <type_traits>
 #include <vector>
 
@@ -105,9 +107,11 @@ namespace g1
 			{
 				if(!m_hasUpstream)
 				{
-					// El primer DSP no tiene a nadie delante: silencio.
+					// El primer DSP no tiene un DSP delante: recibe el codec, las entradas de
+					// audio del panel trasero (R por el ESSI0 -> X:$6C4, L por el ESSI1 ->
+					// X:$6C5; de ahi pasan a los demas por el enlace, en los canales 4 y 5).
 					_frame.resize(2);
-					_frame[0][0] = _frame[1][0] = 0;
+					_frame[0][0] = _frame[1][0] = static_cast<dsp56k::TWord>(m_input[e]) & 0xffffff;
 					return;
 				}
 				readLink(e, _frame);
@@ -155,6 +159,12 @@ namespace g1
 			m_hdiUc.icr(m_hdiUc.icr() & 0x7f);
 			m_hdiUc.isr(m_hdiUc.isr() | mc68k::Hdi08::IsrBits::Txde | mc68k::Hdi08::IsrBits::Trdy);
 		});
+
+		// G1_INTERP=mascara: esos DSP (bit n = DSP n) corren en el interprete del nucleo en vez
+		// del JIT. Mucho mas lento; sirve para ver si un fallo es del JIT.
+		m_noLaFix = std::getenv("G1_NO_LA_FIX") != nullptr;	// solo para comparar con el fallo
+		if(const char* in = std::getenv("G1_INTERP"))
+			m_interpreter = ((std::strtoul(in, nullptr, 0) >> _index) & 1) != 0;
 
 		armBoot();
 	}
@@ -223,6 +233,8 @@ namespace g1
 				m_nextIrqd = (before - m_nextIrqd > g_cyclesPerFrame * 4) ? (before / g_cyclesPerFrame + 1) * g_cyclesPerFrame : m_nextIrqd + g_cyclesPerFrame;
 				if(irqdEnabled())
 				{
+					if(m_inputProvider)
+						m_inputProvider(m_input[1], m_input[0]);	// L entra por el ESSI1 y R por el ESSI0
 					if(m_blockCallback)
 						tapBlock();
 					if(m_next)
@@ -231,7 +243,12 @@ namespace g1
 					++m_irqdCount;
 				}
 			}
-			m_dsp.exec();
+			if(m_interpreter)
+				m_dsp.execInterpreter();
+			else
+				m_dsp.exec();
+			if(static_cast<dsp56k::TWord>(m_dsp.regs().la.var) != m_lastLa && !m_noLaFix)
+				onLaChanged();
 			const auto now = m_dsp.getCycles();
 			if(now == before)	// DSP parado (WAIT/STOP o detenido): no insistir
 			{
@@ -272,6 +289,11 @@ namespace g1
 			b.words[i] = mem.get(dsp56k::MemArea_Y, p0 + i);
 			b.words[9 + i] = mem.get(dsp56k::MemArea_Y, p1 + i);
 		}
+		for(size_t i = 0; i < b.words.size(); ++i)
+		{
+			const auto v = static_cast<int32_t>(b.words[i] << 8) >> 8;
+			m_linkPeak[i] = std::max<uint32_t>(m_linkPeak[i], static_cast<uint32_t>(v < 0 ? -v : v));
+		}
 		m_linkOut.push_back(b);
 	}
 
@@ -283,10 +305,12 @@ namespace g1
 		if(p0 < 0x600 || p0 > 0x7fe || p1 < 0x600 || p1 > 0x7fe)
 			return;	// todavia no corre el programa de sonido
 		BlockFrame f;
-		f[0] = mem.get(dsp56k::MemArea_Y, p0);
-		f[1] = mem.get(dsp56k::MemArea_Y, p0 + 1);
-		f[2] = mem.get(dsp56k::MemArea_Y, p1);
-		f[3] = mem.get(dsp56k::MemArea_Y, p1 + 1);
+		// Cada ESSI lleva la pareja al reves: primero la salida par (2 y 4) y luego la impar
+		// (1 y 3). Comprobado con un 4Output y una senal distinta en cada salida.
+		f[0] = mem.get(dsp56k::MemArea_Y, p0 + 1);	// salida 1
+		f[1] = mem.get(dsp56k::MemArea_Y, p0);		// salida 2
+		f[2] = mem.get(dsp56k::MemArea_Y, p1 + 1);	// salida 3
+		f[3] = mem.get(dsp56k::MemArea_Y, p1);		// salida 4
 		m_blocks.push_back(f);
 	}
 
@@ -310,6 +334,33 @@ namespace g1
 			const auto pos = (ddr - g_linkBase[_essi] + s) % 9;
 			_frame[s][0] = (src && inRing) ? src->words[_essi * 9 + pos] : 0;
 		}
+	}
+
+	// El OS alarga el bucle principal sin reescribir el DO: al cargar un patch con modulos de
+	// control (envolventes, relojes, osciladores maestros...) mete su codigo al final del bucle
+	// (desde $174) y cambia el registro LA con un host command (vector $7C: movep ...,la). En el
+	// DSP el fin de bucle se compara con LA en cada vuelta; el JIT de Gearmulator, en cambio, se
+	// apunta el fin al compilar el DO y corta ahi los bloques. Sin esto solo se ejecutaba la
+	// primera instruccion del codigo de control y todo lo de ritmo de control se quedaba quieto.
+	void Dsp::onLaChanged()
+	{
+		const dsp56k::TWord oldLa = m_lastLa;
+		const dsp56k::TWord newLa = static_cast<dsp56k::TWord>(m_dsp.regs().la.var);
+		m_lastLa = newLa;
+		auto& jit = m_dsp.getJit();
+		constexpr dsp56k::TWord none = 0xffffffff;
+		dsp56k::TWord begin = none;
+		for(const auto& [b, end] : jit.getLoops())
+			if(end == oldLa + 1)
+				begin = b;
+		if(begin == none)
+			return;	// ese bucle no esta compilado: el JIT lo apuntara bien cuando lo compile
+		jit.removeLoop(begin);
+		jit.addLoop(begin, newLa + 1);
+		// Los bloques que acababan en el fin viejo o que pasan por el nuevo se recompilan.
+		for(const dsp56k::TWord pc : std::array<dsp56k::TWord, 4>{oldLa, oldLa + 1, newLa, newLa + 1})
+			jit.destroy(pc);
+		++m_laChanges;
 	}
 
 	void Dsp::catchUp(const uint64_t _cycles)

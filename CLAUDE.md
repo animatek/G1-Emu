@@ -15,8 +15,10 @@ PORT**, y `g1run` lo corre en tiempo real (~94%) con puertos MIDI virtuales de A
 patch y una nota **ya suena**: el audio recorre los 4 DSP y sale por el DSP 3 a la altura
 correcta, y `g1run` lo saca por la tarjeta de sonido. Los 4 DSP van en hilos propios: 100% del
 tiempo real con margen. **Suena limpio** (desde el 2026-09-19 por la tarde: los DSP a su reloj real
-de 82,944 MHz y los enlaces entre ellos a 9 palabras por muestra; ver `NOTAS.md`). Sigue muy flojo
-(−62 dBFS) y falta el panel (ver `SIGUIENTES-PASOS.md`).
+de 82,944 MHz y los enlaces entre ellos a 9 palabras por muestra; ver `NOTAS.md`). Sale flojo porque
+el propio OS limita el volumen maestro a −36 dB; `g1run` lo compensa. Los módulos de control
+(envolventes, relojes, maestros, el LFO del chorus) funcionan desde que se arregló el fin de bucle
+del JIT. Cuatro salidas y dos entradas por JACK. Falta el panel (ver `SIGUIENTES-PASOS.md`).
 
 ## Usarlo
 
@@ -29,9 +31,10 @@ en NME se elige como entrada y salida) y **MIDI** (el MIDI IN/OUT normal). La fl
 patches guardados) vive en `~/.local/share/Animatek/G1-Emu/flash.bin`; si no existe, se crea
 con el OS de fábrica de la ROM.
 
-El audio (salidas 1/2) sale por ALSA, dispositivo `default` (PipeWire lo recoge). Variables:
-`G1_AUDIO=dispositivo` o `G1_AUDIO=no`; `G1_GAIN_DB` (por defecto +36 dB, provisional: sale muy
-flojo); `G1_THREADS=0` para correr los DSP en serie; `G1_RECORD=segundos` graba un WAV de 4 canales. El mapa de memoria, el cargador y el plan están en `NOTAS.md`. La
+El audio va por JACK (pipewire-jack): cliente **G1-Emu** con `out_1..out_4` e `in_L`/`in_R`, como el
+panel trasero; `out_1`/`out_2` se conectan solos a la tarjeta (`G1_JACK_CONNECT=0` no). Sin JACK, o
+con `G1_AUDIO=alsa`/`G1_AUDIO=dispositivo`, salidas 1/2 por ALSA; `G1_AUDIO=no` sin audio. Más: `G1_GAIN_DB` (por defecto +36 dB, que deshace el tope de
+−36 dB que el OS pone al volumen maestro); `G1_THREADS=0` para correr los DSP en serie; `G1_RECORD=segundos` graba un WAV de 4 canales. El mapa de memoria, el cargador y el plan están en `NOTAS.md`. La
 plantilla es la emulación del Nord Lead 2X de Gearmulator (`source/nord/n2x`).
 
 ## Compilar y probar
@@ -59,6 +62,8 @@ desde la ROM en `$C800`, así que la dirección de RAM X está en la ROM en `X -
 | `app/g1run.cpp`, `app/alsamidi.h`, `app/alsaaudio.h`, `g1.sh` | El G1 en tiempo real: MIDI virtual y audio por ALSA, flash persistente. |
 | `cmake/Dsp56300.cmake`, `g1Lib/dsp56300.cpp` | Correcciones del núcleo DSP (JIT y DMA), aplicadas a una copia de compilación. |
 | `tools/g1boot.cpp` | Arranque sin interfaz y desensamblador. |
+| `tools/patchtest/` | `g1patchtest`: sube un `.pch` como NME, toca una nota y mide (necesita `../Nomad2026`). |
+| `app/jackaudio.h` | Audio por JACK: 4 salidas y 2 entradas. |
 
 **El plan y las ideas pendientes están en `SIGUIENTES-PASOS.md`.**
 

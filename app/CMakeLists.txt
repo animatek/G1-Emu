@@ -1,2 +1,15 @@
-add_executable(g1run g1run.cpp alsamidi.h)
+add_executable(g1run g1run.cpp alsamidi.h alsaaudio.h jackaudio.h)
 target_link_libraries(g1run PRIVATE g1Lib asound)
+
+# JACK (con PipeWire, pipewire-jack): cuatro salidas y dos entradas como el panel trasero.
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+	pkg_check_modules(JACK QUIET jack)
+endif()
+if(JACK_FOUND)
+	target_compile_definitions(g1run PRIVATE G1_HAVE_JACK=1)
+	target_include_directories(g1run PRIVATE ${JACK_INCLUDE_DIRS})
+	target_link_libraries(g1run PRIVATE ${JACK_LIBRARIES})
+else()
+	message(STATUS "g1run: sin JACK, solo ALSA")
+endif()

@@ -2,6 +2,28 @@
 
 ## 2026-09-19
 
+- **El panel, emulado (Claude, cambio local, sin commit).** Pantalla LCD HD44780 (`$202006/7`),
+  32 LEDs en 4 filas y matriz de 24 botones (`$202004/5`, `$201800`), con API para una interfaz.
+  Identificados A-D, Store, System y Assign/Morph. Verificación: `g1patchtest` enseña la pantalla
+  del G1 (nombre del patch y voces por slot) y responde a los botones (menú System, Store, slots).
+
+- **Los módulos de control, las entradas y las cuatro salidas (Claude, cambio local, sin
+  commit).** El JIT de Gearmulator no seguía los cambios del registro LA, y el OS alarga así el
+  bucle principal al cargar módulos de control: envolventes, relojes, maestro/esclavo y el LFO del
+  chorus y la cantidad del overdrive se quedaban quietos. Ahora se resincroniza (`onLaChanged`).
+  Dos modos de DMA que faltaban (fija→fija y bloque por petición sin borrar DE) dan las entradas
+  de audio. Las salidas estaban cruzadas por parejas (1↔2, 3↔4). `g1run` por JACK con
+  `out_1..out_4` e `in_L`/`in_R`. Nuevo banco de pruebas `g1patchtest`. Verificación: batería de
+  los 101 tipos de módulo, A/B del chorus (L≠R) y del overdrive (sigue al mando), AudioIn con senos
+  distintos en L y R, 4Output con cuatro señales, `g1run` por JACK 16 s sin cortes, CTest.
+
+- **El nivel, explicado (Claude, cambio local, sin commit).** El OS del rack limita el volumen
+  maestro a −36 dB: lo saca de una tabla de 128 valores (`$153CAC`) indexada con ADC ÷ 2, al
+  encender y al mover el mando. Los −62 dBFS de un OscA → 2Output son lo que calcula el OS; el
+  emulador no pierde nivel, y los +36 dB de `g1run` deshacen ese tope. Nuevos `G1_FINDTX` y
+  `G1_ADCALL` en `g1boot`. Verificación: traza de la CPU hasta `Y:$5F` del DSP 3, tabla leída de
+  la ROM y replay con los 20 canales del ADC al máximo (mismo nivel).
+
 - **Suena limpio: reloj real de los DSP y enlaces de 9 palabras (Claude, commit
   `79e16aa`).** Los DSP van a 82,944 MHz (864 ciclos por muestra, del `PCTL` del OS) con la IRQD en
   una rejilla fija común; los ESSI, al ritmo que sale de su CRA (96 ciclos por palabra en los

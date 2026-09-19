@@ -236,7 +236,7 @@ namespace g1
 			return static_cast<uint16_t>((m_flash.read(addr - g_flashAddress) << 8) | m_flash.read(addr - g_flashAddress + 1));
 		logUnknown(addr, false, 0);
 		if(addr == g_panelIn)
-			return 0xff;	// ningun boton pulsado
+			return buttonRow();
 		return 0;
 	}
 
@@ -260,7 +260,7 @@ namespace g1
 			return m_flash.read(addr - g_flashAddress);
 		logUnknown(addr, false, 0);
 		if(addr == g_panelIn)
-			return 0xff;	// ningun boton pulsado
+			return buttonRow();
 		if(addr == g_panelAdc)
 			return m_adc[m_adcSelect];
 		return 0;
@@ -304,6 +304,16 @@ namespace g1
 		logUnknown(addr, true, _val);
 	}
 
+	// Los botones de la fila elegida en $202005 (bits 4-6, a nivel bajo). Pulsado = 0.
+	uint8_t Microcontroller::buttonRow() const
+	{
+		uint8_t v = 0xff;
+		for(uint32_t row = 0; row < 3; ++row)
+			if(!(m_panelRows & (0x10u << row)))
+				v &= static_cast<uint8_t>(~m_buttons[row].load(std::memory_order_relaxed));
+		return v;
+	}
+
 	void Microcontroller::write8(const uint32_t _addr, const uint8_t _val)
 	{
 		const auto addr = _addr & 0xffffff;
@@ -338,6 +348,31 @@ namespace g1
 		}
 		if(addr == g_panelOut)
 			m_adcSelect = _val;	// canal del multiplexor del ADC
+		else if(addr == g_panelLeds)
+		{
+			m_ledLatch = _val;
+			return;
+		}
+		else if(addr == g_panelRows)
+		{
+			// Nibble bajo: la fila de LEDs que se enciende con lo ultimo que se puso en $202004
+			// (bit 3 = fila 0 ... bit 0 = fila 3). Bits 4-6: fila de botones, a nivel bajo.
+			m_panelRows = _val;
+			for(uint32_t row = 0; row < 4; ++row)
+				if(_val & (8u >> row))
+					m_leds[row].store(m_ledLatch, std::memory_order_relaxed);
+			return;
+		}
+		else if(addr == g_lcdData)
+		{
+			m_lcd.writeData(_val);
+			return;
+		}
+		else if(addr == g_lcdControl)
+		{
+			m_lcd.writeControl(_val);
+			return;
+		}
 		logUnknown(addr, true, _val);
 	}
 }
