@@ -34,6 +34,8 @@ namespace g1
 	static constexpr uint32_t g_dspAddress = 0x200000;		// CS0, puertos HI08 de los DSP
 	static constexpr uint32_t g_panelIn = 0x201800;			// CS4, lectura de la matriz de botones
 	static constexpr uint32_t g_panelOut = 0x202000;		// CS2, filas de botones y LEDs
+	static constexpr uint32_t g_panelAdc = 0x202800;		// CS3, ADC de los mandos (canal elegido en $202000)
+	static constexpr uint8_t g_adcVolume = 0x30;			// codigo de multiplexor del volumen maestro
 	static constexpr uint32_t g_flashAddress = 0x300000;	// CS7, 1 MB, 8 bits: el OS instalado
 	static constexpr uint32_t g_flashSize = Flash::Size;
 
@@ -125,10 +127,15 @@ namespace g1
 		uint32_t m_pcPortIrqs = 0;
 		// Temporizador periodico del SIM (PIT): el reloj del sistema del OS.
 		uint16_t m_picr = 0, m_pitr = 0;
+		std::array<uint8_t, 256> m_adc{};	// en el constructor: volumen al maximo, mandos a cero
+		uint8_t m_adcSelect = 0;
 		uint64_t m_pitAccum = 0;
 		uint64_t m_pitIrqs = 0;
 	public:
 		uint64_t pitIrqs() const { return m_pitIrqs; }
+		// Mandos del panel: valor del ADC para cada codigo de multiplexor (lo que el OS escribe en $202000)
+		void setAdc(uint8_t _value) { m_adc.fill(_value); }
+		void setAdc(uint8_t _select, uint8_t _value) { m_adc[_select] = _value; }
 		uint32_t getSR() const;
 	private:
 		uint32_t m_sciDataWrites = 0;

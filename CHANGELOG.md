@@ -2,6 +2,14 @@
 
 ## 2026-09-19
 
+- **Ya suena por la salida (Claude, commit en este repo).** El audio recorre la cadena
+  DSP0→1→2→3 y el DSP 3 saca el Do de la nota a 261 Hz. Tres arreglos: el DMA de doble contador
+  en origen y destino (Gearmulator no lo tenía y no copiaba nada), las transferencias de bloque
+  inmediatas (la copia llegaba tarde y pisaba la voz) y el volumen maestro, que el OS lee del
+  ADC del panel (código `$30`) y el emulador daba a 0. Verificación: compilado todo, CTest,
+  replay de 60 M instrucciones y FFT de la salida de los 4 DSP. Pendiente: nivel muy bajo
+  (−62 dBFS), escalonado y cortes sueltos; salida a la tarjeta de sonido.
+
 - **Primer audio del patch (Claude, cambio local, sin commit).** El replay de Codex no sonaba
   por un fallo del propio replay: en la sesión grabada NME se reconectó a un G1 reiniciado, así
   que la segunda subida de patch recibió otra vez pid 1; en el replay el OS da pid 2 y descarta

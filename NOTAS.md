@@ -253,3 +253,31 @@ Ojo: "Nord" y "Clavia" son marcas; mejor que el nombre no las lleve.
   saca ceros; el DSP 3 sigue en `$155`.
 - **Herramienta:** `G1_TAP=fichero g1boot ...` guarda el slot 0 del ESSI0 de los 4 DSP, en
   `int32` por DSP y trama.
+
+## Sale por el DSP 3 (2026-09-19, Claude)
+
+- **Cadena de audio confirmada: DSP0 → DSP1 → DSP2 → DSP3 → códec.** Cada DSP recibe por ESSI en
+  `X:$6C0` (DMA2/3). Al empezar cada bloque, el **DMA0 copia `X:$6C0` → `Y:` búfer de salida**
+  (`$6C0`/`$6E0` alternos, 18 palabras), las voces suman encima y el DMA4/5 lo saca por TX.
+  Un DSP sin voces solo deja pasar lo que recibe.
+- **Fallo 1, en Gearmulator:** el DMA0 usa doble contador en origen y destino a la vez
+  (`DCR=$1801B4`, DAM `011 011`, los dos con DOR3 = −17). No estaba implementado: en Release
+  daba el bloque por hecho sin copiar. Corregido en `cmake/Dsp56300.cmake` (los dos lados
+  comparten DCOH/DCOL y cada uno suma su DOR al terminar la línea).
+- **Fallo 2, en Gearmulator:** las transferencias de bloque iban retrasadas y la copia llegaba
+  después de que la voz sumara su muestra, así que la pisaba. Ahora son inmediatas.
+  (La saturación de antes venía de ahí: sin copia, el búfer nunca se reiniciaba y la voz se
+  acumulaba encima.)
+- **Fallo 3, en el emulador: el volumen maestro.** El DSP 3 hace `salida = X:$5F + entrada ×
+  Y:$5F`. `X:$5F = $155` es el silencio (el DSP 3 llena con él sus búferes al pararse);
+  `Y:$5F` es el volumen: el DSP 3 lo pone a 0 al arrancar y el OS lo fija a partir del **ADC
+  del panel**. El OS elige canal escribiendo en `$202000` (tabla de 20 códigos en RAM
+  `$14420A`: `31 37 2d 32 28 2e 33 29 2f 34 2a 1a 35 2b 1b 36 2c 1c 30 18`), lee 8 bits en
+  `$202800` y guarda cada canal en `$15EC20`. **El código `$30` es el volumen maestro**
+  (probado canal a canal con `G1_ADCMUX`): a `$FF`, `Y:$5F = $01FEAA`; a `$80`, `$0022F1`. El
+  emulador devolvía 0, así que no salía nada. Ahora el volumen empieza al máximo; los demás
+  mandos siguen a cero. El OS parece leerlo al encender: subirlo con el G1 en marcha no cambió
+  la ganancia (pendiente).
+- **Resultado:** el Do de la nota 60 sale por los dos ESSI del DSP 3: un seno limpio a 261 Hz.
+  Nivel muy bajo (±0,0008 de fondo de escala, unos −62 dBFS, con la voz a ±0,052 en los DSP de
+  voz) y todavía escalonado (cada valor dura 4 o 5 tramas), con algún corte suelto a 0.

@@ -12,8 +12,8 @@ Es un proyecto aparte de `../Elektron-Emu/` (MM Voice). No comparten build ni RO
 **El OS 3.03 arranca en el 68331 emulado y carga sus programas en los 4 DSP56303**, que
 quedan corriendo; todo va al ~88% del tiempo real. **Contesta al saludo de NME por el PC
 PORT**, y `g1run` lo corre en tiempo real (~94%) con puertos MIDI virtuales de ALSA. Con un
-patch y una nota, **el DSP 0 ya calcula el audio** (sale por su ESSI0 a la altura correcta);
-faltan llevarlo al DSP 3, que es la salida, y el panel.
+patch y una nota **ya suena**: el audio recorre los 4 DSP y sale por el DSP 3 a la altura
+correcta (aún flojo y escalonado). Faltan la salida a la tarjeta de sonido y el panel.
 
 ## Usarlo
 

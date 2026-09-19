@@ -47,6 +47,41 @@ g1_dsp_replace(jitops.cpp
 	"m_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_LF));"
 	"m_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~(SR_LF | SR_FV)));")
 
+# DMA con doble contador en origen y destino a la vez (DAM = 011 011 en el DMA0 del G1:
+# copia X:$6C0 -> Y:bufer de salida en cada bloque). Gearmulator no lo implementa y en
+# Release daba el bloque por hecho sin copiar: el audio no pasaba de un DSP al siguiente.
+# Ambos lados comparten DCOH/DCOL y cada uno suma su DOR al terminar cada linea.
+g1_dsp_replace(dma.cpp
+	[=[		assert(false && "DMA transfer mode not supported yet");]=]
+	[=[		if(agmS <= AddressGenMode::DualCounterDOR3 && agmD <= AddressGenMode::DualCounterDOR3)
+		{
+			const auto isLineTransfer = getTransferMode() == TransferMode::LineTriggerRequestClearDE;
+			const auto dorS = m_dma.getDOR(static_cast<TWord>(agmS));
+			const auto dorD = m_dma.getDOR(static_cast<TWord>(agmD));
+
+			do
+			{
+				memWrite(areaD, m_ddr, memRead(areaS, m_dsr));
+
+				m_dsr = (m_dcol == 0 ? m_dsr + dorS : m_dsr + 1) & 0xffffff;
+
+				if(dualModeIncrement(m_ddr, dorD))
+					return true;
+			}
+			while(!isRequestTrigger() || (isLineTransfer && m_dcol != m_dcolInit));
+
+			return false;
+		}
+
+		assert(false && "DMA transfer mode not supported yet");]=])
+
+# Las transferencias de bloque (disparadas por DE) se hacen al momento. Retrasadas, el DMA0
+# copiaba la entrada al bufer de salida despues de que las voces sumaran su muestra y la pisaba.
+# En el DSP real van en paralelo y acaban mucho antes (unos 36 ciclos).
+g1_dsp_replace(dma.cpp
+	"constexpr bool g_delayedDmaTransfer = true;"
+	"constexpr bool g_delayedDmaTransfer = false;")
+
 foreach(source IN LISTS g1_dsp_files)
 	get_filename_component(name "${source}" NAME)
 	configure_file("${g1_dsp_prepare}/${name}" "${g1_dsp_overlay}/${name}" COPYONLY)

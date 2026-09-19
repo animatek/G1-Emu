@@ -96,6 +96,9 @@ int main(int argc, char** argv)
 			t.mn = std::min(t.mn, _l); t.mx = std::max(t.mx, _l); ++t.n;
 			if(t.values.size() < 64) ++t.values[_l];
 		});
+	// G1_ADCMUX=codigo: ese canal del ADC (un mando) a $FF desde el encendido, para identificarlo
+	if(const char* mux = std::getenv("G1_ADCMUX"))
+		mc.setAdc(static_cast<uint8_t>(std::stoul(mux, nullptr, 16)), 0xff);
 	std::printf("reset: PC=$%06x SP=$%06x\n", mc.getPC(), mc.getAReg(7));
 	std::fflush(stdout);
 
@@ -458,7 +461,7 @@ int main(int argc, char** argv)
 		std::printf("\n        DMA DSTR=%06x", d.periph().getDMA().getDSTR());
 		for(dsp56k::TWord c = 0; c < 6; ++c)
 			std::printf("  c%u:DCR=%06x DSR=%06x DDR=%06x DCO=%06x", c, d.periph().getDMA().getDCR(c), d.periph().getDMA().getDSR(c), d.periph().getDMA().getDDR(c), d.periph().getDMA().getDCO(c));
-		std::printf("\n        X/Y internas no nulas: %u / %u   PC=$%06x SR=%06x\n", nzX, nzY, d.dsp().getPC().toWord(), d.dsp().getSR().toWord());
+		std::printf("\n        X/Y internas no nulas: %u / %u   PC=$%06x SR=%06x  X:5F=%06x Y:5F=%06x (en el DSP 3: desplazamiento y volumen)\n", nzX, nzY, d.dsp().getPC().toWord(), d.dsp().getSR().toWord(), mem.get(dsp56k::MemArea_X, 0x5f), mem.get(dsp56k::MemArea_Y, 0x5f));
 	}
 	for(uint32_t i = 0; i < g1::g_dspCount; ++i)
 	{
@@ -476,6 +479,9 @@ int main(int argc, char** argv)
 		std::printf("\n");
 	}
 
+	std::printf("codigos del multiplexor del ADC ($14420A):");
+	for(uint32_t k = 0; k < 20; ++k) std::printf(" %02x", mc.read8(0x14420a + k));
+	std::printf("\n");
 	std::printf("listas de voces por DSP ($1A84A8 + n*$602): ");
 	for(uint32_t n = 0; n < 4; ++n)
 	{

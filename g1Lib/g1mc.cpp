@@ -14,9 +14,14 @@ namespace g1
 		std::copy_n(_rom.begin(), std::min<size_t>(_rom.size(), g_romSize), m_mem.begin());
 		for(uint32_t i = 0; i < g_dspCount; ++i)
 			m_dsps[i] = std::make_unique<Dsp>(m_hostPorts[i], i);
-		// Cadena de audio por los ESSI: DSP0 -> DSP1 -> DSP2 -> DSP3 -> codec (hipotesis)
+		// Cadena de audio por los ESSI: DSP0 -> DSP1 -> DSP2 -> DSP3 -> codec. Cada DSP copia lo
+		// que recibe a su bufer de salida (DMA0) y le suma sus voces; el DSP 3 aplica el volumen.
 		for(uint32_t i = 0; i + 1 < g_dspCount; ++i)
 			m_dsps[i]->setNext(m_dsps[i + 1].get());
+
+		// El OS lee el volumen maestro del ADC al encender y con el pone la ganancia del DSP 3
+		// (Y:$5F). A cero, no sale nada. Los demas mandos se quedan a cero.
+		m_adc[g_adcVolume] = 0xff;
 
 		// Bus del DUART: el puerto E lleva /CS, /RD, /WR y la direccion del registro.
 		getPortE().setWriteTXCallback([this](const mc68k::Port& _port) { onPortE(_port.read()); });
@@ -183,6 +188,8 @@ namespace g1
 		logUnknown(addr, false, 0);
 		if(addr == g_panelIn)
 			return 0xff;	// ningun boton pulsado
+		if(addr == g_panelAdc)
+			return m_adc[m_adcSelect];
 		return 0;
 	}
 
@@ -256,6 +263,8 @@ namespace g1
 			m_flash.write(addr - g_flashAddress, _val);
 			return;
 		}
+		if(addr == g_panelOut)
+			m_adcSelect = _val;	// canal del multiplexor del ADC
 		logUnknown(addr, true, _val);
 	}
 }

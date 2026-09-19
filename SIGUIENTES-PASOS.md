@@ -11,27 +11,28 @@ Estado al cerrar la sesión del 2026-09-19. El detalle técnico de todo lo averi
   editor) y **MIDI**.
 - **Animatek NME se conecta y monta patches.** Al insertar un módulo, el OS para los DSP, carga
   el código del módulo y los reanuda; el oscilador calcula (su fase avanza en el DSP 0).
-- **El DSP 0 ya suena** (desde la tarde del 2026-09-19): su ESSI0 saca el oscilador del patch a la
-  altura de la nota. Todavía no llega al DSP 3, que es el que sale hacia fuera (sigue con `$155`).
+- **Ya suena** (desde la tarde del 2026-09-19): el oscilador del patch sale por el DSP 3 a la altura
+  de la nota, aunque muy flojo y escalonado. Aún no va a la tarjeta de sonido.
 
 ## 1. Sacar el primer sonido (prioridad: **que suene**)
 
-**Actualización 2026-09-19 (tarde): el DSP 0 ya suena.** El replay de Codex fallaba por el pid
-(ver `NOTAS.md`, «Primer audio del patch»); corregido, el oscilador sale por el ESSI0 del DSP 0 a
-261 Hz. Lo que queda, por orden:
+**Actualización 2026-09-19 (tarde): ya suena por la salida.** El Do del replay sale por el DSP 3
+(ver `NOTAS.md`, «Sale por el DSP 3»). Lo que queda, por orden:
 
-1. **Llevar la muestra al DSP 3** (topología de los ESSI, punto 2 de abajo): el DSP 1 recibe la
-   del DSP 0 y saca ceros; el DSP 3 sigue en `$155`.
-2. **Entender el escalón y la saturación** de la onda: cada valor dura 4 o 5 tramas (¿un valor
-   por bloque de 4 IRQD, o el DMA leyendo a destiempo?) y la amplitud se recorta a ±1. Hay
-   también picos sueltos a 0.
-3. Atajo para oírlo ya: mandar a la tarjeta de sonido el ESSI0 del DSP 0 mientras se resuelve la
-   topología.
+1. **Sacarlo por la tarjeta de sonido en `g1run`** (ahora solo graba WAV con `G1_RECORD`):
+   ESSI0 del DSP 3 = salidas 1/2 y ESSI1 = 3/4 (probable), a 96 kHz, con remuestreo.
+2. **El nivel:** −62 dBFS con el volumen al máximo. ¿Falta una ganancia analógica tras el códec,
+   el ADC da la escala al revés, o el patch de prueba es muy flojo? Comparar con un patch
+   conocido del G1 real.
+3. **El escalón y los cortes:** cada valor dura 4 o 5 tramas (¿un valor por bloque de 4 IRQD?) y
+   hay picos sueltos a 0 (¿el DMA de TX lee el búfer mientras se escribe?).
+4. **Volumen en marcha:** el OS no reacciona si el ADC cambia con el G1 encendido. Mirar los
+   eventos `$100|canal` que genera `$1009BE` y quién los consume.
 
 1. ~~**Seguir el código del módulo de salida.**~~ Hecho: el patch se enlaza en `$197`. Desde `$197` del DSP 0 (el código del patch va
    detrás de la rutina de bloque `$175`), ver dónde escribe 2Output su muestra y si llega a
    `Y:$6C0/$6E0`, de donde lee el DMA4 hacia TX0.
-2. **Topología de los ESSI entre DSP.** ¿Bus TDM compartido (todos los DSP y el códec en la
+2. ~~**Topología de los ESSI entre DSP.**~~ Resuelto: cadena DSP0→1→2→3 (ver `NOTAS.md`). ¿Bus TDM compartido (todos los DSP y el códec en la
    misma línea, cada uno en sus slots) o cadena DSP0→1→2→3? Pistas: el DSP 3 pone
    `TSMA=$FFFFF9` y `RSMA=1`, copia lo que recibe hacia su salida y recibe su propio `$155`; los
    DSP de voz no tocan sus máscaras. Ahora hay una cadena provisional (hipótesis) en
