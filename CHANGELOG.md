@@ -49,7 +49,7 @@
   replay de 60 M instrucciones y FFT de la salida de los 4 DSP. Pendiente: nivel muy bajo
   (−62 dBFS), escalonado y cortes sueltos; salida a la tarjeta de sonido.
 
-- **Primer audio del patch (Claude, commit `f1e7573`).** El replay de Codex no sonaba
+- **Primer audio del patch (Claude, commit `5450cd8`).** El replay de Codex no sonaba
   por un fallo del propio replay: en la sesión grabada NME se reconectó a un G1 reiniciado, así
   que la segunda subida de patch recibió otra vez pid 1; en el replay el OS da pid 2 y descarta
   los mensajes siguientes (los módulos y la nota). `g1boot ... replay` reescribe ahora el pid
