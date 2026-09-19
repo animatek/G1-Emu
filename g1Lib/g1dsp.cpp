@@ -31,6 +31,8 @@ namespace g1
 
 		// Tope de ciclos que se deja correr a un DSP en una sola espera de la CPU.
 		constexpr uint64_t g_waitClamp = 200000;
+		// ...y en una consulta de estado (ISR), mucho menos: unas pocas palabras de margen.
+		constexpr uint64_t g_isrWaitClamp = 2000;
 	}
 
 	Dsp::Dsp(mc68k::Hdi08& _hdiUc, const uint32_t _index)
@@ -59,13 +61,27 @@ namespace g1
 		clock.setSamplerate(g_samplerate * g_wordsPerFrame);
 		clock.setCyclesPerSample(g_cyclesPerSample);
 
+		// Mascaras de slots de los ESSI (TSMA/TSMB/RSMA/RSMB) a su valor de reset: todos los
+		// slots activos. El emulador las deja a 0, y los DSP de voz del G1 no las escriben
+		// nunca (solo el DSP 3 las ajusta): con 0 no transmitian ni pedian datos al DMA.
+		for(const dsp56k::TWord reg : {0xffffb4u, 0xffffb3u, 0xffffb2u, 0xffffb1u, 0xffffa4u, 0xffffa3u, 0xffffa2u, 0xffffa1u})
+			m_periph.write(reg, 0xffffff);
+
 		// Sin hilos, un ESSI que espera audio de entrada bloquea todo. En el aparato real
 		// el codec siempre entrega tramas: aqui se rellenan vacias (ver drainAudio).
 		m_periph.getEssi0().writeEmptyAudioIn(64);
 		m_periph.getEssi1().writeEmptyAudioIn(64);
 
 		hdi08().setRXRateLimit(0);
-		hdi08().setHostCommandArbitration(true);
+		// Sin arbitraje: los host commands del G1 son interrupciones rapidas (un solo movep
+		// en el vector, sin JSR/RTI). El arbitraje de Gearmulator espera ver el RTI en la
+		// pila para dar el comando por terminado y con ellas se quedaba "ocupado" para siempre.
+		hdi08().setHostCommandArbitration(false);
+		m_dsp.setInterruptServicedCallback([this](const dsp56k::TWord _vba)
+		{
+			++m_servicedVectors[_vba];
+			m_lastVector = _vba;
+		});
 
 		// Banderas HF0/HF1 del ICR de la CPU hacia el HSR del DSP.
 		m_hdiUc.setIcrWriteCallback([this](const uint8_t _icr)
@@ -139,7 +155,7 @@ namespace g1
 				return;
 			}
 			const auto before = m_dsp.getCycles();
-			if(before >= m_nextIrqd && !m_dsp.isInterruptMasked(g_irqdVector))
+			if(before >= m_nextIrqd && irqdEnabled())
 			{
 				m_dsp.injectInterrupt(g_irqdVector);	// como un periferico: no bloquea
 				m_nextIrqd = before + g_cyclesPerFrame;
@@ -155,6 +171,15 @@ namespace g1
 			if((now & 0x3ff) < now - before)	// cada ~1000 ciclos (menos de una trama)
 				drainAudio();
 		}
+	}
+
+	// IRQD solo cuenta si el programa la tiene habilitada en el IPRC (X:$FFFFFF, nivel IDL en
+	// los bits 9-10; 0 = deshabilitada) y la mascara del SR la deja pasar. El emulador solo
+	// mira el SR: durante la parada de recarga (IPRC=$FF0800) el G1 la deshabilita a proposito.
+	bool Dsp::irqdEnabled()
+	{
+		const auto iprc = m_periph.read(0xffffff, dsp56k::Instruction::Invalid);
+		return ((iprc >> 9) & 3) != 0 && !m_dsp.isInterruptMasked(g_irqdVector);
 	}
 
 	void Dsp::catchUp(const uint64_t _cycles)
@@ -231,10 +256,14 @@ namespace g1
 	{
 		if(!m_booted)
 			return;
-		// Un host command no puede pisar al anterior mientras su rutina no haya terminado.
+		// El DSP real atiende cada host command en cuanto llega. Aqui, en un solo hilo, se le
+		// deja correr hasta despachar lo pendiente: si no, la cola de interrupciones externas
+		// (32 entradas) se llena e injectExternalInterrupt espera para siempre.
 		const auto stop = m_dsp.getCycles() + g_waitClamp;
-		while(hdi08().hostCommandBusy() && m_booted && m_dsp.getCycles() < stop)
-			runUntil(m_dsp.getCycles() + 64);
+		while(m_dsp.hasPendingInterrupts() && m_booted && m_dsp.getCycles() < stop)
+			runUntil(m_dsp.getCycles() + 16);
+		if(m_dsp.hasPendingInterrupts())
+			return;	// el DSP no las atiende (parado): mejor perder el comando que colgarse
 		hdi08().writeHostCommand(_vector);
 		++m_hostCommands;
 		transferToHost();
@@ -245,9 +274,11 @@ namespace g1
 		// En el aparato el DSP recoge enseguida la palabra que le llega; aqui puede ir
 		// por detras. Si la CPU pregunta con una palabra pendiente, se deja correr al DSP
 		// hasta que la recoja: la rutina del OS descarta la palabra tras 10 consultas.
+		// Espera corta: si el DSP esta en un bucle que no lee el puerto (por ejemplo parado
+		// con HF2 esperando a que la CPU baje HF0), la consulta devuelve el estado tal cual.
 		if(m_booted && hdi08().hasRXData())
 		{
-			const auto stop = m_dsp.getCycles() + g_waitClamp;
+			const auto stop = m_dsp.getCycles() + g_isrWaitClamp;
 			while(hdi08().hasRXData() && m_booted && m_dsp.getCycles() < stop)
 				runUntil(m_dsp.getCycles() + 64);
 		}

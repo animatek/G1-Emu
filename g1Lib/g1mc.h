@@ -84,6 +84,7 @@ namespace g1
 		void installRomOsInFlash();
 		Flash& getFlash() { return m_flash; }
 		Dsp& getDsp(uint32_t _i) { return *m_dsps[_i]; }
+		mc68k::Hdi08& getHostPort(uint32_t _i) { return m_hostPorts[_i]; }
 
 		// La UART de la CPU (SCI del QSM, a 31250 baudios). Por ella habla el OS; falta
 		// confirmar si es el PC PORT (editor) o el MIDI, porque el G1 tiene los dos.
@@ -105,6 +106,7 @@ namespace g1
 		void catchUpDsps();
 		void onPortE(uint8_t _value);
 		void execPcPort();
+		void execPit(uint32_t _cycles);
 		void logUnknown(uint32_t _addr, bool _write, uint32_t _value);
 
 		std::vector<uint8_t> m_mem;		// ROM + RAM en un solo bloque
@@ -121,6 +123,14 @@ namespace g1
 		uint8_t m_prevPortE = 0xff;
 		uint64_t m_nextPcPortByte = 0;
 		uint32_t m_pcPortIrqs = 0;
+		// Temporizador periodico del SIM (PIT): el reloj del sistema del OS.
+		uint16_t m_picr = 0, m_pitr = 0;
+		uint64_t m_pitAccum = 0;
+		uint64_t m_pitIrqs = 0;
+	public:
+		uint64_t pitIrqs() const { return m_pitIrqs; }
+		uint32_t getSR() const;
+	private:
 		uint32_t m_sciDataWrites = 0;
 		uint32_t m_romWrites = 0;
 	};

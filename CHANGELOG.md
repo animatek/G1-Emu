@@ -2,6 +2,15 @@
 
 ## 2026-09-19
 
+- **El OS ya carga el código de los patches en los DSP y el oscilador calcula.** Arreglados cinco
+  fallos encadenados: el reloj del sistema (el PIT del SIM, que Gearmulator no emula), una espera
+  excesiva en las consultas de estado HI08, el arbitraje de host commands (incompatible con las
+  interrupciones rápidas del G1), la cola de interrupciones que se llenaba en un solo hilo, y
+  IRQD, que no respetaba el IPRC. Además, las máscaras de slots del ESSI arrancan como en el chip
+  (todas activas). Todavía no sale audio. Detalle en `NOTAS.md`.
+- `g1boot`: la reproducción manda los mensajes espaciados, como NME; nuevo modo `diff`, y vuelcos
+  de ESSI, vectores atendidos, modo de proceso y cambios de memoria de cada DSP.
+
 - **NME se conecta al G1 emulado y construye patches** (Javier montó OscA → 2Output; el OS lo
   confirma todo y hasta informa de la carga de DSP). Todavía **no suena**.
 - Audio: reloj del ESSI a 96 kHz, reloj de proceso por IRQD, medidores y grabación a WAV de la

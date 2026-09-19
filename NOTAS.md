@@ -136,6 +136,32 @@ versión 3.3, número de serie y ID de aparato. Es el saludo completo que espera
   (`$122F72`, que escribe X/Y/P con `$B2/$B3/$B4` y parchea el salto con `$B7`) no se llama
   nunca. Falta saber qué recurso le parece agotado: la capacidad que el OS atribuye a cada DSP
   o las tablas de recursos por módulo (`$1C3B0C`, `$1C3B24`, `$1C3B28`, en pasos de `$30`).
+- **Resuelto (2026-09-19, tarde): por qué no se cargaba el patch.** Eran cinco fallos encadenados:
+  1. **No había reloj del sistema.** El OS usa el PIT del SIM (`PICR=$0140`: nivel 1, vector
+     `$40`; `PITR=$0002`: cada 244 µs; rutina `$1008A4`). El SIM de Gearmulator no lo emula, así
+     que los temporizadores por software del OS nunca vencían. Emulado en `g1mc.cpp`.
+  2. **Espera excesiva en `readIsr`.** Al recargar, el OS levanta HF0; el DSP para, levanta HF2
+     y espera en `$C2` sin leer el puerto. Cada consulta de estado dejaba correr al DSP 200.000
+     ciclos. Ahora son 2.000.
+  3. **Arbitraje de host commands.** Los del G1 son interrupciones rápidas (un `movep` en el
+     vector, sin `RTI`) y el arbitraje de Gearmulator nunca los daba por terminados. Desactivado.
+  4. **Cola de interrupciones llena.** Sin arbitraje, la CPU manda cientos de host commands
+     seguidos y la cola de 32 se llenaba. Ahora el DSP despacha lo pendiente antes de cada uno.
+  5. **IRQD durante la parada.** El DSP deshabilita IRQD en el IPRC (`$FF0800`, IDL=0), pero el
+     emulador solo mira el SR. La IRQD inyectada dejaba al DSP "dentro" de una interrupción larga
+     para siempre y bloqueaba los host commands. Ahora IRQD respeta el IDL del IPRC.
+  Con eso, al insertar un módulo el OS para los DSP, **carga el código del módulo**
+  (`$122F72`; unas 400 palabras al DSP 0), los reanuda, y el oscilador calcula (cambian su fase
+  y sus variables). Las respuestas DSP → CPU (lecturas de memoria del "monitor") funcionan.
+- **Máscaras de slots del ESSI:** los DSP de voz no escriben TSMA/TSMB/RSMA/RSMB y se fían del
+  reset (todos los slots activos); el emulador las dejaba a 0. Ahora se inicializan a `$FFFFFF`.
+- **Pendiente: sacar el audio.** El DSP 0 calcula, pero su ESSI transmite ceros y el DSP 3
+  sigue con `$155`. Falta entender qué espacio lee cada DMA (DSS) y la topología del bus serie
+  (¿TDM compartido? El DSP 3 recibe su propio `$155` y copia RX → TX).
+- **`g1boot ... replay`** manda ahora los mensajes espaciados (uno cada 500.000 instrucciones),
+  como NME, que espera cada ACK: si llegan todos seguidos, el OS pierde ediciones mientras
+  recarga. `g1boot ROM N diff A.bin B.bin` compara el código ejecutado en reposo y tras un
+  mensaje.
 - **Herramienta:** `g1boot ROM N replay pcport-in.bin` reproduce una sesión de NME grabada
   por `g1run`, mantiene una nota por MIDI IN y vuelca estado, búferes y DMA de cada DSP.
   `G1_WATCH=123e94,1239e8 g1boot ...` cuenta los pasos del PC por esas direcciones y enseña

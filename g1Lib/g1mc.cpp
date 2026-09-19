@@ -48,6 +48,7 @@ namespace g1
 		if((m_ucCycles & 0x3ff) < cycles)	// cada ~1000 ciclos de CPU
 			catchUpDsps();
 		execPcPort();
+		execPit(cycles);
 		while(m_ucCycles >= m_nextSciSample)	// la UART avanza al ritmo de su reloj
 		{
 			m_sci.process(1);
@@ -88,6 +89,32 @@ namespace g1
 		getGPT().injectInterrupt(0xa);						// PAOV: el OS pone su manejador en IVBA+$A
 		++m_pcPortIrqs;
 		m_nextPcPortByte = m_ucCycles + g_ucCyclesPerSerialByte;
+	}
+
+	// PIT del SIM del 68331 (el SIM de Gearmulator no lo emula). PICR ($FFFA22): nivel en
+	// los bits 10-8 y vector en 7-0. PITR ($FFFA24): modulo en 7-0 y prescaler /512 en el
+	// bit 8. Periodo = PITM * 4 (* 512) / 32768 s. El OS lo usa como reloj del sistema
+	// ($1008A4, cada 244 us): sin el, sus temporizadores por software no vencen nunca.
+	void Microcontroller::execPit(const uint32_t _cycles)
+	{
+		const uint32_t pitm = m_pitr & 0xff;
+		const uint32_t level = (m_picr >> 8) & 7;
+		if(!pitm || !level)
+			return;
+		const uint64_t period = static_cast<uint64_t>(pitm) * 4 * ((m_pitr & 0x100) ? 512 : 1) * g_ucClock / 32768;
+		m_pitAccum += _cycles;
+		if(m_pitAccum < period)
+			return;
+		m_pitAccum -= period;
+		const auto vector = static_cast<uint8_t>(m_picr & 0xff);
+		if(!hasPendingInterrupt(vector, static_cast<uint8_t>(level)))
+			injectInterrupt(vector, static_cast<uint8_t>(level));
+		++m_pitIrqs;
+	}
+
+	uint32_t Microcontroller::getSR() const
+	{
+		return m68k_get_reg(const_cast<Microcontroller*>(this)->getCpuState(), M68K_REG_SR);
 	}
 
 	void Microcontroller::catchUpDsps()
@@ -176,6 +203,8 @@ namespace g1
 		if(isInternalPeripheral(addr))
 		{
 			if(addr == 0xfffc0e) ++m_sciDataWrites;
+			if(addr == 0xfffa22) m_picr = _val;
+			if(addr == 0xfffa24) m_pitr = _val;
 			Mc68k::write16(addr, _val);
 			return;
 		}

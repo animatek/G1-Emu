@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <array>
 #include <functional>
+#include <map>
 #include <memory>
 
 namespace mc68k { class Hdi08; }
@@ -41,6 +42,8 @@ namespace g1
 		uint64_t audioFrames() const { return m_audioFrames; }
 		uint64_t hostWords() const { return m_hostWords; }
 		uint64_t irqdCount() const { return m_irqdCount; }
+		const std::map<uint32_t, uint64_t>& servicedVectors() const { return m_servicedVectors; }
+		uint32_t lastVector() const { return m_lastVector; }
 		uint64_t hostCommands() const { return m_hostCommands; }
 		uint64_t wordsToHost() const { return m_wordsToHost; }
 
@@ -73,6 +76,7 @@ namespace g1
 		bool transferToHost();
 		void runUntil(uint64_t _cycles);
 		void drainAudio();
+		bool irqdEnabled();
 
 		mc68k::Hdi08& m_hdiUc;
 		const uint32_t m_index;
@@ -90,6 +94,8 @@ namespace g1
 		uint64_t m_audioFrames = 0;
 		uint64_t m_hostWords = 0, m_hostCommands = 0, m_wordsToHost = 0;
 		uint64_t m_nextIrqd = 0, m_irqdCount = 0;
+		std::map<uint32_t, uint64_t> m_servicedVectors;
+		uint32_t m_lastVector = 0;
 		Meter m_meter{};
 		AudioCallback m_audioCallback;
 		Dsp* m_next = nullptr;

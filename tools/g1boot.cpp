@@ -16,6 +16,7 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -102,6 +103,7 @@ int main(int argc, char** argv)
 			pos = comma + 1;
 		}
 	}
+	std::array<uint64_t, 8> iplHist{};
 	std::array<uint32_t, 64> lastPcs{};	// ultimos PCs, para ver como se llega a un fallo
 	size_t lastPcPos = 0;
 	std::map<uint32_t, uint64_t> pcHits;	// PC -> veces, para ver en que bucle se queda
@@ -114,11 +116,34 @@ int main(int argc, char** argv)
 	// g1boot ROM N replay FICHERO: a mitad de la ejecucion se mete por el PC Port todo lo
 	// que NME mando en una sesion (lo graba g1run en pcport-in.bin).
 	std::vector<uint8_t> replay;
+	// g1boot ROM N diff A.bin B.bin: A a 1/4, B a 1/2; se comparan los PCs ejecutados en
+	// [3/8, 1/2) (reposo tras A) y en [1/2, 5/8) (tras B).
+	std::vector<uint8_t> diffB;
+	std::set<uint32_t> pcIdle, pcAfter;
+	const bool diffMode = argc > 5 && std::string(argv[3]) == "diff";
+	if(diffMode)
+	{
+		std::ifstream fa(argv[4], std::ios::binary);
+		replay.assign(std::istreambuf_iterator<char>(fa), std::istreambuf_iterator<char>());
+		std::ifstream fb(argv[5], std::ios::binary);
+		diffB.assign(std::istreambuf_iterator<char>(fb), std::istreambuf_iterator<char>());
+		iamSent = true;
+	}
+	std::vector<std::vector<uint8_t>> replayMsgs;
+	size_t replayNext = 0;
 	if(argc > 4 && std::string(argv[3]) == "replay")
 	{
 		std::ifstream rf(argv[4], std::ios::binary);
 		replay.assign(std::istreambuf_iterator<char>(rf), std::istreambuf_iterator<char>());
 		iamSent = true;	// el replay ya trae su IAm
+		// Se parte en mensajes para mandarlos espaciados, como NME (que espera cada ACK).
+		std::vector<uint8_t> cur;
+		for(auto b : replay)
+		{
+			if(b == 0xf0) cur.clear();
+			cur.push_back(b);
+			if(b == 0xf7) { replayMsgs.push_back(cur); cur.clear(); }
+		}
 	}
 	for(uint64_t i = 0; i < steps; ++i)
 	{
@@ -128,17 +153,24 @@ int main(int argc, char** argv)
 			mc.getPcPort().receive({0xf0, 0x33, 0x00, 0x06, 0x00, 0x03, 0x03, 0xf7});
 			std::printf("  >> IAm enviado por el PC PORT en la instruccion %llu\n", static_cast<unsigned long long>(i));
 		}
-		if(!replay.empty() && i == steps / 2)
+		if(diffMode)
+		{
+			if(i >= steps * 3 / 8 && i < steps / 2) pcIdle.insert(mc.getPC());
+			else if(i >= steps / 2 && i < steps * 5 / 8) pcAfter.insert(mc.getPC());
+			if(i == steps / 2) { mc.getPcPort().receive(diffB); std::printf("  >> diff: %zu bytes (B)\n", diffB.size()); }
+		}
+		if(!replay.empty() && !diffMode && i == steps * 3 / 4)
 		{
 			mc.getSci().write({0x90, 60, 100});	// nota mantenida por el MIDI IN, canal 1
 			std::printf("  >> nota 60 on por MIDI IN\n");
 			for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 				for(auto& t : taps[d]) t = {};
 		}
-		if(!replay.empty() && i == steps / 4)
+		if(!replayMsgs.empty() && replayNext < replayMsgs.size() && i >= steps / 10 && (i % 500000) == 0)
 		{
-			mc.getPcPort().receive(replay);
-			std::printf("  >> replay: %zu bytes por el PC Port\n", replay.size());
+			mc.getPcPort().receive(replayMsgs[replayNext++]);
+			if(replayNext == replayMsgs.size())
+				std::printf("  >> replay: %zu mensajes enviados (el ultimo en la instruccion %llu)\n", replayMsgs.size(), static_cast<unsigned long long>(i));
 		}
 		if((i & 0xfff) == 0)
 			mc.getSci().read(sciOut);
@@ -161,13 +193,22 @@ int main(int argc, char** argv)
 			break;
 		}
 		lastPcs[lastPcPos++ % lastPcs.size()] = pc;
+		if((i & 0xff) == 0)
+			++iplHist[(mc.getSR() >> 8) & 7];
 		if(!watch.empty())
 		{
 			auto it = watch.find(pc);
 			if(it != watch.end() && it->second++ < 6)
-				std::printf("  [watch $%06x] #%u D0=%08x D1=%08x D2=%08x A0=%06x A7=%06x ret=$%06x\n", pc, it->second,
-					mc.getDReg(0), mc.getDReg(1), mc.getDReg(2), mc.getAReg(0), mc.getAReg(7),
+			{
+				std::printf("  [watch $%06x] #%u D0=%08x D1=%08x D2=%08x D3=%08x A0=%06x A5=%06x A7=%06x ret=$%06x\n       (A5):", pc, it->second,
+					mc.getDReg(0), mc.getDReg(1), mc.getDReg(2), mc.getDReg(3), mc.getAReg(0), mc.getAReg(5), mc.getAReg(7),
 					(static_cast<uint32_t>(mc.read16(mc.getAReg(7))) << 16) | mc.read16(mc.getAReg(7) + 2));
+				for(uint32_t k = 0; k < 28; ++k) std::printf(" %02x", mc.read8(mc.getAReg(5) + k));
+				std::printf("\n       A6-$48..-$24:");
+				for(uint32_t k = 0; k < 0x24; k += 4)
+					std::printf(" %08x", (static_cast<uint32_t>(mc.read16(mc.getAReg(6) - 0x48 + k)) << 16) | mc.read16(mc.getAReg(6) - 0x48 + k + 2));
+				std::printf("\n");
+			}
 		}
 		cycles += mc.exec();
 		const auto report = static_cast<uint32_t>(i / (steps / 10));
@@ -183,6 +224,43 @@ int main(int argc, char** argv)
 	}
 
 	mc.getSci().read(sciOut);
+	// ¿Esta calculando algo cada DSP? Memoria X/Y interna antes y despues de 200.000 instrucciones.
+	{
+		std::array<std::vector<uint32_t>, g1::g_dspCount> before;
+		for(uint32_t d = 0; d < g1::g_dspCount; ++d)
+			for(dsp56k::TWord a = 0; a < 0x800; ++a)
+			{
+				before[d].push_back(mc.getDsp(d).dsp().memory().get(dsp56k::MemArea_X, a));
+				before[d].push_back(mc.getDsp(d).dsp().memory().get(dsp56k::MemArea_Y, a));
+			}
+		for(int k = 0; k < 200000; ++k) mc.exec();
+		for(uint32_t d = 0; d < g1::g_dspCount; ++d)
+		{
+			std::printf("DSP%u cambios en X/Y internas:", d);
+			uint32_t n = 0;
+			for(dsp56k::TWord a = 0; a < 0x800; ++a)
+				for(int xy = 0; xy < 2; ++xy)
+				{
+					const auto v = mc.getDsp(d).dsp().memory().get(xy ? dsp56k::MemArea_Y : dsp56k::MemArea_X, a);
+					if(v != before[d][a * 2 + xy] && n++ < 14)
+						std::printf(" %c:%03x=%06x", xy ? 'Y' : 'X', a, v);
+				}
+			std::printf("  (%u)\n", n);
+		}
+	}
+	if(diffMode)
+	{
+		std::vector<uint32_t> only;
+		for(auto p : pcAfter) if(!pcIdle.count(p)) only.push_back(p);
+		std::printf("\nPCs nuevos tras B: %zu. Rangos:\n", only.size());
+		for(size_t k = 0; k < only.size();)
+		{
+			size_t j = k;
+			while(j + 1 < only.size() && only[j + 1] - only[j] <= 16) ++j;
+			std::printf("  $%06x-$%06x (%zu)\n", only[k], only[j], j - k + 1);
+			k = j + 1;
+		}
+	}
 	std::printf("\nQSM: QMCR=%04x QILR/QIVR=%04x SCCR0=%04x SCCR1=%04x SCSR=%04x  PORTQS/PQSPAR=%04x DDRQS=%04x\n",
 		mc.read16(0xfffc00), mc.read16(0xfffc04), mc.read16(0xfffc08), mc.read16(0xfffc0a), mc.read16(0xfffc0c),
 		mc.read16(0xfffc14), mc.read16(0xfffc16));
@@ -199,6 +277,7 @@ int main(int argc, char** argv)
 	std::printf("PC PORT -> fuera (%zu bytes):", pcOut.size());
 	for(size_t k = 0; k < std::min<size_t>(pcOut.size(), 300); ++k)
 		std::printf(" %02x", pcOut[k]);
+	if(FILE* f = std::fopen("/tmp/g1_pcout.bin", "wb")) { std::fwrite(pcOut.data(), 1, pcOut.size(), f); std::fclose(f); }
 	std::printf("\n");
 	std::printf("SCI -> fuera (%zu bytes):", sciOut.size());
 	for(size_t k = 0; k < std::min<size_t>(sciOut.size(), 300); ++k)
@@ -291,7 +370,25 @@ int main(int argc, char** argv)
 				for(uint32_t l = 0; l < g1::Dsp::MeterLines; ++l)
 					if(m[e][sl][l])
 						std::printf(" [E%u s%u tx%u %06x]", e, sl, l, m[e][sl][l]);
-		std::printf("  slots E0=%u E1=%u\n", d.lastSlotCount(0), d.lastSlotCount(1));
+		std::printf("  slots E0=%u E1=%u  HOTX en cola=%zu  CPU acepta=%d  HSR=%06x HCR=%06x PC=$%06x\n", d.lastSlotCount(0), d.lastSlotCount(1),
+			d.hdi08().txData().size(), mc.getHostPort(i).canReceiveData() ? 1 : 0, d.hdi08().readStatusRegister(), d.hdi08().readControlRegister(), d.dsp().getPC().toWord());
+		std::printf("        SR=%06x OMR=%06x pendientes=%d  HC $7a enmascarado=%d  HC $64=%d  IRQD=%d  IPRC=%06x IPRP=%06x  HCbusy=%d HCpend=%d\n",
+			d.dsp().getSR().toWord(), d.dsp().regs().omr.var, d.dsp().hasPendingInterrupts() ? 1 : 0,
+			d.dsp().isInterruptMasked(0x7a) ? 1 : 0, d.dsp().isInterruptMasked(0x64) ? 1 : 0, d.dsp().isInterruptMasked(0x16) ? 1 : 0,
+			d.periph().read(0xffffff, dsp56k::Instruction::Invalid), d.periph().read(0xfffffe, dsp56k::Instruction::Invalid),
+			d.hdi08().hostCommandBusy() ? 1 : 0, d.hdi08().hostCommandPending() ? 1 : 0);
+		{
+			auto rd = [&](dsp56k::TWord a) { return d.periph().read(a, dsp56k::Instruction::Invalid); };
+			std::printf("        ESSI0 CRA=%06x CRB=%06x TSMA=%06x TSMB=%06x SSISR=%06x | ESSI1 CRA=%06x CRB=%06x TSMA=%06x | Y:6C0..6C3=%06x %06x %06x %06x  Y:6E0..6E3=%06x %06x %06x %06x\n",
+				rd(0xffffb5), rd(0xffffb6), rd(0xffffb4), rd(0xffffb3), rd(0xffffb7), rd(0xffffa5), rd(0xffffa6), rd(0xffffa4),
+				d.dsp().memory().get(dsp56k::MemArea_Y, 0x6c0), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6c1), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6c2), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6c3),
+				d.dsp().memory().get(dsp56k::MemArea_Y, 0x6e0), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6e1), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6e2), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6e3));
+		}
+		std::printf("        vectores atendidos (ultimo $%02x):", d.lastVector());
+		for(auto& [v, n] : d.servicedVectors()) std::printf(" $%02x=%llu", v, static_cast<unsigned long long>(n));
+		std::printf("\n");
+		std::printf("        modo=%d SP=%06x LA=%06x LC=%06x ext.pend=%d\n", static_cast<int>(d.dsp().getProcessingMode()),
+			d.dsp().regs().sp.var, d.dsp().regs().la.var, d.dsp().regs().lc.var, d.dsp().hasPendingExternalInterrupts() ? 1 : 0);
 		auto& mem = d.dsp().memory();
 		std::printf("        X:$6C0..$6CF:");
 		for(dsp56k::TWord a = 0x6c0; a < 0x6d0; ++a) std::printf(" %06x", mem.get(dsp56k::MemArea_X, a));
@@ -324,6 +421,28 @@ int main(int argc, char** argv)
 		for(auto& [a, n] : watch) std::printf(" $%06x=%u", a, n);
 		std::printf("\n");
 	}
+
+	std::printf("listas de voces por DSP ($1A84A8 + n*$602): ");
+	for(uint32_t n = 0; n < 4; ++n)
+	{
+		const uint32_t b = 0x1a84a8 + n * 0x602;
+		std::printf(" DSP%u[", n);
+		for(uint32_t k = 0; k < 14; ++k) std::printf("%02x ", mc.read8(b + k));
+		std::printf("]");
+	}
+	std::printf("\n");
+	std::printf("PIT: %llu interrupciones. Mascara IPL de la CPU (muestras):", static_cast<unsigned long long>(mc.pitIrqs()));
+	for(int k = 0; k < 8; ++k) std::printf(" %d:%llu", k, static_cast<unsigned long long>(iplHist[k]));
+	std::printf("\n");
+	{
+		const uint32_t vbr = 0x1ab4e0;
+		auto vec = [&](uint32_t v) { return (static_cast<uint32_t>(mc.read16(vbr + v * 4)) << 16) | mc.read16(vbr + v * 4 + 2); };
+		std::printf("PIT pendiente al final: %d   SR=%04x\n", mc.hasPendingInterrupt(0x40, 1) ? 1 : 0, mc.getSR());
+		std::printf("vectores (VBR=$%06x): $40=$%06x $42=$%06x $55=$%06x $5A=$%06x  PICR=%04x PITR=%04x\n", vbr, vec(0x40), vec(0x42), vec(0x55), vec(0x5a),
+			mc.read16(0xfffa22), mc.read16(0xfffa24));
+	}
+	std::printf("GPT: TCNT=%04x TOC1=%04x TOC2=%04x TMSK=%04x TFLG=%04x ICR=%04x MCR=%04x\n",
+		mc.read16(0xfff90a), mc.read16(0xfff914), mc.read16(0xfff916), mc.read16(0xfff920), mc.read16(0xfff922), mc.read16(0xfff904), mc.read16(0xfff900));
 
 	printChipSelects(mc);
 	std::printf("\nflash: %u bytes programados, %u sectores borrados\n", mc.getFlash().programmedBytes(), mc.getFlash().erasedSectors());
