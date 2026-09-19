@@ -16,6 +16,17 @@ namespace g1gui
 	{
 		constexpr const char* g_romName = "NORD-MODULAR-RACK-VER-3.03.BIN";
 
+		// Shown at startup until the user ticks "Don't show this again". The same text is in the
+		// README ("Please read this first").
+		const char* const g_disclaimer =
+			"G1-Emu is an independent, open-source emulator of the Nord Modular G1.\n\n"
+			"- It is not affiliated with, endorsed by or connected to Clavia DMI in any way. "
+			"\"Nord\" and \"Nord Modular\" are trademarks of Clavia DMI.\n\n"
+			"- No ROMs or firmware are included, and none will ever be provided. Please do not ask "
+			"for them: you will not find them here.\n\n"
+			"- There is no support. This is a pre-alpha community project, made in spare time. Bug "
+			"reports and contributions are welcome on GitHub; requests for help, ROMs or builds are not.";
+
 		juce::File findRom(const juce::StringArray& _args)
 		{
 			if(!_args.isEmpty() && juce::File::isAbsolutePath(_args[0]))
@@ -58,11 +69,13 @@ namespace g1gui
 			if(!rom.existsAsFile() || !m_host.start(rom.getFullPathName().toStdString(), args.size() > 1 ? args[1].toStdString() : "", log))
 			{
 				juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "G1-Emu",
-					"Cannot start the emulated G1.\n\n" + juce::String(log) + (rom.existsAsFile() ? "" : "\nThe ROM (" + juce::String(g_romName) + ") is missing in Roms/."));
+					"Cannot start the emulated G1.\n\n" + juce::String(log) + (rom.existsAsFile() ? "" : "\nThe ROM (" + juce::String(g_romName)
+					+ ") is missing in Roms/. G1-Emu does not include any ROM and none will be provided: you need a dump of your own."));
 				return;
 			}
 			std::printf("%s", log.c_str());
 			m_window = std::make_unique<MainWindow>(m_host);
+			showDisclaimer();
 		}
 
 		void shutdown() override
@@ -72,8 +85,38 @@ namespace g1gui
 		}
 
 	private:
+		// The notice about Clavia, ROMs and support, until the user asks not to see it again. The
+		// choice is kept in the user settings (~/.config/G1-Emu.settings on Linux).
+		void showDisclaimer()
+		{
+			juce::PropertiesFile::Options opts;
+			opts.applicationName = "G1-Emu";
+			opts.filenameSuffix = ".settings";
+			opts.osxLibrarySubFolder = "Application Support";
+			m_settings.setStorageParameters(opts);
+			if(m_settings.getUserSettings()->getBoolValue("hideDisclaimer", false))
+				return;
+
+			auto* w = new juce::AlertWindow("Please read this first", g_disclaimer, juce::MessageBoxIconType::InfoIcon, m_window.get());
+			m_dontShow = std::make_unique<juce::ToggleButton>("Don't show this again");
+			m_dontShow->setSize(260, 24);
+			m_dontShow->setName({});	// AlertWindow draws a custom component's name as a label
+			w->addCustomComponent(m_dontShow.get());
+			w->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
+			w->enterModalState(true, juce::ModalCallbackFunction::create([this](int)
+			{
+				if(m_dontShow && m_dontShow->getToggleState())
+				{
+					m_settings.getUserSettings()->setValue("hideDisclaimer", true);
+					m_settings.saveIfNeeded();
+				}
+			}), true);
+		}
+
 		g1app::EmuHost m_host;
 		std::unique_ptr<MainWindow> m_window;
+		juce::ApplicationProperties m_settings;
+		std::unique_ptr<juce::ToggleButton> m_dontShow;
 	};
 }
 

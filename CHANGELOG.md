@@ -7,6 +7,12 @@ Older entries cite their commit by hand.
 
 ## 2026-09-19
 
+- **Disclaimer at startup and in the README (Claude).** `g1gui` shows a notice when it opens: an
+  independent project not affiliated with Clavia DMI, no ROMs now or ever, and no support. It has a
+  "Don't show this again" box, saved in the user settings (`~/.config/G1-Emu.settings`). The same
+  text opens the README ("Please read this first") and is summarised in `CONTRIBUTING.md`; the
+  missing-ROM error now says that no ROM is provided. Check: built, the dialog opened and reviewed.
+
 - **The whole repo in English (Claude).** Documentation, code comments, program messages and the
   changelog translated; `NOTAS.md` → `NOTES.md` (rewritten as a technical reference, organised by
   topic) and `SIGUIENTES-PASOS.md` → `ROADMAP.md` (updated). New `CONTRIBUTING.md`. The language

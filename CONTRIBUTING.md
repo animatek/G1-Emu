@@ -5,6 +5,11 @@ testing patches. Everything in the repo is in English.
 
 ## Before you start
 
+- **There is no support and no ROMs.** Issues are for bug reports with details (what you did, what
+  you expected, what happened, ideally with the `.pch`) and for concrete proposals. Requests for
+  help, builds or ROMs will be closed without an answer. The project is not affiliated with Clavia
+  DMI.
+
 - **Never commit ROMs, firmware or dumps.** You need your own Nord Modular rack OS 3.03 ROM in
   `Roms/`, which Git ignores. Pull requests that include copyrighted firmware will be closed.
 - Read `NOTES.md` (what is known about the hardware and the OS) and `ROADMAP.md` (what is next).

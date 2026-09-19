@@ -15,13 +15,20 @@ Windows. The technical details are in [`NOTES.md`](NOTES.md), the plan in
 [`ROADMAP.md`](ROADMAP.md) and what changes in [`CHANGELOG.md`](CHANGELOG.md). Contributions are
 welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## What is not included
+## Please read this first
 
-- **No ROM or firmware.** You need the 512 KB ROM of a Nord Modular rack with OS 3.03
-  (`Roms/NORD-MODULAR-RACK-VER-3.03.BIN`), dumped from your own unit or taken from the official
-  update. `Roms/` is ignored by Git and must stay that way.
-- This project is not affiliated with Clavia DMI. "Nord" and "Nord Modular" are Clavia trademarks;
-  they are used here only to say which instrument is emulated.
+- **Not affiliated with Clavia.** G1-Emu is an independent, open-source project. It is not
+  affiliated with, endorsed by or connected to Clavia DMI in any way. "Nord" and "Nord Modular" are
+  trademarks of Clavia DMI; they are used here only to say which instrument is emulated.
+- **No ROMs, now or ever.** No ROM or firmware is included, and none will be provided. Please do
+  not ask for them in issues, e-mails or messages: you will not find them here. You need the 512 KB
+  ROM of a Nord Modular rack with OS 3.03 (`Roms/NORD-MODULAR-RACK-VER-3.03.BIN`), dumped from
+  your own unit. `Roms/` is ignored by Git and must stay that way.
+- **No support.** This is a pre-alpha community project, made in spare time by its maintainer and
+  whoever wants to join. There is no support: please do not ask for help, builds or ROMs. Bug
+  reports with details, and contributions, are welcome (see [`CONTRIBUTING.md`](CONTRIBUTING.md)).
+
+The window shows this same notice when it opens, until you tick "Don't show this again".
 
 ## Building
 
