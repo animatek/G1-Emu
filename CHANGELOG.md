@@ -2,7 +2,7 @@
 
 ## 2026-09-19
 
-- **La ventana: primer panel en JUCE (Claude).** `EmuHost` saca el bucle de `g1run` (flash, MIDI,
+- **La ventana: primer panel en JUCE (Claude, commit `46c7b8d`).** `EmuHost` saca el bucle de `g1run` (flash, MIDI,
   JACK/ALSA, tiempo real y estadísticas) a una clase con su hilo; `g1run` queda en una consola
   fina y ahora dice la carga (~55%) y los núcleos (~2,9). `g1gui` (`./g1gui.sh`): pantalla con
   los caracteres propios de la CGRAM, 18 mandos y volumen (ADC), los botones y LEDs identificados,
