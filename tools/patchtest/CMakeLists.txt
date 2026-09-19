@@ -3,12 +3,10 @@
 # nota y mide lo que sale. Solo se compila si esta NME al lado (../Nomad2026): el emulador
 # no depende de NME.
 set(NME_DIR "${CMAKE_SOURCE_DIR}/../Nomad2026" CACHE PATH "Arbol de Animatek NME")
-if(NOT EXISTS "${NME_DIR}/source/model/PatchSerializer.cpp" OR NOT EXISTS "${NME_DIR}/JUCE/CMakeLists.txt")
+if(NOT G1_HAVE_JUCE OR NOT EXISTS "${NME_DIR}/source/model/PatchSerializer.cpp")
 	message(STATUS "g1patchtest: no encuentro NME en ${NME_DIR}; no se compila")
 	return()
 endif()
-
-add_subdirectory(${NME_DIR}/JUCE ${CMAKE_BINARY_DIR}/juce EXCLUDE_FROM_ALL)
 
 juce_add_console_app(g1patchtest PRODUCT_NAME "g1patchtest")
 target_sources(g1patchtest PRIVATE

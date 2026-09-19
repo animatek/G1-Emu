@@ -2,6 +2,14 @@
 
 ## 2026-09-19
 
+- **La ventana: primer panel en JUCE (Claude).** `EmuHost` saca el bucle de `g1run` (flash, MIDI,
+  JACK/ALSA, tiempo real y estadísticas) a una clase con su hilo; `g1run` queda en una consola
+  fina y ahora dice la carga (~55%) y los núcleos (~2,9). `g1gui` (`./g1gui.sh`): pantalla con
+  los caracteres propios de la CGRAM, 18 mandos y volumen (ADC), los botones y LEDs identificados,
+  vista de matrices en crudo y barra de estado. JUCE se incluye una vez en el CMake principal.
+  Verificación: compilado, `g1run` 10 s por JACK igual que antes, ventana abierta con la pantalla
+  del G1 («Empty Patch», voces por slot) y el LED del slot A.
+
 - **El panel, emulado (Claude, commit `f1e7573`).** Pantalla LCD HD44780 (`$202006/7`),
   32 LEDs en 4 filas y matriz de 24 botones (`$202004/5`, `$201800`), con API para una interfaz.
   Identificados A-D, Store, System y Assign/Morph. Verificación: `g1patchtest` enseña la pantalla

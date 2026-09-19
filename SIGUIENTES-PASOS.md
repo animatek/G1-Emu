@@ -114,10 +114,11 @@ Con el OS real corriendo en el emulador tenemos un G1 "de laboratorio" sin encen
 
 - **Hecho (2026-09-19):** el modelo del panel en el emulador: pantalla HD44780, 32 LEDs, matriz
   de 24 botones y mandos por el ADC, con API para leerlos y moverlos desde otro hilo. Ver `NOTAS.md`.
-- **Falta:** casar cada bit con su botón y su LED y cada canal del ADC con su mando; sacar el bucle
-  de `g1run` a una clase que usen la consola y la ventana; y la ventana (propuesta: JUCE, como los
-  plugins de Gearmulator y NME, que además deja la puerta abierta a un plugin). Con la carga de
-  la CPU a la vista, como pidió Javier.
+- **Hecho:** `EmuHost` (el bucle de `g1run` en una clase) y la primera ventana en JUCE (`g1gui`,
+  `./g1gui.sh`): pantalla, mandos, botones, LEDs y barra con velocidad, carga y núcleos.
+- **Falta:** casar los botones que quedan (Edit, Patch/Load, Shift, Navigator, Panel Split, Find,
+  Oct Shift), los LEDs de los mandos y de los modos, y comprobar el orden de los mandos contra el
+  aparato; la rueda (encoder), que aún no se sabe por dónde entra; y un aspecto más fiel.
 
 ### 3d-antes. Una interfaz para el G1 emulado (idea original)
 

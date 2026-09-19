@@ -36,6 +36,18 @@ target_include_directories(g1Midi PUBLIC ${GEARMULATOR_DIR}/source)
 target_link_libraries(g1Midi PUBLIC 68kEmu)
 include(cmake/Dsp56300.cmake)
 
+# JUCE, para la ventana (app/gui) y el banco de pruebas (tools/patchtest). Por defecto, el de
+# Animatek NME al lado (../Nomad2026/JUCE); G1_JUCE_DIR para usar otro. Sin JUCE solo se
+# compilan la consola y las herramientas.
+set(G1_JUCE_DIR "${CMAKE_SOURCE_DIR}/../Nomad2026/JUCE" CACHE PATH "Arbol de JUCE")
+set(G1_HAVE_JUCE OFF)
+if(EXISTS "${G1_JUCE_DIR}/CMakeLists.txt")
+	add_subdirectory(${G1_JUCE_DIR} ${CMAKE_BINARY_DIR}/juce EXCLUDE_FROM_ALL)
+	set(G1_HAVE_JUCE ON)
+else()
+	message(STATUS "Sin JUCE en ${G1_JUCE_DIR}: ni ventana ni banco de pruebas")
+endif()
+
 enable_testing()
 add_subdirectory(g1Lib)
 add_subdirectory(tools)

@@ -23,8 +23,14 @@ del JIT. Cuatro salidas y dos entradas por JACK. Falta el panel (ver `SIGUIENTES
 ## Usarlo
 
 ```bash
-./g1.sh      # arranca el G1 emulado; Ctrl+C guarda la flash y sale
+./g1.sh      # arranca el G1 emulado en la consola; Ctrl+C guarda la flash y sale
+./g1gui.sh   # lo mismo con su panel en una ventana (JUCE); al cerrarla guarda la flash
 ```
+
+La ventana (`app/gui`) enseña la pantalla, los 18 mandos y el volumen, los botones y LEDs ya
+identificados y una barra con la velocidad, la carga del emulador y los núcleos que usa. «Matriz»
+abre los 24 botones y los 32 LEDs en crudo, para identificar los que faltan. JUCE sale de
+`../Nomad2026/JUCE` (o `G1_JUCE_DIR`); sin él solo se compilan la consola y las herramientas.
 
 Crea el cliente ALSA **G1-Emu** con dos puertos, como el aparato: **PC Port** (el del editor:
 en NME se elige como entrada y salida) y **MIDI** (el MIDI IN/OUT normal). La flash (OS +
@@ -64,6 +70,9 @@ desde la ROM en `$C800`, así que la dirección de RAM X está en la ROM en `X -
 | `tools/g1boot.cpp` | Arranque sin interfaz y desensamblador. |
 | `tools/patchtest/` | `g1patchtest`: sube un `.pch` como NME, toca una nota y mide (necesita `../Nomad2026`). |
 | `app/jackaudio.h` | Audio por JACK: 4 salidas y 2 entradas. |
+| `app/emuhost.*` | El G1 funcionando (flash, MIDI, audio, tiempo real) en su hilo; lo usan `g1run` y `g1gui`. |
+| `app/gui/` | `g1gui`: la ventana con el panel. |
+| `g1Lib/g1lcd.h` | La pantalla (HD44780). |
 
 **El plan y las ideas pendientes están en `SIGUIENTES-PASOS.md`.**
 
