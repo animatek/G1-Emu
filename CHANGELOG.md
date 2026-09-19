@@ -2,15 +2,15 @@
 
 ## 2026-09-19
 
-- **Suena limpio: reloj real de los DSP y enlaces de 9 palabras (Claude, cambio local, sin
-  commit).** Los DSP van a 82,944 MHz (864 ciclos por muestra, del `PCTL` del OS) con la IRQD en
+- **Suena limpio: reloj real de los DSP y enlaces de 9 palabras (Claude, commit
+  `79e16aa`).** Los DSP van a 82,944 MHz (864 ciclos por muestra, del `PCTL` del OS) con la IRQD en
   una rejilla fija común; los ESSI, al ritmo que sale de su CRA (96 ciclos por palabra en los
   enlaces). El enlace entre DSP va por posición (cada palabra al sitio del anillo de recepción
   donde va a escribir el DMA, del bloque de hace 8) y la salida se lee del DSP 3 bloque a bloque.
   Los escalones y clics venían de ahí: el enlace movía 2 de las 9 palabras por muestra y los
   canales se desplazaban. `g1run` sube +36 dB por defecto (el nivel sigue a −62 dBFS). Nuevo
   `G1_BLOCKS` en `g1boot`. Verificación: compilado, CTest, replay con FFT (Do a 261,6 Hz por 1/2,
-  armónicos −82 dB, un salto en toda la ejecución) y `g1run` al 100% en tiempo real.
+  armónicos −82 dB, un salto en toda la ejecución) y `g1run` al 100% en tiempo real. Javier lo ha probado con NME: sin ruidos.
 
 - **Suena en tiempo real por la tarjeta de sonido (Claude).** `g1run` saca las salidas 1/2 por
   ALSA (`app/alsaaudio.h`, 48 kHz, +24 dB provisional; `G1_AUDIO`, `G1_GAIN_DB`). Los 4 DSP van
