@@ -10,6 +10,7 @@
 #include "g1Lib/g1mc.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <array>
 #include <cstdio>
 #include <fstream>
@@ -86,6 +87,21 @@ int main(int argc, char** argv)
 	std::printf("reset: PC=$%06x SP=$%06x\n", mc.getPC(), mc.getAReg(7));
 	std::fflush(stdout);
 
+	// G1_WATCH="123e94,1239e8": cuenta cuantas veces pasa el PC por esas direcciones y
+	// enseña los registros las primeras veces.
+	std::map<uint32_t, uint32_t> watch;
+	if(const char* w = std::getenv("G1_WATCH"))
+	{
+		std::string list = w;
+		size_t pos = 0;
+		while(pos < list.size())
+		{
+			const auto comma = list.find(',', pos);
+			watch[static_cast<uint32_t>(std::stoul(list.substr(pos, comma - pos), nullptr, 16))] = 0;
+			if(comma == std::string::npos) break;
+			pos = comma + 1;
+		}
+	}
 	std::array<uint32_t, 64> lastPcs{};	// ultimos PCs, para ver como se llega a un fallo
 	size_t lastPcPos = 0;
 	std::map<uint32_t, uint64_t> pcHits;	// PC -> veces, para ver en que bucle se queda
@@ -145,6 +161,14 @@ int main(int argc, char** argv)
 			break;
 		}
 		lastPcs[lastPcPos++ % lastPcs.size()] = pc;
+		if(!watch.empty())
+		{
+			auto it = watch.find(pc);
+			if(it != watch.end() && it->second++ < 6)
+				std::printf("  [watch $%06x] #%u D0=%08x D1=%08x D2=%08x A0=%06x A7=%06x ret=$%06x\n", pc, it->second,
+					mc.getDReg(0), mc.getDReg(1), mc.getDReg(2), mc.getAReg(0), mc.getAReg(7),
+					(static_cast<uint32_t>(mc.read16(mc.getAReg(7))) << 16) | mc.read16(mc.getAReg(7) + 2));
+		}
 		cycles += mc.exec();
 		const auto report = static_cast<uint32_t>(i / (steps / 10));
 		if(report != lastReport)
@@ -196,11 +220,12 @@ int main(int argc, char** argv)
 	{
 		std::map<uint32_t, std::vector<std::string>> perPort;
 		std::map<uint32_t, uint32_t> pendingHigh;
+		const bool tailMode = true;
 		for(const auto& a : mc.hostTrace())
 		{
 			const auto port = a.addr & ~7u;
 			auto& v = perPort[port];
-			if(v.size() >= 40 && !(port == 0x200018 && v.size() < 140)) continue;
+			if(v.size() >= 40 && !(port == 0x200018 && v.size() < 140) && !(port == 0x200000 && a.pc >= 0x100000 && tailMode)) continue;
 			char buf[64];
 			const auto reg = a.addr & 7;
 			if(!a.write) { std::snprintf(buf, sizeof(buf), "r%u", reg); if(v.empty() || v.back() != buf) v.push_back(buf); continue; }
@@ -212,8 +237,10 @@ int main(int argc, char** argv)
 		std::printf("\ntraza HI08 (primeros eventos por puerto):\n");
 		for(auto& [port, v] : perPort)
 		{
-			std::printf("  $%06x:", port);
-			for(auto& e : v) std::printf(" %s", e.c_str());
+			std::printf("  $%06x (%zu eventos):", port, v.size());
+			// del puerto $200000 se enseñan los ultimos 80 (lo que llega tras crear el patch)
+			const size_t from = (port == 0x200000 && v.size() > 80) ? v.size() - 80 : 0;
+			for(size_t k = from; k < v.size() && k < from + 80; ++k) std::printf(" %s", v[k].c_str());
 			std::printf("\n");
 		}
 	}
@@ -289,6 +316,13 @@ int main(int argc, char** argv)
 			static_cast<unsigned long long>(d.stalls()), static_cast<unsigned long long>(d.audioFrames()),
 			d.dsp().getPC().toWord(), static_cast<unsigned long long>(d.dsp().getCycles()),
 			d.hdi08().readControlRegister(), d.hdi08().readStatusRegister());
+	}
+
+	if(!watch.empty())
+	{
+		std::printf("\nwatch:");
+		for(auto& [a, n] : watch) std::printf(" $%06x=%u", a, n);
+		std::printf("\n");
 	}
 
 	printChipSelects(mc);

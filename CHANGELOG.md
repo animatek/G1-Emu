@@ -11,7 +11,9 @@
   palabras pendientes pasan a la ROM de arranque. Si la CPU consulta el estado con una palabra
   pendiente, el DSP avanza hasta recogerla, para que el OS no la descarte.
 - `g1boot ... replay FICHERO`: reproduce una sesión de NME sin NME y vuelca DMA, búferes y
-  salida de cada DSP. Diagnóstico de por qué no suena, en `NOTAS.md`.
+  salida de cada DSP. `G1_WATCH`: puntos de observación en el código del OS.
+- Diagnóstico de por qué no suena: el OS asigna 0 voces (su comprobación de recursos dice
+  "no cabe" a todo), así que nunca carga el código del patch en los DSP. En `NOTAS.md`.
 
 ## 2026-09-18
 

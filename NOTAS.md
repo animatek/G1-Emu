@@ -128,8 +128,18 @@ versión 3.3, número de serie y ID de aparato. Es el saludo completo que espera
   patch**. Siguen vacíos. Crear OscA → 2Output solo manda 12 palabras (todas al DSP 0),
   ningún DSP ha devuelto nunca una palabra a la CPU y NME ve 0 voces. Parece que el OS no
   llega a compilar ni cargar el patch; quizá espera una respuesta de los DSP que no llega.
+- **Por qué no se carga (2026-09-19): el OS asigna 0 voces.** Con `G1_WATCH` se ve la cadena:
+  `$1226F0` → `$123E94` (asignación de voces) → `$1239E8` ("¿cabe otra voz?", suma los
+  recursos de cada slot: ciclos y memoria X/Y/P) devuelve **no** las 4 veces → la lista de voces
+  de cada DSP (`$1A84A8 + DSP×$602`, cuenta en `+1`) queda vacía → `$12287E` (reparto de
+  memoria) y `$122DE2` (carga por voz) no tienen nada que hacer → el cargador de módulos
+  (`$122F72`, que escribe X/Y/P con `$B2/$B3/$B4` y parchea el salto con `$B7`) no se llama
+  nunca. Falta saber qué recurso le parece agotado: la capacidad que el OS atribuye a cada DSP
+  o las tablas de recursos por módulo (`$1C3B0C`, `$1C3B24`, `$1C3B28`, en pasos de `$30`).
 - **Herramienta:** `g1boot ROM N replay pcport-in.bin` reproduce una sesión de NME grabada
   por `g1run`, mantiene una nota por MIDI IN y vuelca estado, búferes y DMA de cada DSP.
+  `G1_WATCH=123e94,1239e8 g1boot ...` cuenta los pasos del PC por esas direcciones y enseña
+  los registros.
 
 ## El hardware
 
