@@ -84,7 +84,15 @@ desde la ROM en `$C800`, así que la dirección de RAM X está en la ROM en `X -
 - Antes de tocar el sinte de verdad desde aquí, mirar la conexión (ver la memoria
   "NME: mirar la conexión antes de tocar slots").
 
-## Changelog
+## Changelog — regla
+
+**Todo cambio que entre en el repo lleva su línea en `CHANGELOG.md`, en el mismo commit.** Sin
+excepciones: código, documentación, herramientas, arreglos pequeños. Lo más reciente arriba,
+bajo la fecha, con quién lo hizo, qué cambia y cómo se ha verificado. No hace falta el hash: la
+entrada va en el mismo commit que el cambio. Lo que quede sin commitear se marca «cambio local, sin
+commit». El repo es público: el changelog es lo que lee la gente.
+
+## Changelog global
 
 Cada cambio va en `CHANGELOG.md` de este repo **y** en el global
 `/mnt/SPEED/CODE/CHANGELOG.md` (regla de `/mnt/SPEED/CODE/AGENTS.md`, sección Global

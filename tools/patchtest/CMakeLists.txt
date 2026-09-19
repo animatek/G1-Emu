@@ -20,7 +20,8 @@ target_sources(g1patchtest PRIVATE
 	${NME_DIR}/source/model/PatchParser.cpp
 	${NME_DIR}/source/model/PchFileIO.cpp
 	${NME_DIR}/source/midi/UploadPacketizer.cpp
-	${NME_DIR}/source/midi/SysExCodec.cpp)
+	${NME_DIR}/source/midi/SysExCodec.cpp
+	${NME_DIR}/source/protocol/KnobAssignmentMessage.cpp)
 target_include_directories(g1patchtest PRIVATE ${NME_DIR}/source)
 target_compile_definitions(g1patchtest PRIVATE
 	NME_DATA_DIR="${NME_DIR}/data"

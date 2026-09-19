@@ -6,3 +6,6 @@ Roms/
 build/
 build-*/
 bin/
+
+# Borradores privados de Patreon
+/Patreon post/

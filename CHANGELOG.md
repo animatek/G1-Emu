@@ -1,6 +1,37 @@
 # Changelog
 
+Todo lo que cambia en G1-Emu, lo más reciente arriba. **Regla: cada cambio que entra en el repo
+lleva aquí su línea, en el mismo commit** (ver `CLAUDE.md`). Cada entrada dice quién lo hizo, qué
+cambia y cómo se ha comprobado; el commit es el que la trae (`git log -- CHANGELOG.md`). Las
+entradas antiguas citan su commit a mano.
+
 ## 2026-09-19
+
+- **Panel como el del aparato, mandos en su sitio y repo listo para ser público (Claude).**
+  El ADC devolvía el canal elegido y no la conversión anterior: los mandos
+  iban corridos uno y el volumen en marcha se leía de otro canal; arreglado. Identificados con
+  `g1patchtest` (nuevos `G1_KNOBS`, `G1_ADCSWEEP`, `G1_LEDSTATE`, `G1_PRESS`) los 18 mandos y sus
+  LEDs, los LEDs de slots y modos, Edit, Patch/Load y el navegador. La ventana, rehecha a partir de
+  las fotos: pantalla con la fuente de puntos del HD44780, mandos rojos y negros con el número
+  bajo el LED, Panel Split, Find/Panic, Oct Shift, Assign/Morph, Shift, la rueda y un LED de MIDI;
+  sin la tira de matrices. `LICENSE` (GPLv3), `README.md` y la regla del changelog en `CLAUDE.md`
+  y `AGENTS.md`. Verificación: barrido del ADC con los 18 mandos asignados, 18 pruebas de LED y
+  24+36 de botones, audio igual que antes, capturas de la ventana; historial revisado (sin ROMs).
+
+- **Ampliación del post de Patreon (Codex; cambio local, sin commit).** Añadido
+  en ambos idiomas el apartado de edición de varios G1 físicos o emulados desde
+  Animatek NME como mejora prevista, con la referencia a los cuatro dispositivos
+  del editor original y un par MIDI In/Out del PC Port por dispositivo.
+  Verificación: texto revisado contra `SIGUIENTES-PASOS.md`, sección 3a-bis;
+  `git diff --check` y exclusión del borrador con `git check-ignore -v` correctos.
+
+- **Post de Patreon bilingüe (Codex; cambio local, sin commit).** Borrador corregido
+  en `Patreon post/2026-09-19-g1-emulation.md`, inglés primero y español debajo,
+  con aviso de pre-alpha sin beta, espacio para el vídeo y posibilidades futuras
+  diferenciadas de funciones disponibles. Carpeta excluida mediante `.gitignore`.
+  Verificación: revisión editorial contra las notas del proyecto y fuentes de los
+  autores; `git check-ignore -v` confirma la exclusión, `git ls-files` no incluye
+  el borrador y `git diff --check` pasa. Sin publicación en Patreon.
 
 - **La ventana: primer panel en JUCE (Claude, commit `46c7b8d`).** `EmuHost` saca el bucle de `g1run` (flash, MIDI,
   JACK/ALSA, tiempo real y estadísticas) a una clase con su hilo; `g1run` queda en una consola

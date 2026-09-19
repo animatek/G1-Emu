@@ -1,4 +1,5 @@
 #include "Panel.h"
+#include "LcdFont.h"
 
 #include <cmath>
 
@@ -6,65 +7,71 @@ namespace g1gui
 {
 	namespace
 	{
-		// Mandos 1-18: canal del multiplexor del ADC. El OS los lee en el orden de su tabla
-		// ($14420A) y los guarda en ese orden; se supone que el mando n es la entrada n-1.
-		// Falta comprobarlo con el aparato.
+		// Mandos 1-18: su canal del multiplexor del ADC. Comprobado asignando un mando a cada
+		// modulo y moviendo cada canal: el OS avisa al editor del mando que ha cambiado.
 		constexpr std::array<uint8_t, 18> g_knobAdc = {0x31, 0x37, 0x2d, 0x32, 0x28, 0x2e, 0x33, 0x29, 0x2f, 0x34, 0x2a, 0x1a, 0x35, 0x2b, 0x1b, 0x36, 0x2c, 0x1c};
 		constexpr uint8_t g_volumeAdc = 0x30;
 
-		// Botones identificados pulsandolos uno a uno (G1_PROBE); los demas, sin conectar.
-		constexpr ButtonBit g_btnA{0, 2}, g_btnB{0, 3}, g_btnC{0, 4}, g_btnD{0, 5};
-		constexpr ButtonBit g_btnStore{0, 6}, g_btnSystem{0, 7}, g_btnAssign{1, 2};
-		constexpr ButtonBit g_unknown{};
+		// Botones (fila.bit de la matriz), identificados pulsandolos uno a uno con g1patchtest.
+		constexpr MatrixBit g_btnA{0, 2}, g_btnB{0, 3}, g_btnC{0, 4}, g_btnD{0, 5};
+		constexpr MatrixBit g_btnStore{0, 6}, g_btnSystem{0, 7}, g_btnEdit{1, 2}, g_btnPatchLoad{1, 3};
+		constexpr MatrixBit g_btnUp{1, 4}, g_btnLeft{1, 5}, g_btnDown{1, 6}, g_btnRight{1, 7};
+		constexpr MatrixBit g_btnPanelSplit{2, 2};	// enciende el LED 3.2; falta confirmarlo
+		constexpr MatrixBit g_unknown{};
 
-		// LEDs identificados: los de los slots, bit 7 de cada fila (activos a nivel bajo).
-		constexpr std::array<LedBit, 4> g_slotLeds = {LedBit{0, 7}, LedBit{1, 7}, LedBit{2, 7}, LedBit{3, 7}};
+		// LEDs (activos a nivel bajo). Los de los mandos: mando k (0-17) en fila k%3, bit 1+k/3.
+		constexpr std::array<MatrixBit, 4> g_slotLeds = {MatrixBit{0, 7}, MatrixBit{1, 7}, MatrixBit{2, 7}, MatrixBit{3, 7}};
+		constexpr std::array<MatrixBit, 4> g_modeLeds = {MatrixBit{3, 3}, MatrixBit{3, 4}, MatrixBit{3, 5}, MatrixBit{3, 6}};
+		constexpr MatrixBit g_panelSplitLed{3, 2};
+		// Los cinco que quedan (bit 0 de las cuatro filas y 3.1) deben de ser los de Oct Shift;
+		// el orden esta sin comprobar.
+		constexpr std::array<MatrixBit, 5> g_octLeds = {MatrixBit{0, 0}, MatrixBit{1, 0}, MatrixBit{2, 0}, MatrixBit{3, 0}, MatrixBit{3, 1}};
 
-		const juce::Colour g_chassis(0xffb5202c), g_face(0xff2c2b4a), g_panel(0xffd6d6d2), g_groupLine(0xffe8a33a);
+		const juce::Colour g_chassis(0xffb21f2d), g_face(0xff2b2346), g_panel(0xffc9c9c6), g_groupLine(0xffe0a040);
+		const juce::Colour g_textDark(0xff2b2346), g_textLight(0xffe8e8f0);
 	}
 
 	// ________________________________________________________________________
-	// Pantalla: caracteres del HD44780; los propios (codigos 0-15) se dibujan desde la CGRAM.
+	// Pantalla: 2 x 16 caracteres de 5x8 puntos, como el HD44780.
 
 	void LcdView::paint(juce::Graphics& _g)
 	{
 		const auto area = getLocalBounds().toFloat();
-		_g.setColour(juce::Colour(0xff1a1a1a));
+		_g.setColour(juce::Colour(0xffc4232f));	// el marco rojo del aparato
 		_g.fillRoundedRectangle(area, 6.0f);
-		const auto glass = area.reduced(6.0f);
-		_g.setColour(m_lcd.displayOn() ? juce::Colour(0xff9fd33a) : juce::Colour(0xff6f8f32));
-		_g.fillRoundedRectangle(glass, 3.0f);
-		if(!m_lcd.displayOn())
+		const auto glass = area.reduced(10.0f, 9.0f);
+		const bool on = m_lcd.displayOn();
+		_g.setColour(on ? juce::Colour(0xffa6c83a) : juce::Colour(0xff7d9434));
+		_g.fillRect(glass);
+		if(!on)
 			return;
 
 		constexpr int cols = 16, rows = 2;
-		const float cellW = (glass.getWidth() - 12.0f) / cols, cellH = (glass.getHeight() - 10.0f) / rows;
+		const float cellW = glass.getWidth() / cols, cellH = glass.getHeight() / rows;
+		const float dot = std::min(cellW / 6.0f, cellH / 9.0f);
 		const auto cg = m_lcd.cgram();
-		const auto ink = juce::Colour(0xff1d2a10);
-		_g.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), cellH * 0.82f, juce::Font::bold));
+		const auto& font = lcdFont();
+		const auto ink = juce::Colour(0xff1c2a0e), ghost = juce::Colour(0xff9bbb35);
+
 		for(int r = 0; r < rows; ++r)
 		{
 			const auto text = m_lcd.line(static_cast<uint32_t>(r), cols);
-			for(int c = 0; c < cols && c < static_cast<int>(text.size()); ++c)
+			for(int c = 0; c < cols; ++c)
 			{
-				const auto ch = static_cast<uint8_t>(text[static_cast<size_t>(c)]);
-				const juce::Rectangle<float> cell(glass.getX() + 6.0f + c * cellW, glass.getY() + 5.0f + r * cellH, cellW, cellH);
-				if(ch < 16)
-				{
-					// 5x8 puntos desde la CGRAM
-					const auto base = static_cast<size_t>(ch & 7) * 8;
-					const float px = cell.getWidth() / 6.0f, py = cell.getHeight() / 8.5f;
-					_g.setColour(ink);
-					for(int y = 0; y < 8; ++y)
-						for(int x = 0; x < 5; ++x)
-							if(cg[base + static_cast<size_t>(y)] & (0x10 >> x))
-								_g.fillRect(cell.getX() + x * px + px * 0.5f, cell.getY() + y * py, px * 0.9f, py * 0.9f);
-				}
-				else
-				{
-					_g.setColour(ink);
-					_g.drawText(juce::String::charToString(static_cast<juce::juce_wchar>(ch)), cell, juce::Justification::centred, false);
-				}
+				const auto ch = c < static_cast<int>(text.size()) ? static_cast<uint8_t>(text[static_cast<size_t>(c)]) : uint8_t(' ');
+				const float x0 = glass.getX() + c * cellW + (cellW - dot * 5.0f) * 0.5f;
+				const float y0 = glass.getY() + r * cellH + (cellH - dot * 8.0f) * 0.5f;
+				for(int y = 0; y < 8; ++y)
+					for(int x = 0; x < 5; ++x)
+					{
+						bool px = false;
+						if(ch < 16)
+							px = (cg[static_cast<size_t>(ch & 7) * 8 + static_cast<size_t>(y)] & (0x10 >> x)) != 0;
+						else if(ch >= 0x20 && ch < 0x80 && y < 7)
+							px = (font[static_cast<size_t>(ch - 0x20)][static_cast<size_t>(x)] >> y) & 1;
+						_g.setColour(px ? ink : ghost);
+						_g.fillRect(x0 + x * dot, y0 + y * dot, dot * 0.86f, dot * 0.86f);
+					}
 			}
 		}
 	}
@@ -72,24 +79,27 @@ namespace g1gui
 	void LedView::paint(juce::Graphics& _g)
 	{
 		const auto r = getLocalBounds().toFloat().reduced(1.0f);
-		_g.setColour(m_on ? juce::Colour(0xff4dff6a) : juce::Colour(0xff1f4a26));
+		if(m_on)
+		{
+			_g.setColour(juce::Colour(0x5539ff5a));
+			_g.fillEllipse(r.expanded(1.0f));
+		}
+		_g.setColour(m_on ? juce::Colour(0xff5dff78) : juce::Colour(0xff1d4a26));
 		_g.fillEllipse(r);
-		_g.setColour(juce::Colours::black.withAlpha(0.6f));
+		_g.setColour(juce::Colours::black.withAlpha(0.7f));
 		_g.drawEllipse(r, 1.0f);
 	}
 
-	PanelButton::PanelButton(const juce::String& _name, g1::Microcontroller& _mc, const ButtonBit _bit)
-		: juce::TextButton(_name), m_mc(_mc), m_bit(_bit)
+	PanelButton::PanelButton(const juce::String& _name, g1::Microcontroller& _mc, const MatrixBit _bit)
+		: juce::Button(_name), m_mc(_mc), m_bit(_bit)
 	{
-		setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2a2a2a));
-		setColour(juce::TextButton::textColourOffId, juce::Colours::white);
 		if(!_bit.known())
 		{
 			setEnabled(false);
-			setTooltip("Sin identificar todavia en la matriz del panel");
+			setTooltip(_name + ": todavia sin identificar en la matriz del panel");
 			return;
 		}
-		setTooltip("Fila " + juce::String(_bit.row) + ", bit " + juce::String(_bit.bit));
+		setTooltip(_name);
 		onStateChange = [this]
 		{
 			const bool down = isDown();
@@ -101,6 +111,44 @@ namespace g1gui
 		};
 	}
 
+	void PanelButton::paintButton(juce::Graphics& _g, const bool _over, const bool _down)
+	{
+		auto r = getLocalBounds().toFloat().reduced(1.5f);
+		_g.setColour(juce::Colours::black.withAlpha(0.5f));
+		_g.fillRoundedRectangle(r.translated(0, 2.0f), 4.0f);
+		if(_down)
+			r = r.translated(0, 1.5f);
+		const auto base = isEnabled() ? juce::Colour(0xff1b1b1e) : juce::Colour(0xff4a4a50);
+		_g.setGradientFill(juce::ColourGradient(base.brighter(_over ? 0.35f : 0.2f), r.getX(), r.getY(), base, r.getX(), r.getBottom(), false));
+		_g.fillRoundedRectangle(r, 4.0f);
+		_g.setColour(juce::Colours::black);
+		_g.drawRoundedRectangle(r, 4.0f, 1.0f);
+	}
+
+	void KnobLook::drawRotarySlider(juce::Graphics& _g, const int _x, const int _y, const int _w, const int _h, const float _pos, const float _start, const float _end, juce::Slider&)
+	{
+		const auto area = juce::Rectangle<float>(static_cast<float>(_x), static_cast<float>(_y), static_cast<float>(_w), static_cast<float>(_h)).reduced(3.0f);
+		const auto c = area.getCentre();
+		const float radius = std::min(area.getWidth(), area.getHeight()) * 0.5f;
+		// Anillo rojo con marcas, como el del aparato
+		_g.setColour(juce::Colour(0xffc4232f));
+		_g.fillEllipse(area);
+		_g.setColour(juce::Colours::white.withAlpha(0.8f));
+		for(int i = 0; i <= 10; ++i)
+		{
+			const float a = _start + (_end - _start) * static_cast<float>(i) / 10.0f;
+			const auto p1 = c.getPointOnCircumference(radius * 0.97f, a), p2 = c.getPointOnCircumference(radius * 0.82f, a);
+			_g.drawLine({p1, p2}, 1.2f);
+		}
+		// Cuerpo negro y el indicador blanco
+		const float knob = radius * 0.72f;
+		_g.setGradientFill(juce::ColourGradient(juce::Colour(0xff3a3a3e), c.x - knob, c.y - knob, juce::Colour(0xff0e0e10), c.x + knob, c.y + knob, false));
+		_g.fillEllipse(c.x - knob, c.y - knob, knob * 2.0f, knob * 2.0f);
+		const float a = _start + _pos * (_end - _start);
+		_g.setColour(juce::Colours::white);
+		_g.drawLine({c.getPointOnCircumference(knob * 0.25f, a), c.getPointOnCircumference(knob * 0.95f, a)}, 3.0f);
+	}
+
 	// ________________________________________________________________________
 
 	Panel::Panel(g1app::EmuHost& _host) : m_host(_host), m_mc(_host.mc()), m_lcd(_host.mc().getLcd())
@@ -109,85 +157,77 @@ namespace g1gui
 
 		auto setupKnob = [this](juce::Slider& _s, const uint8_t _adc, const double _initial, const juce::String& _tip)
 		{
+			_s.setLookAndFeel(&m_knobLook);
 			_s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
 			_s.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
 			_s.setRange(0, 255, 1);
-			_s.setRotaryParameters(juce::MathConstants<float>::pi * 1.2f, juce::MathConstants<float>::pi * 2.8f, true);
-			_s.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xffd23b3b));
-			_s.setColour(juce::Slider::thumbColourId, juce::Colours::white);
+			_s.setRotaryParameters(juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
 			_s.setTooltip(_tip);
 			_s.setValue(_initial, juce::dontSendNotification);
 			_s.onValueChange = [this, &_s, _adc] { m_mc.setAdc(_adc, static_cast<uint8_t>(_s.getValue())); };
 			m_mc.setAdc(_adc, static_cast<uint8_t>(_initial));
 			addAndMakeVisible(_s);
 		};
-		setupKnob(m_volume, g_volumeAdc, 255, "Master volume (el OS lo lee al encender y al moverlo)");
+		setupKnob(m_volume, g_volumeAdc, 255, "Master Volume");
 		for(size_t i = 0; i < m_knobs.size(); ++i)
 		{
 			setupKnob(m_knobs[i], g_knobAdc[i], 0, "Mando " + juce::String(static_cast<int>(i + 1)));
-			addAndMakeVisible(m_knobLeds[i]);
+			m_knobLeds[i] = &addLed({static_cast<int>(i % 3), 1 + static_cast<int>(i / 3)});
 		}
 
-		m_panelSplit = &addButton("Panel Split", g_unknown);
+		m_midiLed = &addLed({});
+		m_panelSplitLed = &addLed(g_panelSplitLed);
+		m_panelSplit = &addButton("Panel Split", g_btnPanelSplit);
 		m_find = &addButton("Find", g_unknown);
-		m_octDown = &addButton("<", g_unknown);
-		m_octUp = &addButton(">", g_unknown);
-		for(auto& l : m_octLeds)
-			l = &addLed({});
+		m_oct[0] = &addButton("Oct Shift -", g_unknown);
+		m_oct[1] = &addButton("Oct Shift +", g_unknown);
+		for(size_t i = 0; i < m_octLeds.size(); ++i)
+			m_octLeds[i] = &addLed(g_octLeds[i]);
+
 		const char* modes[] = {"Store", "System", "Edit", "Patch/Load"};
-		const ButtonBit modeBits[] = {g_btnStore, g_btnSystem, g_unknown, g_unknown};
+		const MatrixBit modeBits[] = {g_btnStore, g_btnSystem, g_btnEdit, g_btnPatchLoad};
 		for(size_t i = 0; i < 4; ++i)
 		{
 			m_modeButtons[i] = &addButton(modes[i], modeBits[i]);
-			m_modeLeds[i] = &addLed({});
+			m_modeLeds[i] = &addLed(g_modeLeds[i]);
 		}
 		const char* slots[] = {"A", "B", "C", "D"};
-		const ButtonBit slotBits[] = {g_btnA, g_btnB, g_btnC, g_btnD};
+		const MatrixBit slotBits[] = {g_btnA, g_btnB, g_btnC, g_btnD};
 		for(size_t i = 0; i < 4; ++i)
 		{
 			m_slotButtons[i] = &addButton(slots[i], slotBits[i]);
 			m_slotLeds[i] = &addLed(g_slotLeds[i]);
 		}
-		m_assign = &addButton("Assign / Morph", g_btnAssign);
+		m_assign = &addButton("Assign / Morph", g_unknown);
 		m_shift = &addButton("Shift", g_unknown);
-		const char* nav[] = {"<", "^", "v", ">"};
-		for(size_t i = 0; i < 4; ++i)
-			m_nav[i] = &addButton(nav[i], g_unknown);
+		m_nav[0] = &addButton("Arriba", g_btnUp);
+		m_nav[1] = &addButton("Izquierda", g_btnLeft);
+		m_nav[2] = &addButton("Derecha", g_btnRight);
+		m_nav[3] = &addButton("Abajo", g_btnDown);
 
-		// Matrices en crudo
-		for(int i = 0; i < 24; ++i)
-		{
-			m_rawButtons[static_cast<size_t>(i)] = std::make_unique<PanelButton>(juce::String(i / 8) + "." + juce::String(i % 8), m_mc, ButtonBit{i / 8, i % 8});
-			addChildComponent(*m_rawButtons[static_cast<size_t>(i)]);
-		}
-		for(auto& l : m_rawLeds)
-			addChildComponent(l);
-		m_showMatrix.onClick = [this]
-		{
-			const bool show = m_showMatrix.getToggleState();
-			for(auto& b : m_rawButtons) b->setVisible(show);
-			for(auto& l : m_rawLeds) l.setVisible(show);
-			setSize(getWidth(), show ? 590 : 470);	// la ventana sigue al contenido
-			repaint();
-		};
-		addAndMakeVisible(m_showMatrix);
-
-		m_status.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 13.0f, juce::Font::plain));
+		m_status.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 12.5f, juce::Font::plain));
 		m_status.setColour(juce::Label::textColourId, juce::Colours::white);
 		addAndMakeVisible(m_status);
 
-		setSize(1200, 470);
+		setSize(1200, 440);
 		startTimerHz(30);
 	}
 
-	PanelButton& Panel::addButton(const juce::String& _name, const ButtonBit _bit)
+	Panel::~Panel()
+	{
+		m_volume.setLookAndFeel(nullptr);
+		for(auto& k : m_knobs)
+			k.setLookAndFeel(nullptr);
+	}
+
+	PanelButton& Panel::addButton(const juce::String& _name, const MatrixBit _bit)
 	{
 		m_buttons.push_back(std::make_unique<PanelButton>(_name, m_mc, _bit));
 		addAndMakeVisible(*m_buttons.back());
 		return *m_buttons.back();
 	}
 
-	LedView& Panel::addLed(const LedBit _bit)
+	LedView& Panel::addLed(const MatrixBit _bit)
 	{
 		m_leds.push_back(std::make_unique<LedView>());
 		addAndMakeVisible(*m_leds.back());
@@ -199,86 +239,102 @@ namespace g1gui
 	void Panel::paint(juce::Graphics& _g)
 	{
 		_g.fillAll(g_chassis);
-		const auto face = juce::Rectangle<float>(10.0f, 10.0f, static_cast<float>(getWidth()) - 20.0f, 400.0f);
+		const juce::Rectangle<float> face(12.0f, 12.0f, static_cast<float>(getWidth()) - 24.0f, 378.0f);
 		_g.setColour(g_face);
-		_g.fillRoundedRectangle(face, 14.0f);
+		_g.fillRoundedRectangle(face, 16.0f);
 
-		// Grupos de mandos y la zona de la pantalla, en gris como el aparato
-		const juce::Rectangle<float> groups[] = {{130, 26, 200, 340}, {345, 26, 200, 340}, {560, 26, 100, 340}, {675, 26, 100, 340}, {795, 26, 385, 340}};
+		// Los grupos de mandos y la zona de la pantalla, grises con el borde naranja
+		const juce::Rectangle<float> groups[] = {{140, 26, 196, 330}, {350, 26, 196, 330}, {560, 26, 100, 330}, {674, 26, 100, 330}, {790, 26, 380, 330}};
 		for(const auto& g : groups)
 		{
 			_g.setColour(g_panel);
-			_g.fillRoundedRectangle(g, 10.0f);
+			_g.fillRoundedRectangle(g, 8.0f);
 			_g.setColour(g_groupLine);
-			_g.drawRoundedRectangle(g, 10.0f, 2.0f);
+			_g.drawRoundedRectangle(g, 8.0f, 1.6f);
 		}
 
-		_g.setColour(juce::Colours::white);
-		_g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
-		_g.drawText("MASTER VOLUME", 20, 24, 100, 16, juce::Justification::centred);
-		_g.drawText("Oct Shift", 20, 300, 100, 14, juce::Justification::centred);
-		_g.setColour(juce::Colour(0xff333333));
+		auto label = [&](const juce::String& _t, const juce::Rectangle<int> _r, const juce::Colour _c, const float _size = 11.0f, const juce::Justification _j = juce::Justification::centred)
+		{
+			_g.setColour(_c);
+			_g.setFont(juce::FontOptions(_size, juce::Font::bold));
+			_g.drawText(_t, _r, _j, false);
+		};
+
+		label("MASTER", {20, 24, 110, 13}, g_textLight, 12.0f);
+		label("VOLUME", {20, 37, 110, 13}, g_textLight, 12.0f);
+		label("MIDI", m_midiLed->getBounds().withWidth(40).translated(14, -1), g_textLight, 10.0f, juce::Justification::centredLeft);
+		label("Panel Split", m_panelSplitLed->getBounds().withWidth(80).translated(14, -1), g_textLight, 11.0f, juce::Justification::centredLeft);
+		label("Find", m_find->getBounds().translated(0, -15).withHeight(13), g_textLight);
+		label("Panic", m_find->getBounds().translated(0, m_find->getHeight() + 2).withHeight(12), juce::Colour(0xffe0404a), 10.0f);
+		label("Oct Shift", {20, 283, 110, 14}, g_textLight);
+
 		for(size_t i = 0; i < m_knobs.size(); ++i)
-		{
-			const auto k = m_knobs[i].getBounds();
-			_g.drawText(juce::String(static_cast<int>(i + 1)), k.getRight() - 22, k.getY() - 15, 18, 14, juce::Justification::centredRight);
-		}
+			label(juce::String(static_cast<int>(i + 1)), m_knobLeds[i]->getBounds().withSizeKeepingCentre(24, 12).translated(0, 13), g_textDark, 10.0f);
 
-		_g.setColour(juce::Colours::white.withAlpha(0.7f));
-		_g.setFont(juce::FontOptions(11.0f));
-		_g.drawText("VIRTUAL  MODULAR  SYNTHESIZER   -   G1-Emu", face.withTop(378).withHeight(20).toNearestInt(), juce::Justification::centred);
+		const char* modes[] = {"Store", "System", "Edit", "Patch/Load"};
+		for(size_t i = 0; i < 4; ++i)
+			label(modes[i], m_modeLeds[i]->getBounds().withWidth(70).translated(14, -1), g_textDark, 11.0f, juce::Justification::centredLeft);
+		label("Save", m_modeButtons[0]->getBounds().translated(0, m_modeButtons[0]->getHeight() + 2).withHeight(12), g_textDark, 10.0f);
+		label("Synth Settings", m_modeButtons[0]->getBounds().translated(-10, m_modeButtons[0]->getHeight() + 14).withHeight(12).withWidth(m_modeButtons[0]->getWidth() + 20), g_textDark, 10.0f);
+		const char* slots[] = {"A", "B", "C", "D"};
+		for(size_t i = 0; i < 4; ++i)
+			label(slots[i], m_slotLeds[i]->getBounds().withWidth(40).translated(14, -1), g_textDark, 11.0f, juce::Justification::centredLeft);
+		label("Navigator", m_nav[0]->getBounds().translated(-24, -15).withWidth(m_nav[0]->getWidth() + 48).withHeight(13), g_textDark);
+		label("Assign/Morph", m_assign->getBounds().translated(-14, -15).withWidth(m_assign->getWidth() + 28).withHeight(13), g_textDark, 10.0f);
+		label("Shift", m_shift->getBounds().translated(0, -15).withHeight(13), g_textDark);
 
-		if(m_showMatrix.getToggleState())
-		{
-			_g.setColour(juce::Colours::white);
-			_g.drawText("Botones (fila.bit)", 20, 470, 200, 14, juce::Justification::left);
-			_g.drawText("LEDs (fila 0-3, bit 7-0; encendido = bit a 0)", 700, 470, 400, 14, juce::Justification::left);
-		}
+		// La rueda (todavia sin conectar)
+		const auto d = m_dial.toFloat();
+		_g.setColour(juce::Colours::black.withAlpha(0.4f));
+		_g.fillEllipse(d.translated(2.0f, 3.0f));
+		_g.setGradientFill(juce::ColourGradient(juce::Colour(0xff3a3a3e), d.getX(), d.getY(), juce::Colour(0xff0c0c0e), d.getRight(), d.getBottom(), false));
+		_g.fillEllipse(d);
+
+		label("V I R T U A L      M O D U L A R      S Y N T H E S I Z E R      -      G 1 - E M U", {140, 362, 1030, 16}, g_textLight, 10.0f);
 	}
 
 	void Panel::resized()
 	{
-		m_volume.setBounds(35, 42, 70, 70);
-		m_panelSplit->setBounds(22, 150, 96, 26);
-		m_find->setBounds(22, 200, 96, 26);
+		// Columna izquierda
+		m_volume.setBounds(42, 54, 66, 66);
+		m_midiLed->setBounds(46, 130, 10, 10);
+		m_panelSplitLed->setBounds(34, 158, 10, 10);
+		m_panelSplit->setBounds(40, 174, 70, 28);
+		m_find->setBounds(40, 234, 70, 28);
 		for(size_t i = 0; i < m_octLeds.size(); ++i)
-			m_octLeds[i]->setBounds(30 + static_cast<int>(i) * 17, 318, 12, 12);
-		m_octDown->setBounds(28, 338, 40, 24);
-		m_octUp->setBounds(72, 338, 40, 24);
+			m_octLeds[i]->setBounds(38 + static_cast<int>(i) * 15, 300, 10, 10);
+		m_oct[0]->setBounds(42, 316, 28, 38);
+		m_oct[1]->setBounds(78, 316, 28, 38);
 
-		// Mandos: 1-6 en dos columnas, 7-12 en dos, 13-15 y 16-18 en una, de tres en tres
-		const int colX[] = {150, 245, 365, 460, 580, 695};
-		const int rowY[] = {60, 160, 260};
+		// Mandos: 1-3 y 4-6 en el primer grupo, 7-12 en el segundo, 13-15 y 16-18 en los otros
+		const int colX[] = {158, 250, 368, 460, 578, 692};
+		const int rowY[] = {52, 158, 264};
 		for(size_t i = 0; i < m_knobs.size(); ++i)
 		{
 			const int col = static_cast<int>(i / 3), row = static_cast<int>(i % 3);
-			m_knobs[i].setBounds(colX[col], rowY[row], 64, 64);
-			m_knobLeds[i].setBounds(colX[col] + 58, rowY[row] - 13, 11, 11);
+			m_knobs[i].setBounds(colX[col], rowY[row], 66, 66);
+			m_knobLeds[i]->setBounds(colX[col] + 66, rowY[row] - 14, 10, 10);
 		}
 
-		m_lcd.setBounds(815, 40, 250, 70);
+		// Derecha: pantalla, modos, slots, navegador, Assign/Morph, Shift y la rueda
+		m_lcd.setBounds(810, 40, 250, 74);
 		for(size_t i = 0; i < 4; ++i)
 		{
-			const int x = 815 + static_cast<int>(i) * 64;
-			m_modeLeds[i]->setBounds(x, 150, 10, 10);
-			m_modeButtons[i]->setBounds(x, 164, 60, 26);
-			m_slotLeds[i]->setBounds(x, 230, 10, 10);
-			m_slotButtons[i]->setBounds(x, 244, 60, 26);
+			const int x = 810 + static_cast<int>(i) * 64;
+			m_modeLeds[i]->setBounds(x + 4, 146, 10, 10);
+			m_modeButtons[i]->setBounds(x, 160, 60, 28);
+			m_slotLeds[i]->setBounds(x + 4, 262, 10, 10);
+			m_slotButtons[i]->setBounds(x, 276, 60, 28);
 		}
-		m_assign->setBounds(1080, 150, 90, 26);
-		m_shift->setBounds(1080, 190, 90, 26);
-		m_nav[0]->setBounds(1080, 70, 28, 26);
-		m_nav[1]->setBounds(1110, 40, 28, 26);
-		m_nav[2]->setBounds(1110, 100, 28, 26);
-		m_nav[3]->setBounds(1140, 70, 28, 26);
+		m_nav[0]->setBounds(1105, 48, 26, 34);
+		m_nav[1]->setBounds(1070, 84, 34, 26);
+		m_nav[2]->setBounds(1132, 84, 34, 26);
+		m_nav[3]->setBounds(1105, 112, 26, 34);
+		m_assign->setBounds(1078, 178, 40, 28);
+		m_shift->setBounds(1128, 178, 40, 28);
+		m_dial = {1094, 232, 72, 72};
 
-		m_showMatrix.setBounds(1090, 420, 90, 22);
-		m_status.setBounds(12, 416, 1070, 26);
-
-		for(size_t i = 0; i < m_rawButtons.size(); ++i)
-			m_rawButtons[i]->setBounds(20 + static_cast<int>(i % 8) * 70, 490 + static_cast<int>(i / 8) * 30, 64, 26);
-		for(size_t i = 0; i < m_rawLeds.size(); ++i)
-			m_rawLeds[i].setBounds(700 + static_cast<int>(7 - i % 8) * 24, 492 + static_cast<int>(i / 8) * 22, 14, 14);
+		m_status.setBounds(14, 396, getWidth() - 28, 30);
 	}
 
 	void Panel::timerCallback()
@@ -286,11 +342,18 @@ namespace g1gui
 		m_lcd.repaint();
 		for(auto& [led, bit] : m_ledMap)
 			led->setOn(!(m_mc.ledRow(static_cast<uint32_t>(bit.row)) & (1u << bit.bit)));
-		if(m_showMatrix.getToggleState())
-			for(size_t i = 0; i < m_rawLeds.size(); ++i)
-				m_rawLeds[i].setOn(!(m_mc.ledRow(static_cast<uint32_t>(i / 8)) & (1u << (i % 8))));
 
 		const auto s = m_host.stats();
+		// LED de MIDI: se enciende un momento con lo que entre por el puerto MIDI (notas, CC)
+		if(s.midiIn != m_lastMidiIn)
+		{
+			m_lastMidiIn = s.midiIn;
+			m_midiHold = 3;
+		}
+		m_midiLed->setOn(m_midiHold > 0);
+		if(m_midiHold > 0)
+			--m_midiHold;
+
 		m_peakHold = std::max(static_cast<double>(s.peak), m_peakHold * 0.9);
 		juce::String dsp;
 		for(bool on : s.dspOn)
@@ -298,6 +361,6 @@ namespace g1gui
 		m_status.setText(juce::String::formatted("velocidad %5.1f%%   carga %3.0f%%   CPU %.1f nucleos   DSP %s   salida 1/2 %s   cortes %llu   |  ",
 			s.speed, s.load, s.cpuCores, dsp.toRawUTF8(),
 			m_peakHold > 1e-6 ? juce::String::formatted("%+.0f dB", 20.0 * std::log10(m_peakHold)).toRawUTF8() : "silencio",
-			static_cast<unsigned long long>(s.xruns)) + juce::String(s.audio), juce::dontSendNotification);
+			static_cast<unsigned long long>(s.xruns)) + juce::String(s.audio) + "   |  MIDI: G1-Emu:MIDI", juce::dontSendNotification);
 	}
 }

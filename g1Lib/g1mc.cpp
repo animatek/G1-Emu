@@ -262,7 +262,14 @@ namespace g1
 		if(addr == g_panelIn)
 			return buttonRow();
 		if(addr == g_panelAdc)
-			return m_adc[m_adcSelect];
+		{
+			// Cada lectura devuelve la conversion anterior y arranca otra con el canal elegido. Asi
+			// lo usa el OS: al encender elige y lee dos veces (la segunda es la buena); en marcha
+			// elige el canal siguiente y lee, y guarda lo leido en el anterior ($1041BE).
+			const auto v = m_adcResult;
+			m_adcResult = m_adc[m_adcSelect];
+			return v;
+		}
 		return 0;
 	}
 

@@ -14,6 +14,7 @@
 #include "model/PatchSerializer.h"
 #include "model/PchFileIO.h"
 #include "midi/UploadPacketizer.h"
+#include "protocol/KnobAssignmentMessage.h"
 
 #include <cmath>
 #include <cstdio>
@@ -217,6 +218,31 @@ int main(int argc, char** argv)
 	}
 	run(mc, 300 * g_ms);	// que el OS cargue los DSP
 
+	// Asignaciones de mandos, como hace NME despues de subir: las del .pch y, con
+	// G1_KNOBS="mando:modulo:param,...", otras (mando 0-17 = 1-18, seccion poly).
+	std::vector<std::array<int, 4>> knobs;	// mando, seccion, modulo, parametro
+	for(int k = 0; k < 23; ++k)
+		if(patch->knobAssignments[static_cast<size_t>(k)].assigned)
+		{
+			const auto& ka = patch->knobAssignments[static_cast<size_t>(k)];
+			knobs.push_back({k, ka.section, ka.module, ka.param});
+		}
+	if(const char* ks = std::getenv("G1_KNOBS"))
+		for(const auto& t : juce::StringArray::fromTokens(ks, ",", ""))
+		{
+			const auto f = juce::StringArray::fromTokens(t, ":", "");
+			if(f.size() == 3)
+				knobs.push_back({f[0].getIntValue(), 1, f[1].getIntValue(), f[2].getIntValue()});
+		}
+	for(const auto& k : knobs)
+	{
+		const auto reply = transact(mc, KnobAssignmentMessage::assign(pid, k[0], k[1], k[2], k[3], 0), 200);
+		if(std::getenv("G1_VERBOSE"))
+			std::printf("  mando %d -> modulo %d param %d: %s\n", k[0], k[2], k[3], hex(reply, 16).c_str());
+	}
+	if(!knobs.empty())
+		run(mc, 200 * g_ms);
+
 	for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 		mc.getDsp(d).resetLinkPeak();
 	// G1_PCWATCH=174,194: cuantas veces pasa cada DSP por esas direcciones durante la nota
@@ -274,6 +300,78 @@ int main(int argc, char** argv)
 		return r;
 	};
 	std::printf("LEDs (filas 0-3): %s\n", leds().c_str());
+	// Estado de los 32 LEDs mirando 20 veces en 1 s: '#' encendido, '.' apagado, '*' parpadea.
+	// Fila 0 a 3, bit 7 a 0 (encendido = bit a 0).
+	auto ledStates = [&]
+	{
+		std::array<int, 32> on{};
+		for(int k = 0; k < 20; ++k)
+		{
+			for(uint32_t i = 0; i < 32; ++i)
+				if(!(mc.ledRow(i / 8) & (1u << (i % 8))))
+					++on[i];
+			run(mc, 50 * g_ms);
+		}
+		std::string r;
+		for(uint32_t row = 0; row < 4; ++row)
+		{
+			for(int bit = 7; bit >= 0; --bit)
+			{
+				const int n = on[row * 8 + static_cast<uint32_t>(bit)];
+				r += n == 0 ? '.' : (n == 20 ? '#' : '*');
+			}
+			if(row < 3) r += ' ';
+		}
+		return r;
+	};
+	if(std::getenv("G1_LEDSTATE"))
+		std::printf("LEDs (fila 0..3, bit 7..0): %s\n", ledStates().c_str());
+	// G1_PRESS=fila.bit: pulsa ese boton desde el estado de arranque y dice como quedan la pantalla
+	// y los LEDs (antes y despues). Para casar los botones, uno por proceso.
+	if(const char* pr = std::getenv("G1_PRESS"))
+	{
+		// Varios separados por comas: se pulsan en orden y se informa del ultimo.
+		const auto seq = juce::StringArray::fromTokens(pr, ",", "");
+		for(int k = 0; k + 1 < seq.size(); ++k)
+		{
+			const auto g = juce::StringArray::fromTokens(seq[k], ".", "");
+			mc.setButton(static_cast<uint32_t>(g[0].getIntValue()), static_cast<uint32_t>(g[1].getIntValue()), true);
+			run(mc, 150 * g_ms);
+			mc.setButton(static_cast<uint32_t>(g[0].getIntValue()), static_cast<uint32_t>(g[1].getIntValue()), false);
+			run(mc, 300 * g_ms);
+		}
+		const auto f = juce::StringArray::fromTokens(seq[seq.size() - 1], ".", "");
+		const auto row = static_cast<uint32_t>(f[0].getIntValue()), bit = static_cast<uint32_t>(f[1].getIntValue());
+		auto screen = [&] { std::string a = mc.getLcd().line(0, 16), b = mc.getLcd().line(1, 16);
+			for(auto* s : {&a, &b}) for(auto& c : *s) if(static_cast<uint8_t>(c) < 16) c = '~';
+			return "[" + a + "|" + b + "]"; };
+		const auto s0 = screen();
+		const auto l0 = ledStates();
+		mc.setButton(row, bit, true);
+		run(mc, 150 * g_ms);
+		mc.setButton(row, bit, false);
+		run(mc, 300 * g_ms);
+		std::printf("PULSA %s  pantalla %s -> %s  LEDs %s -> %s\n", pr, s0.c_str(), screen().c_str(), l0.c_str(), ledStates().c_str());
+	}
+	// G1_ADCSWEEP=1: sube cada canal del ADC de 0 a 200 y dice que manda el OS por el PC Port
+	// (con mandos asignados, un Parameter con el modulo y el valor: asi se sabe que mando es).
+	if(std::getenv("G1_ADCSWEEP"))
+		for(const uint8_t code : {0x31, 0x37, 0x2d, 0x32, 0x28, 0x2e, 0x33, 0x29, 0x2f, 0x34, 0x2a, 0x1a, 0x35, 0x2b, 0x1b, 0x36, 0x2c, 0x1c, 0x30, 0x18})
+		{
+			std::vector<uint8_t> drain;
+			mc.getPcPort().takeTx(drain);
+			mc.setAdc(code, 200);
+			run(mc, 250 * g_ms);
+			std::vector<uint8_t> outMsgs;
+			mc.getPcPort().takeTx(outMsgs);
+			std::printf("ADC $%02x ->", code);
+			for(size_t k = 0; k + 9 < outMsgs.size(); ++k)
+				if(outMsgs[k] == 0xf0 && (outMsgs[k + 2] >> 2) == 0x13 && outMsgs[k + 5] == 0x40)
+					std::printf(" [seccion %u modulo %u param %u = %u]", outMsgs[k + 6], outMsgs[k + 7], outMsgs[k + 8], outMsgs[k + 9]);
+			std::printf("  %s\n", hex(outMsgs, 30).c_str());
+			mc.setAdc(code, 0);
+			run(mc, 100 * g_ms);
+		}
 	// G1_PROBE=1: pulsa uno a uno los 24 botones de la matriz y dice que cambia en la pantalla y
 	// en los LEDs. Sirve para saber que boton del panel es cada bit.
 	if(std::getenv("G1_PROBE"))

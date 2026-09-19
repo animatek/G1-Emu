@@ -153,7 +153,7 @@ namespace g1
 		// Temporizador periodico del SIM (PIT): el reloj del sistema del OS.
 		uint16_t m_picr = 0, m_pitr = 0;
 		std::array<uint8_t, 256> m_adc{};	// en el constructor: volumen al maximo, mandos a cero
-		uint8_t m_adcSelect = 0;
+		uint8_t m_adcSelect = 0, m_adcResult = 0;
 		uint8_t m_ledLatch = 0, m_panelRows = 0xff;
 		std::array<std::atomic<uint8_t>, 4> m_leds{};
 		std::array<std::atomic<uint8_t>, 3> m_buttons{};	// 1 = pulsado

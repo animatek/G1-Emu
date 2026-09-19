@@ -443,8 +443,23 @@ Ojo: "Nord" y "Clavia" son marcas; mejor que el nombre no las lleve.
   bit 6 = Store, bit 7 = System; fila 1 bit 2 = Assign/Morph. El resto (Edit, Patch/Load, Shift,
   Navigator, Panel Split, Oct Shift, Find) falta por casar; hay que mirar los LEDs varias veces
   por el parpadeo.
-- **Mandos:** canales del ADC (`$202000` elige, `$202800` lee; ver arriba). `$30` es el volumen
-  maestro; los otros 18 de los 19 códigos restantes, los mandos 1-18 (orden por casar).
+- **Mandos:** canales del ADC. Mando *n* = entrada *n* de la tabla `$14420A`: `$31` = 1, `$37` = 2,
+  `$2D`, `$32`, `$28`, `$2E`, `$33`, `$29`, `$2F`, `$34`, `$2A`, `$1A`, `$35`, `$2B`, `$1B`, `$36`,
+  `$2C`, `$1C` = 18; `$30` = volumen maestro; `$18`, sin identificar (¿pedal?). Comprobado asignando
+  un mando a cada módulo y moviendo cada canal: el OS avisa al editor del mando que cambia.
+- **El ADC devuelve la conversión anterior.** Cada lectura de `$202800` da el resultado de la
+  conversión anterior y arranca otra con el canal elegido. En marcha el OS elige el canal
+  siguiente, lee y guarda lo leído en el anterior (`$1041BE`); al encender elige y lee dos veces.
+  El emulador devolvía el canal elegido en el momento: todos los mandos iban corridos uno, y el
+  volumen en marcha se leía de `$18` (por eso «el volumen no reaccionaba con el G1 encendido»).
+- **Botones identificados** (fila.bit): A-D = 0.2-0.5, Store 0.6, System 0.7, Edit 1.2,
+  Patch/Load 1.3, Navigator arriba 1.4, izquierda 1.5, abajo 1.6, derecha 1.7, Panel Split 2.2
+  (probable: enciende el LED 3.2). Sin identificar: Shift, Find, Oct Shift −/+, Assign/Morph y la
+  rueda (quedan 0.0, 0.1, 1.0, 1.1, 2.0, 2.1, 2.3-2.7). `G1_PRESS=0.7,1.6` en `g1patchtest`.
+- **LEDs identificados:** slots A-D = bit 7 de las filas 0-3 (el del slot activo parpadea);
+  Store/System/Edit/Patch-Load = fila 3 bits 3/4/5/6; mando *k* (1-18) = fila (k−1) mod 3,
+  bit 1 + (k−1)/3; Panel Split = 3.2 (probable). Quedan 0.0, 1.0, 2.0, 3.0 y 3.1: los cinco de
+  Oct Shift, en orden sin comprobar. `G1_LEDSTATE=1` los mira 20 veces en 1 s.
 - **`$201000` + PORTF:** otra matriz de 8 filas que el OS barre ~19.000 veces por segundo
   (`$1177CA`), leyendo el puerto F de la CPU. Probablemente el teclado del Nord Modular con teclas;
   en el rack no hay nada.
