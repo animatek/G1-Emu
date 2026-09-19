@@ -2,6 +2,14 @@
 
 ## 2026-09-19
 
+- **Suena en tiempo real por la tarjeta de sonido (Claude).** `g1run` saca las salidas 1/2 por
+  ALSA (`app/alsaaudio.h`, 48 kHz, +24 dB provisional; `G1_AUDIO`, `G1_GAIN_DB`). Los 4 DSP van
+  en hilos propios, y su audio pasa de uno al siguiente en el hilo de la CPU cuando todos han
+  parado: 100% del tiempo real (antes ~79%), replay 2,2× más rápido, mismo audio que en serie
+  (`G1_THREADS=0`). Verificación: compilado, CTest, replay en los dos modos con FFT y conteo de
+  cortes, `g1run` 15 s (96.000 tramas/s, sin cortes tras el arranque). Pendiente: escalones y
+  clics del propio DSP 0.
+
 - **Ya suena por la salida (Claude, commit en este repo).** El audio recorre la cadena
   DSP0→1→2→3 y el DSP 3 saca el Do de la nota a 261 Hz. Tres arreglos: el DMA de doble contador
   en origen y destino (Gearmulator no lo tenía y no copiaba nada), las transferencias de bloque

@@ -2,6 +2,7 @@
 
 #include "mc68k/hdi08.h"
 
+#include <algorithm>
 #include <type_traits>
 #include <vector>
 
@@ -195,9 +196,8 @@ namespace g1
 		transferToHost();
 	}
 
-	// Todavia no se escucha: se descarta lo que sale por los ESSI para que su cola no
-	// se llene y bloquee al DSP, y se rellena la entrada con silencio. Se cuentan las
-	// tramas para saber si el DSP esta generando audio.
+	// Saca lo que ha salido por los ESSI (a la cola de flushAudio) y rellena con silencio la
+	// entrada si no llega nada, para que el ESSI no se quede esperando. Se miden los picos.
 	void Dsp::drainAudio()
 	{
 		uint32_t e = 0;
@@ -206,7 +206,6 @@ namespace g1
 			// Si no llega nada por la cadena (arranque, o el primer DSP), silencio.
 			if(essi->getAudioInputs().size() < 16)
 				essi->writeEmptyAudioIn(16);
-			auto* nextEssi = m_next ? (e == 0 ? &m_next->m_periph.getEssi0() : &m_next->m_periph.getEssi1()) : nullptr;
 			auto& out = essi->getAudioOutputs();
 			auto& meter = m_meter[e];
 			auto& slotCount = m_slotCount[e];
@@ -215,17 +214,10 @@ namespace g1
 				out.pop_front([&](const auto& _frame)
 				{
 					slotCount = _frame.size();
-					if(nextEssi && !nextEssi->getAudioInputs().full())
-					{
-						dsp56k::Audio::RxFrame rx;
-						rx.resize(_frame.size());
-						for(uint32_t s = 0; s < _frame.size(); ++s)
-							rx[s][0] = _frame[s][0];
-						nextEssi->getAudioInputs().push_back(rx);
-						++m_chainedFrames;
-					}
-					if(m_audioCallback && _frame.size() >= 2)
-						m_audioCallback(e, static_cast<int32_t>(_frame[0][0] << 8) >> 8, static_cast<int32_t>(_frame[1][0] << 8) >> 8);
+					StagedFrame f{static_cast<uint32_t>(std::min<size_t>(_frame.size(), 4)), {}};
+					for(uint32_t s = 0; s < f.slots; ++s)
+						f.v[s] = _frame[s][0];
+					m_staged[e].push_back(f);
 					for(uint32_t s = 0; s < std::min<uint32_t>(_frame.size(), MeterSlots); ++s)
 						for(uint32_t l = 0; l < MeterLines; ++l)
 						{
@@ -239,6 +231,38 @@ namespace g1
 			}
 			++e;
 		}
+	}
+
+	void Dsp::flushAudio()
+	{
+		// Los dos ESSI van intercalados, trama a trama, como salian del DSP.
+		const auto n = std::max(m_staged[0].size(), m_staged[1].size());
+		for(size_t k = 0; k < n; ++k)
+		{
+			for(uint32_t e = 0; e < 2; ++e)
+			{
+				if(k >= m_staged[e].size())
+					continue;
+				const auto& f = m_staged[e][k];
+				if(m_next)
+				{
+					auto& in = (e == 0 ? m_next->m_periph.getEssi0() : m_next->m_periph.getEssi1()).getAudioInputs();
+					if(!in.full())
+					{
+						dsp56k::Audio::RxFrame rx;
+						rx.resize(f.slots);
+						for(uint32_t s = 0; s < f.slots; ++s)
+							rx[s][0] = f.v[s];
+						in.push_back(rx);
+						++m_chainedFrames;
+					}
+				}
+				if(m_audioCallback && f.slots >= 2)
+					m_audioCallback(e, static_cast<int32_t>(f.v[0] << 8) >> 8, static_cast<int32_t>(f.v[1] << 8) >> 8);
+			}
+		}
+		m_staged[0].clear();
+		m_staged[1].clear();
 	}
 
 	void Dsp::hostWord(const uint32_t _word)

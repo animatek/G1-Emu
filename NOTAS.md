@@ -281,3 +281,28 @@ Ojo: "Nord" y "Clavia" son marcas; mejor que el nombre no las lleve.
 - **Resultado:** el Do de la nota 60 sale por los dos ESSI del DSP 3: un seno limpio a 261 Hz.
   Nivel muy bajo (±0,0008 de fondo de escala, unos −62 dBFS, con la voz a ±0,052 en los DSP de
   voz) y todavía escalonado (cada valor dura 4 o 5 tramas), con algún corte suelto a 0.
+
+## Tiempo real: un hilo por DSP y salida de audio (2026-09-19, Claude)
+
+- **Dónde se iba el tiempo** (cronómetros en `catchUpDsps`, 12 s de `g1run`): 10,6 s en los
+  DSP, a partes iguales (2,65 s cada uno), y 1,3 s en la CPU y lo demás. Con la máquina algo
+  cargada (Bitwig), la versión de un solo hilo iba al ~79%, también la del día anterior.
+- **Un hilo por DSP** (`g1mc.cpp`): el DSP 0 corre en el hilo de la CPU y los DSP 1–3 en tres
+  hilos que esperan girando: se sincronizan cada ~1.000 ciclos de CPU, unas 20.000 veces por
+  segundo, demasiado seguido para dormir y despertar. Solo duermen (mutex y variable de condición)
+  si la CPU tarda. Lo que sale por los ESSI se guarda en una cola por DSP (`drainAudio`) y el hilo
+  de la CPU lo pasa al DSP siguiente y al callback de audio cuando todos han parado
+  (`flushAudio`), así que ninguna cola tiene dos productores. El resultado es el mismo que en serie
+  (mismo audio y mismos cortes en el replay). Replay de 60 M instrucciones: 13,0 s con hilos
+  frente a 28,3 s en serie. `g1run` va al 100%. `G1_THREADS=0` vuelve a correrlo todo en serie.
+- **Salida de audio** (`app/alsaaudio.h`): ESSI0 del DSP 3 (salidas 1/2) por ALSA `default`, de
+  96 a 48 kHz promediando cada par, en su propio hilo, con 30 ms de colchón. Cuenta como corte cada
+  vez que el colchón se vacía (PipeWire no avisa de los xrun). En 15 s: 4 cortes, todos al
+  arrancar, mientras el OS recarga los DSP.
+- **Los escalones y los ceros ya salen del DSP 0**, el primero de la cadena: bloques enteros de 4
+  o 5 tramas (unas 170 rachas por segundo en el replay). Pista: el DMA4 de los DSP de voz manda
+  **9 palabras por bloque** (`DCO4=8`) y el del DSP 3 solo **2** (`DCO4=1`); el DSP 3 recibe 9
+  (`DCO2=8`) y procesa 4. Parece que el enlace entre DSP lleva varios canales por bloque (salidas y
+  buses) y no 4,5 tramas de tiempo. El emulador da una IRQD por trama y el mismo reloj serie a los
+  cuatro, y eso probablemente no es lo que hace el aparato (los divisores del ESSI también
+  difieren: `PM=1` en los de voz, `PM=2` en el DSP 3).

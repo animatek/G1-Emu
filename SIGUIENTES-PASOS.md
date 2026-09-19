@@ -11,22 +11,21 @@ Estado al cerrar la sesión del 2026-09-19. El detalle técnico de todo lo averi
   editor) y **MIDI**.
 - **Animatek NME se conecta y monta patches.** Al insertar un módulo, el OS para los DSP, carga
   el código del módulo y los reanuda; el oscilador calcula (su fase avanza en el DSP 0).
-- **Ya suena** (desde la tarde del 2026-09-19): el oscilador del patch sale por el DSP 3 a la altura
-  de la nota, aunque muy flojo y escalonado. Aún no va a la tarjeta de sonido.
+- **Ya suena** (desde la tarde del 2026-09-19): el oscilador del patch sale por el DSP 3 y por la
+  tarjeta de sonido a la altura de la nota, aunque flojo, escalonado y con clics.
 
 ## 1. Sacar el primer sonido (prioridad: **que suene**)
 
-**Actualización 2026-09-19 (tarde): ya suena por la salida.** El Do del replay sale por el DSP 3
-(ver `NOTAS.md`, «Sale por el DSP 3»). Lo que queda, por orden:
+**Actualización 2026-09-19 (tarde): suena por la tarjeta de sonido y en tiempo real.** Ver
+`NOTAS.md` («Sale por el DSP 3» y «Tiempo real»). Lo que queda, por orden:
 
-1. **Sacarlo por la tarjeta de sonido en `g1run`** (ahora solo graba WAV con `G1_RECORD`):
-   ESSI0 del DSP 3 = salidas 1/2 y ESSI1 = 3/4 (probable), a 96 kHz, con remuestreo.
-2. **El nivel:** −62 dBFS con el volumen al máximo. ¿Falta una ganancia analógica tras el códec,
-   el ADC da la escala al revés, o el patch de prueba es muy flojo? Comparar con un patch
-   conocido del G1 real.
-3. **El escalón y los cortes:** cada valor dura 4 o 5 tramas (¿un valor por bloque de 4 IRQD?) y
-   hay picos sueltos a 0 (¿el DMA de TX lee el búfer mientras se escribe?).
-4. **Volumen en marcha:** el OS no reacciona si el ADC cambia con el G1 encendido. Mirar los
+1. **Los escalones y los clics** (lo que más se oye): bloques de 4–5 tramas con el mismo valor y
+   bloques enteros a cero, ya en el DSP 0. Revisar el modelo de reloj: los DSP de voz sacan 9
+   palabras por bloque y el DSP 3 solo 2, y el emulador da una IRQD por trama con el mismo reloj
+   serie para todos. Averiguar qué dispara la IRQD y a qué velocidad va cada ESSI en el aparato.
+2. **El nivel:** −62 dBFS con el volumen al máximo; `g1run` sube +24 dB provisionalmente. Puede
+   arreglarse solo con el punto 1 (si la mayoría de las palabras son otros canales o ceros).
+3. **Volumen en marcha:** el OS no reacciona si el ADC cambia con el G1 encendido. Mirar los
    eventos `$100|canal` que genera `$1009BE` y quién los consume.
 
 1. ~~**Seguir el código del módulo de salida.**~~ Hecho: el patch se enlaza en `$197`. Desde `$197` del DSP 0 (el código del patch va
@@ -41,7 +40,7 @@ Estado al cerrar la sesión del 2026-09-19. El detalle técnico de todo lo averi
 3. **Nota:** el G1 solo calcula voces con nota. En la sesión grabada la nota va por el PC Port
    (`cc=$17`, `sc=$56`: `00 3C` pulsa, `01 3C` suelta). La prueba con la nota mantenida son
    los **45 primeros mensajes** del `pcport-in.bin` actual (hasta `56 00 3C`).
-4. **Salida a la tarjeta de sonido** cuando haya muestras: ESSI0 del DSP 3 = salidas 1/2 y ESSI1 =
+4. ~~**Salida a la tarjeta de sonido**~~ Hecho en `g1run` (salidas 1/2). Pendiente, 3/4: ESSI0 del DSP 3 = salidas 1/2 y ESSI1 =
    3/4 (probable), a 96 kHz, con remuestreo al dispositivo.
 
 Herramientas:
@@ -54,8 +53,8 @@ Herramientas:
 
 ## 2. Rendimiento (para tocarlo en directo)
 
-- Ahora va al ~88–95% del tiempo real, en un solo hilo y sin patch pesado.
-- Repartir los 4 DSP entre hilos (como el Virus TI de Gearmulator) y compilar con PGO (como en
+- **Hecho:** un hilo por DSP; `g1run` va al 100% con margen (el replay corre 2,2× más rápido).
+- Si hace falta más: saltarse el bucle de espera de los DSP sin voces y compilar con PGO (como en
   Elektron-Emu).
 
 ## 3. Ideas de Javier para después (apuntadas el 2026-09-19)

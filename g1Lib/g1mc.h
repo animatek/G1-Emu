@@ -14,7 +14,11 @@
 #include "mc68k/hdi08.h"
 #include "hardwareLib/sciMidi.h"
 
+#include <atomic>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
+#include <thread>
 
 #include <array>
 #include <cstdint>
@@ -66,6 +70,7 @@ namespace g1
 	{
 	public:
 		explicit Microcontroller(const std::vector<uint8_t>& _rom);
+		~Microcontroller() override;
 
 		uint32_t exec() override;
 		uint16_t readImm16(uint32_t _addr) override;
@@ -130,6 +135,19 @@ namespace g1
 		std::array<uint8_t, 256> m_adc{};	// en el constructor: volumen al maximo, mandos a cero
 		uint8_t m_adcSelect = 0;
 		uint64_t m_pitAccum = 0;
+
+		// Un hilo por DSP (el 0 va en el de la CPU). En cada sincronizacion la CPU publica el
+		// ciclo objetivo y los DSP corren a la vez hasta el; G1_THREADS=0 lo hace todo en serie.
+		void workerLoop(uint32_t _dsp);
+		bool m_threaded = true;
+		std::vector<std::thread> m_workers;
+		std::atomic<uint64_t> m_generation{0};
+		std::atomic<uint32_t> m_pending{0};
+		std::atomic<uint32_t> m_sleepers{0};
+		std::atomic<bool> m_quitWorkers{false};
+		uint64_t m_dspTarget = 0;
+		std::mutex m_wakeMutex;
+		std::condition_variable m_wake;
 		uint64_t m_pitIrqs = 0;
 	public:
 		uint64_t pitIrqs() const { return m_pitIrqs; }

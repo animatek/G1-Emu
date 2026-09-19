@@ -3,6 +3,7 @@
 #include "mc68k/memoryOps.h"
 
 #include <algorithm>
+#include <cstdlib>
 
 #define MC68K_CLASS g1::Microcontroller
 #include "mc68k/musashiEntry.h"
@@ -26,6 +27,53 @@ namespace g1
 		// Bus del DUART: el puerto E lleva /CS, /RD, /WR y la direccion del registro.
 		getPortE().setWriteTXCallback([this](const mc68k::Port& _port) { onPortE(_port.read()); });
 		reset();	// lee la pila y el PC de los vectores en $0 y $4
+
+		if(const char* t = std::getenv("G1_THREADS"))
+			m_threaded = std::atoi(t) != 0;
+		if(m_threaded)
+			for(uint32_t i = 1; i < g_dspCount; ++i)
+				m_workers.emplace_back([this, i] { workerLoop(i); });
+	}
+
+	Microcontroller::~Microcontroller()
+	{
+		m_quitWorkers = true;
+		{
+			std::lock_guard lock(m_wakeMutex);
+			m_wake.notify_all();
+		}
+		for(auto& t : m_workers)
+			t.join();
+	}
+
+	void Microcontroller::workerLoop(const uint32_t _dsp)
+	{
+		uint64_t seen = 0;
+		while(true)
+		{
+			// Las sincronizaciones son muy seguidas (~20.000 por segundo): se espera girando y
+			// solo se duerme si la CPU tarda (por ejemplo, cuando el emulador va sobrado).
+			uint32_t spins = 0;
+			while(m_generation.load() == seen && !m_quitWorkers)
+			{
+				if(++spins < 20000)
+				{
+#if defined(__x86_64__) || defined(_M_X64)
+					__builtin_ia32_pause();
+#endif
+					continue;
+				}
+				std::unique_lock lock(m_wakeMutex);
+				++m_sleepers;
+				m_wake.wait(lock, [&] { return m_generation.load() != seen || m_quitWorkers; });
+				--m_sleepers;
+			}
+			if(m_quitWorkers)
+				return;
+			seen = m_generation.load();
+			m_dsps[_dsp]->catchUp(m_dspTarget);
+			m_pending.fetch_sub(1);
+		}
 	}
 
 	void Microcontroller::installRomOsInFlash()
@@ -124,8 +172,33 @@ namespace g1
 
 	void Microcontroller::catchUpDsps()
 	{
+		const auto target = m_ucCycles * g_dspCyclesPerUcCycle;
+		if(!m_threaded)
+		{
+			for(auto& dsp : m_dsps)
+				dsp->catchUp(target);
+		}
+		else
+		{
+			m_dspTarget = target;
+			m_pending.store(static_cast<uint32_t>(m_workers.size()));
+			m_generation.fetch_add(1);
+			if(m_sleepers.load() > 0)
+			{
+				std::lock_guard lock(m_wakeMutex);
+				m_wake.notify_all();
+			}
+			m_dsps[0]->catchUp(target);
+			while(m_pending.load() != 0)
+			{
+#if defined(__x86_64__) || defined(_M_X64)
+				__builtin_ia32_pause();
+#endif
+			}
+		}
+		// Con todos los DSP quietos, el audio pasa de cada uno al siguiente.
 		for(auto& dsp : m_dsps)
-			dsp->catchUp(m_ucCycles * g_dspCyclesPerUcCycle);
+			dsp->flushAudio();
 	}
 
 	void Microcontroller::traceHost(const uint32_t _addr, const bool _write, const uint32_t _value)

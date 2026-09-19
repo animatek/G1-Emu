@@ -13,7 +13,9 @@ Es un proyecto aparte de `../Elektron-Emu/` (MM Voice). No comparten build ni RO
 quedan corriendo; todo va al ~88% del tiempo real. **Contesta al saludo de NME por el PC
 PORT**, y `g1run` lo corre en tiempo real (~94%) con puertos MIDI virtuales de ALSA. Con un
 patch y una nota **ya suena**: el audio recorre los 4 DSP y sale por el DSP 3 a la altura
-correcta (aún flojo y escalonado). Faltan la salida a la tarjeta de sonido y el panel.
+correcta, y `g1run` lo saca por la tarjeta de sonido. Los 4 DSP van en hilos propios: 100% del
+tiempo real con margen. Todavía suena escalonado y con clics (ver `SIGUIENTES-PASOS.md`). Falta el
+panel.
 
 ## Usarlo
 
@@ -24,7 +26,11 @@ correcta (aún flojo y escalonado). Faltan la salida a la tarjeta de sonido y el
 Crea el cliente ALSA **G1-Emu** con dos puertos, como el aparato: **PC Port** (el del editor:
 en NME se elige como entrada y salida) y **MIDI** (el MIDI IN/OUT normal). La flash (OS +
 patches guardados) vive en `~/.local/share/Animatek/G1-Emu/flash.bin`; si no existe, se crea
-con el OS de fábrica de la ROM. El mapa de memoria, el cargador y el plan están en `NOTAS.md`. La
+con el OS de fábrica de la ROM.
+
+El audio (salidas 1/2) sale por ALSA, dispositivo `default` (PipeWire lo recoge). Variables:
+`G1_AUDIO=dispositivo` o `G1_AUDIO=no`; `G1_GAIN_DB` (por defecto +24 dB, provisional: sale muy
+flojo); `G1_THREADS=0` para correr los DSP en serie; `G1_RECORD=segundos` graba un WAV de 4 canales. El mapa de memoria, el cargador y el plan están en `NOTAS.md`. La
 plantilla es la emulación del Nord Lead 2X de Gearmulator (`source/nord/n2x`).
 
 ## Compilar y probar
@@ -49,7 +55,8 @@ desde la ROM en `$C800`, así que la dirección de RAM X está en la ROM en `X -
 | `g1Lib/g1duart.h` | El PC PORT: DUART SCN2681 en bus paralelo (puerto GP + puerto E). |
 | `g1Lib/g1dsp.*` | Un DSP56303 con su ROM de arranque HI08, conectado al puerto host de la CPU. |
 | `tools/dspdis.cpp` | Desensamblador de DSP56300 (palabras en hex por stdin). |
-| `app/g1run.cpp`, `app/alsamidi.h`, `g1.sh` | El G1 en tiempo real con MIDI virtual (ALSA) y flash persistente. |
+| `app/g1run.cpp`, `app/alsamidi.h`, `app/alsaaudio.h`, `g1.sh` | El G1 en tiempo real: MIDI virtual y audio por ALSA, flash persistente. |
+| `cmake/Dsp56300.cmake`, `g1Lib/dsp56300.cpp` | Correcciones del núcleo DSP (JIT y DMA), aplicadas a una copia de compilación. |
 | `tools/g1boot.cpp` | Arranque sin interfaz y desensamblador. |
 
 **El plan y las ideas pendientes están en `SIGUIENTES-PASOS.md`.**

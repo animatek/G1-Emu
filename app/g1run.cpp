@@ -10,8 +10,12 @@
 // Crea el cliente ALSA "G1-Emu" con dos puertos, como el aparato:
 //   "PC Port" = el PC PORT del editor (NME se conecta aqui)
 //   "MIDI"    = el MIDI IN/OUT normal
+// La salida 1/2 (ESSI0 del DSP 3) suena por ALSA ("default", o G1_AUDIO=dispositivo;
+// G1_AUDIO=no la desactiva). G1_GAIN_DB sube el nivel (por defecto +24 dB, provisional:
+// el G1 emulado sale muy flojo, ver NOTAS.md).
 // Ctrl+C guarda la flash y sale.
 
+#include "alsaaudio.h"
 #include "alsamidi.h"
 #include "g1Lib/g1mc.h"
 
@@ -25,6 +29,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <memory>
+#include <string>
 #include <thread>
 
 namespace
@@ -128,8 +134,25 @@ int main(int argc, char** argv)
 	// Solo se graba si se pide con G1_RECORD=segundos (tope; por defecto no se graba nada).
 	const char* recordEnv = std::getenv("G1_RECORD");
 	const uint64_t wavMaxFrames = recordEnv ? static_cast<uint64_t>(std::atof(recordEnv) * 96000.0) : 0;
+	std::unique_ptr<g1app::AlsaAudio> audio;
+	const char* audioDev = std::getenv("G1_AUDIO");
+	if(!audioDev || std::string(audioDev) != "no")
+	{
+		const char* gainEnv = std::getenv("G1_GAIN_DB");
+		const float gainDb = gainEnv ? static_cast<float>(std::atof(gainEnv)) : 24.0f;
+		audio = std::make_unique<g1app::AlsaAudio>(audioDev ? audioDev : "default", std::pow(10.0f, gainDb / 20.0f));
+		if(audio->valid())
+			std::printf("audio: salida 1/2 por ALSA \"%s\" a 48 kHz, %+.0f dB\n", audioDev ? audioDev : "default", gainDb);
+		else
+		{
+			std::printf("audio: no puedo abrir \"%s\"; sigo sin sonido\n", audioDev ? audioDev : "default");
+			audio.reset();
+		}
+	}
 	mc.getDsp(3).setAudioCallback([&](const uint32_t _essi, const int32_t _l, const int32_t _r)
 	{
+		if(audio && _essi == 0)
+			audio->push(_l, _r);
 		if(wavFrames >= wavMaxFrames)
 			return;
 		wavFrame[_essi * 2] = _l;
@@ -223,6 +246,12 @@ int main(int argc, char** argv)
 							if(m[e][sl][l] > 256)
 								std::printf(" [E%u s%u tx%u %.0fdB]", e, sl, l, 20.0 * std::log10(m[e][sl][l] / 8388608.0));
 				dsp.resetMeter();
+			}
+			if(audio)
+			{
+				const auto peak = audio->peak();
+				std::printf("  salida %s  cortes %llu", peak > 0.0f ? (std::to_string(static_cast<int>(20.0f * std::log10(peak))) + " dB").c_str() : "silencio",
+					static_cast<unsigned long long>(audio->xruns()));
 			}
 			std::printf("\n");
 			std::fflush(stdout);

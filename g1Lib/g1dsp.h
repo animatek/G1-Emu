@@ -21,6 +21,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <vector>
 
 namespace mc68k { class Hdi08; }
 
@@ -66,7 +67,12 @@ namespace g1
 		uint64_t chainedFrames() const { return m_chainedFrames; }
 
 		// Ejecuta el DSP hasta llegar a _cycles ciclos (o hasta un tope si esta esperando).
+		// Puede ir en su propio hilo: lo que sale por los ESSI se queda en una cola propia.
 		void catchUp(uint64_t _cycles);
+
+		// Reparte lo que ha salido por los ESSI desde la ultima vez: a la entrada del DSP
+		// siguiente y al callback de audio. Solo desde el hilo de la CPU, con los DSP quietos.
+		void flushAudio();
 
 	private:
 		void armBoot();
@@ -101,6 +107,8 @@ namespace g1
 		Meter m_meter{};
 		AudioCallback m_audioCallback;
 		Dsp* m_next = nullptr;
+		struct StagedFrame { uint32_t slots; std::array<dsp56k::TWord, 4> v; };
+		std::array<std::vector<StagedFrame>, 2> m_staged;	// por ESSI, pendiente de flushAudio
 		uint64_t m_chainedFrames = 0;
 		std::array<uint32_t, 2> m_slotCount{};
 	};
