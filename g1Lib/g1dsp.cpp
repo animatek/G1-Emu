@@ -154,6 +154,11 @@ namespace g1
 				armBoot();
 				return;
 			}
+			if(!m_pcWatch.empty())
+			{
+				auto it = m_pcWatch.find(m_dsp.getPC().toWord());
+				if(it != m_pcWatch.end()) ++it->second;
+			}
 			const auto before = m_dsp.getCycles();
 			if(before >= m_nextIrqd && irqdEnabled())
 			{

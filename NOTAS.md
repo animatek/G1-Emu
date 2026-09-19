@@ -155,9 +155,20 @@ versión 3.3, número de serie y ID de aparato. Es el saludo completo que espera
   y sus variables). Las respuestas DSP → CPU (lecturas de memoria del "monitor") funcionan.
 - **Máscaras de slots del ESSI:** los DSP de voz no escriben TSMA/TSMB/RSMA/RSMB y se fían del
   reset (todos los slots activos); el emulador las dejaba a 0. Ahora se inicializan a `$FFFFFF`.
+- **Cómo se procesa el audio en cada DSP (2026-09-19):** la rutina de bloque (`$175`) es el
+  **manejador de IRQD**. El vector IRQD (`P:$16` = `jsr`, destino en `P:$17`) se reescribe en
+  marcha: `$200` en reposo (solo cuenta) y `$175` procesando. El OS manda el destino en `X:$FFF3`
+  con un host command. En la parada de recarga (`$9E`), el DSP apunta el vector a `$CA`, y esa
+  rutina, en la siguiente IRQD, rearma los DMA y copia `X:$FFF3` → `P:$17`. El código de los
+  módulos se añade detrás de la rutina de bloque (desde `$197`). En la emulación, el bloque se
+  ejecuta cientos de miles de veces y la fase del oscilador (`Y:$60/$61` del DSP 0) avanza.
 - **Pendiente: sacar el audio.** El DSP 0 calcula, pero su ESSI transmite ceros y el DSP 3
   sigue con `$155`. Falta entender qué espacio lee cada DMA (DSS) y la topología del bus serie
-  (¿TDM compartido? El DSP 3 recibe su propio `$155` y copia RX → TX).
+  (¿TDM compartido? El DSP 3 recibe su propio `$155` y copia RX → TX). Comprobado: el DMA4 del
+  DSP 0 completa sus 9 transferencias por bloque desde `Y:$6C0/$6E0` hacia TX0, pero los búferes
+  llegan a cero y TX0 queda a 0 (hay subdesbordamientos, TUE). Con la nota mantenida (el `sc=$56`
+  de NME sin soltar) tampoco cambia. Lo siguiente: localizar dónde escribe el módulo 2Output
+  (seguir el código de `$197` en adelante) y el cableado real de los ESSI entre los DSP.
 - **`g1boot ... replay`** manda ahora los mensajes espaciados (uno cada 500.000 instrucciones),
   como NME, que espera cada ACK: si llegan todos seguidos, el OS pierde ediciones mientras
   recarga. `g1boot ROM N diff A.bin B.bin` compara el código ejecutado en reposo y tras un

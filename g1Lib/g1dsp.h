@@ -44,6 +44,7 @@ namespace g1
 		uint64_t irqdCount() const { return m_irqdCount; }
 		const std::map<uint32_t, uint64_t>& servicedVectors() const { return m_servicedVectors; }
 		uint32_t lastVector() const { return m_lastVector; }
+		std::map<uint32_t, uint64_t>& pcWatch() { return m_pcWatch; }
 		uint64_t hostCommands() const { return m_hostCommands; }
 		uint64_t wordsToHost() const { return m_wordsToHost; }
 
@@ -96,6 +97,7 @@ namespace g1
 		uint64_t m_nextIrqd = 0, m_irqdCount = 0;
 		std::map<uint32_t, uint64_t> m_servicedVectors;
 		uint32_t m_lastVector = 0;
+		std::map<uint32_t, uint64_t> m_pcWatch;	// PCs a vigilar (solo diagnostico)
 		Meter m_meter{};
 		AudioCallback m_audioCallback;
 		Dsp* m_next = nullptr;

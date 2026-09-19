@@ -74,6 +74,9 @@ int main(int argc, char** argv)
 
 	const uint64_t steps = (argc > 2 ? std::stoull(argv[2]) : 20) * 1000000ull;
 	mc.installRomOsInFlash();
+	for(uint32_t d = 0; d < g1::g_dspCount; ++d)
+		for(auto pcw : {0xcau, 0xccu, 0xd2u, 0x175u, 0x200u, 0x9eu, 0xc4u})
+			mc.getDsp(d).pcWatch()[pcw] = 0;
 
 	// Historial de lo que sale por el ESSI0 de cada DSP (valores distintos, min, max)
 	struct Tap { int32_t mn = 0x7fffffff, mx = -0x7fffffff; std::map<int32_t, uint64_t> values; uint64_t n = 0; };
@@ -158,6 +161,13 @@ int main(int argc, char** argv)
 			if(i >= steps * 3 / 8 && i < steps / 2) pcIdle.insert(mc.getPC());
 			else if(i >= steps / 2 && i < steps * 5 / 8) pcAfter.insert(mc.getPC());
 			if(i == steps / 2) { mc.getPcPort().receive(diffB); std::printf("  >> diff: %zu bytes (B)\n", diffB.size()); }
+		}
+		if(std::getenv("G1_MARK") && i >= steps * 9 / 10 && (i % 20000) == 0)
+		{
+			// Marca los bufferes de audio del DSP 0 para ver cual sale por el ESSI
+			auto& mem = mc.getDsp(0).dsp().memory();
+			for(dsp56k::TWord a = 0x6c0; a < 0x700; ++a) { mem.set(dsp56k::MemArea_Y, a, 0x111111 + (a & 0x3f)); mem.set(dsp56k::MemArea_X, a, 0x222222 + (a & 0x3f)); }
+			if(i == steps * 9 / 10) for(auto& t : taps[0]) t = {};
 		}
 		if(!replay.empty() && !diffMode && i == steps * 3 / 4)
 		{
@@ -379,11 +389,14 @@ int main(int argc, char** argv)
 			d.hdi08().hostCommandBusy() ? 1 : 0, d.hdi08().hostCommandPending() ? 1 : 0);
 		{
 			auto rd = [&](dsp56k::TWord a) { return d.periph().read(a, dsp56k::Instruction::Invalid); };
-			std::printf("        ESSI0 CRA=%06x CRB=%06x TSMA=%06x TSMB=%06x SSISR=%06x | ESSI1 CRA=%06x CRB=%06x TSMA=%06x | Y:6C0..6C3=%06x %06x %06x %06x  Y:6E0..6E3=%06x %06x %06x %06x\n",
-				rd(0xffffb5), rd(0xffffb6), rd(0xffffb4), rd(0xffffb3), rd(0xffffb7), rd(0xffffa5), rd(0xffffa6), rd(0xffffa4),
+			std::printf("        P:17=%06x X:FFF3=%06x TX0=%06x TX1=%06x  ESSI0 CRA=%06x CRB=%06x TSMA=%06x TSMB=%06x SSISR=%06x | ESSI1 CRA=%06x CRB=%06x TSMA=%06x | Y:6C0..6C3=%06x %06x %06x %06x  Y:6E0..6E3=%06x %06x %06x %06x\n",
+				d.dsp().memory().get(dsp56k::MemArea_P, 0x17), rd(0xfffff3), rd(0xffffbc), rd(0xffffac), rd(0xffffb5), rd(0xffffb6), rd(0xffffb4), rd(0xffffb3), rd(0xffffb7), rd(0xffffa5), rd(0xffffa6), rd(0xffffa4),
 				d.dsp().memory().get(dsp56k::MemArea_Y, 0x6c0), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6c1), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6c2), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6c3),
 				d.dsp().memory().get(dsp56k::MemArea_Y, 0x6e0), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6e1), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6e2), d.dsp().memory().get(dsp56k::MemArea_Y, 0x6e3));
 		}
+		std::printf("        PCs:");
+		for(auto& [a, n] : d.pcWatch()) std::printf(" $%03x=%llu", a, static_cast<unsigned long long>(n));
+		std::printf("\n");
 		std::printf("        vectores atendidos (ultimo $%02x):", d.lastVector());
 		for(auto& [v, n] : d.servicedVectors()) std::printf(" $%02x=%llu", v, static_cast<unsigned long long>(n));
 		std::printf("\n");
