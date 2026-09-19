@@ -13,7 +13,7 @@ Estado al cerrar la sesión del 2026-09-19. El detalle técnico de todo lo averi
   el código del módulo y los reanuda; el oscilador calcula (su fase avanza en el DSP 0).
 - **No suena todavía:** los búferes de salida llegan a cero y el DSP 3 solo transmite `$155`.
 
-## 1. Sacar el primer sonido (prioridad)
+## 1. Sacar el primer sonido (prioridad: **que suene**)
 
 1. **Seguir el código del módulo de salida.** Desde `$197` del DSP 0 (el código del patch va
    detrás de la rutina de bloque `$175`), ver dónde escribe 2Output su muestra y si llega a
@@ -106,6 +106,17 @@ Con el OS real corriendo en el emulador tenemos un G1 "de laboratorio" sin encen
   MIDI (combinación de teclas al encender), así que un OS malo se puede recuperar. **El emulador
   es el sitio para probarlo todo antes de flashear el aparato.**
 - Proyecto grande y a largo plazo; primero hay que entender el formato de las tablas de módulos.
+- **¿Cabe?** Hay que distinguir dos cosas:
+  - *Cuántos tipos de módulo puede conocer el OS:* depende del espacio en la flash (1 MB, con el
+    OS de ~470 KB y la zona de patches que el OS formatea) y del tamaño de las tablas. El código
+    DSP de un módulo son unos cientos de palabras, así que un puñado de módulos nuevos no debería
+    ser problema. Hay que medir el hueco real.
+  - *Cuántos módulos caben en un patch:* lo limita la memoria y el tiempo de cada DSP (4K palabras
+    de programa internas; el OS calcula el reparto y las voces). Un módulo nuevo muy pesado solo
+    significa menos voces, no que no se pueda añadir.
+- **Módulos del G2 en el G1:** los sencillos probablemente sí; los que dependen de la potencia de
+  los DSP del G2 (56362, más rápidos y con más memoria) quizá no quepan o den pocas voces. Se
+  prueba en el emulador.
 
 ### 3g. Referencia: el plugin de voz de Monomachine sin ROM
 
