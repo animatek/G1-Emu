@@ -94,6 +94,26 @@ Con el OS real corriendo en el emulador tenemos un G1 "de laboratorio" sin encen
   podría ser un buen primer G1 que suene: sin cadena ni bus entre DSP. **Por confirmar:** su
   hardware (CPU, DSP, memoria) y conseguir su OS (ROM propia, distinta de la del rack).
 
+### 3f. Módulos nuevos dentro del G1 (OS modificado)
+
+- Idea: módulos propios (secuenciador euclídeo, oscilador aditivo, **salida MIDI desde el patch**)
+  cargados en el G1 real con una actualización de OS por MIDI.
+- Qué haría falta: el código DSP del módulo (ensamblador DSP56300), darlo de alta en las tablas de
+  módulos del OS (recursos, parámetros, conexiones), y que NME lo conozca (NME es nuestro). Una
+  salida MIDI además necesita que el DSP pase datos a la CPU y la CPU los saque por la UART:
+  cambios en el código 68k del OS.
+- Red de seguridad: el cargador de la ROM trae el OS de fábrica y un modo de actualización por
+  MIDI (combinación de teclas al encender), así que un OS malo se puede recuperar. **El emulador
+  es el sitio para probarlo todo antes de flashear el aparato.**
+- Proyecto grande y a largo plazo; primero hay que entender el formato de las tablas de módulos.
+
+### 3g. Referencia: el plugin de voz de Monomachine sin ROM
+
+- El autor del plugin del vídeo (en blanco y negro; "Monomodule") dice que será open source y que
+  no necesitará ROM. Encaja con reescribir los motores en C++ a partir de estudiar el firmware
+  (como el repo `glassg333/mmmm`), que es el camino de 3b. Cuando lo publique, revisar cómo lo ha
+  hecho y con qué licencia.
+
 ## Para el agente de Codex
 
 Empieza por `CLAUDE.md` (compilar y usar), `NOTAS.md` (todo lo averiguado) y este fichero.
