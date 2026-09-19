@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <array>
 #include <functional>
+#include <deque>
 #include <map>
 #include <memory>
 #include <vector>
@@ -63,8 +64,14 @@ namespace g1
 		void setAudioCallback(AudioCallback _cb) { m_audioCallback = std::move(_cb); }
 
 		// Cadena de audio: lo que sale por los ESSI de este DSP entra por los del siguiente.
-		void setNext(Dsp* _next) { m_next = _next; }
+		void setNext(Dsp* _next) { m_next = _next; if(_next) _next->m_hasUpstream = true; }
 		uint64_t chainedFrames() const { return m_chainedFrames; }
+
+		// Recibe la salida de cada bloque (una muestra a 96 kHz): salidas 1/2 (ESSI0) y 3/4
+		// (ESSI1), en 24 bits con signo. Con el programa de sonido del DSP 3, es lo que va al
+		// codec. Se entrega en flushAudio.
+		using BlockCallback = std::function<void(int32_t, int32_t, int32_t, int32_t)>;
+		void setBlockCallback(BlockCallback _cb) { m_blockCallback = std::move(_cb); }
 
 		// Ejecuta el DSP hasta llegar a _cycles ciclos (o hasta un tope si esta esperando).
 		// Puede ir en su propio hilo: lo que sale por los ESSI se queda en una cola propia.
@@ -84,6 +91,9 @@ namespace g1
 		void runUntil(uint64_t _cycles);
 		void drainAudio();
 		bool irqdEnabled();
+		void tapBlock();
+		void tapLink(uint64_t _block);
+		void readLink(uint32_t _essi, dsp56k::Audio::RxFrame& _frame);
 
 		mc68k::Hdi08& m_hdiUc;
 		const uint32_t m_index;
@@ -107,6 +117,14 @@ namespace g1
 		Meter m_meter{};
 		AudioCallback m_audioCallback;
 		Dsp* m_next = nullptr;
+		bool m_hasUpstream = false;
+		struct LinkBlock { uint64_t index; std::array<dsp56k::TWord, 18> words; };
+		std::vector<LinkBlock> m_linkOut;	// bloques de este DSP, pendientes de flushAudio
+		std::deque<LinkBlock> m_linkIn;		// bloques del DSP anterior
+		std::array<dsp56k::TWord, 2> m_craSeen{};
+		BlockCallback m_blockCallback;
+		using BlockFrame = std::array<dsp56k::TWord, 4>;
+		std::vector<BlockFrame> m_blocks;	// pendiente de flushAudio
 		struct StagedFrame { uint32_t slots; std::array<dsp56k::TWord, 4> v; };
 		std::array<std::vector<StagedFrame>, 2> m_staged;	// por ESSI, pendiente de flushAudio
 		uint64_t m_chainedFrames = 0;

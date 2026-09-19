@@ -19,13 +19,18 @@ Estado al cerrar la sesión del 2026-09-19. El detalle técnico de todo lo averi
 **Actualización 2026-09-19 (tarde): suena por la tarjeta de sonido y en tiempo real.** Ver
 `NOTAS.md` («Sale por el DSP 3» y «Tiempo real»). Lo que queda, por orden:
 
-1. **Los escalones y los clics** (lo que más se oye): bloques de 4–5 tramas con el mismo valor y
-   bloques enteros a cero, ya en el DSP 0. Revisar el modelo de reloj: los DSP de voz sacan 9
-   palabras por bloque y el DSP 3 solo 2, y el emulador da una IRQD por trama con el mismo reloj
-   serie para todos. Averiguar qué dispara la IRQD y a qué velocidad va cada ESSI en el aparato.
-2. **El nivel:** −62 dBFS con el volumen al máximo; `g1run` sube +24 dB provisionalmente. Puede
-   arreglarse solo con el punto 1 (si la mayoría de las palabras son otros canales o ceros).
-3. **Volumen en marcha:** el OS no reacciona si el ADC cambia con el G1 encendido. Mirar los
+1. ~~**Los escalones y los clics**~~ Hecho (2026-09-19, tarde): reloj real de los DSP y enlaces
+   entre DSP a 9 palabras por muestra, por posición. El Do sale limpio por 1/2 (armónicos −82 dB,
+   sin saltos). Ver `NOTAS.md`, «Sonido limpio».
+2. **El nivel:** sigue a −62 dBFS con el volumen al máximo, y **no** venía de los enlaces. Sale
+   de `Y:$5F` del DSP 3 = `$01FEAA` (0,0156, −36 dB) con el ADC a `$FF`, y de la voz a ±0,052 en
+   el DSP 0. Seguir cómo calcula el OS `Y:$5F` a partir de `$15EC20` (¿tabla, ADC de más de
+   8 bits?) y qué nivel da un OscA → 2Output en un G1 real. `g1run` sube +36 dB mientras tanto.
+3. **Probar patches más complejos** (mixer, filtros, relojes, secuenciadores) ahora que el
+   enlace es fiable: lo que falle ya será de los módulos o del OS, no del transporte.
+4. **Carga de la CPU:** el replay va a 1,21× del tiempo real (antes 1,31×): el ESSI a su ritmo
+   real cuesta un 8%. Si falta margen, el TX de los enlaces ya no hace falta (se lee de memoria).
+5. **Volumen en marcha:** el OS no reacciona si el ADC cambia con el G1 encendido. Mirar los
    eventos `$100|canal` que genera `$1009BE` y quién los consume.
 
 1. ~~**Seguir el código del módulo de salida.**~~ Hecho: el patch se enlaza en `$197`. Desde `$197` del DSP 0 (el código del patch va

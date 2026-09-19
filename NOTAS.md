@@ -306,3 +306,39 @@ Ojo: "Nord" y "Clavia" son marcas; mejor que el nombre no las lleve.
   buses) y no 4,5 tramas de tiempo. El emulador da una IRQD por trama y el mismo reloj serie a los
   cuatro, y eso probablemente no es lo que hace el aparato (los divisores del ESSI también
   difieren: `PM=1` en los de voz, `PM=2` en el DSP 3).
+
+## Sonido limpio: reloj real y enlaces de 9 palabras (2026-09-19, tarde, Claude)
+
+- **El reloj de los DSP, del propio OS.** Los cuatro programas escriben `PCTL=$3C001A`: MF+1=27,
+  PD+1=4. Con un cristal de 12,288 MHz (128 × 96 kHz) da **82,944 MHz = 864 ciclos por muestra**.
+  El emulador los tenía a 125,8 MHz (6 × CPU); ahora van a 2025/512 × el reloj de la CPU.
+- **Los enlaces entre DSP**, de sus CRA/CRB: los DSP 0–2 transmiten por ESSI0 y ESSI1 con
+  `CRA=$181801` (PM=1, PSR, 2 palabras por trama, 24 bits), reloj interno y modo red. Periodo de
+  palabra = 2·(PM+1)·24 = **96 ciclos: 9 palabras por muestra por ESSI**, justo lo que manda el
+  DMA4/5 en cada bloque. Son 18 canales por enlace. El DSP 1–3 los reciben con el DMA2/3 en dos
+  anillos de 9 palabras (`X:$6C0` y `X:$6C9`, 2D con DOR2=−8, continuo), y el DMA0 los copia al
+  búfer de salida al empezar cada bloque. El DSP 3 tiene `CRA=$181802` (PM=2, 144 ciclos): es el
+  reloj hacia el códec; su receptor, en modo asíncrono, va con el reloj del DSP 2.
+- **La IRQD es la muestra:** el vector `$16` hace `jsr $175`, un bloque (una muestra) por IRQD
+  (lo de «un bloque cada 4 cuentas» era de antes de cargar el patch). Ahora va en una rejilla fija
+  de 864 ciclos, común a los cuatro (los DSP van a la par en ciclos, sin paradas).
+- **Por qué sonaba escalonado:** el emulador movía 2 palabras por muestra en cada enlace (una
+  trama), y el DMA pedía 9. Con el ESSI a su ritmo real (modo «fine link» del fork), el DSP 3
+  seguía recibiendo a 144 ciclos (6 de 9 palabras): el oscilador saltaba de canal en canal cada
+  4–5 muestras. Y aun al ritmo bueno, los canales llegaban desplazados: el receptor reactiva su
+  DMA al volver de cada recarga y la primera palabra que llega es el canal 0; en el aparato eso
+  lo garantiza el reloj común, y aquí las palabras esperan en cola hasta que los hilos se
+  sincronizan (cada ~4.000 ciclos).
+- **Cómo se hace ahora** (`g1dsp.cpp`): el enlace va **por posición**. En cada IRQD, cada DSP deja
+  lo que acaba de mandar (`Y:[X:$5]` y `Y:[X:$6]`, 9 + 9 palabras) con su número de bloque. El
+  receptor, cuando su ESSI pide una trama, mira a qué palabra del anillo va a escribir su DMA
+  (DDR) y le da ese canal del bloque de hace 8 (retardo fijo de ~83 µs por DSP, para no ir nunca
+  por delante de los hilos). Si falta ese bloque (el anterior está parado recargando), silencio.
+- **La salida**, igual: en cada IRQD del DSP 3 se leen las 2 + 2 palabras que acaba de mandar al
+  códec (salidas 1/2 y 3/4): una muestra por bloque (`setBlockCallback`). `g1run` y
+  `g1boot` (`G1_BLOCKS=fichero`) usan eso en vez de las tramas del ESSI.
+- **Resultado** (replay de 45 mensajes, nota 60 mantenida): salidas 1 y 2 iguales, Do a 261,6 Hz,
+  armónicos a −82 dB y ruido a −81 dB de la fundamental, 0,4% de muestras repetidas (los picos
+  del seno) y un solo salto en toda la ejecución (el ataque de la nota); 3/4 en silencio, como
+  manda el 2Output. Antes: −9 dB de armónicos, +6 dB de ruido y ~8.300 saltos por segundo.
+- **Nivel**, sin cambios: −62 dBFS. `Y:$5F` del DSP 3 = `$01FEAA` con el ADC del volumen a `$FF`.

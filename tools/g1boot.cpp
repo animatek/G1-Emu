@@ -96,6 +96,15 @@ int main(int argc, char** argv)
 			t.mn = std::min(t.mn, _l); t.mx = std::max(t.mx, _l); ++t.n;
 			if(t.values.size() < 64) ++t.values[_l];
 		});
+	// G1_BLOCKS=fichero: la salida del DSP 3 bloque a bloque (una muestra a 96 kHz): 4 canales
+	// int32 (salidas 1-4), en crudo. Es lo que g1run manda a la tarjeta de sonido.
+	FILE* blockFile = std::getenv("G1_BLOCKS") ? std::fopen(std::getenv("G1_BLOCKS"), "wb") : nullptr;
+	if(blockFile)
+		mc.getDsp(g1::g_dspCount - 1).setBlockCallback([blockFile](const int32_t _a, const int32_t _b, const int32_t _c, const int32_t _d)
+		{
+			const int32_t f[4] = {_a, _b, _c, _d};
+			std::fwrite(f, sizeof(int32_t), 4, blockFile);
+		});
 	// G1_ADCMUX=codigo: ese canal del ADC (un mando) a $FF desde el encendido, para identificarlo
 	if(const char* mux = std::getenv("G1_ADCMUX"))
 		mc.setAdc(static_cast<uint8_t>(std::stoul(mux, nullptr, 16)), 0xff);
@@ -276,6 +285,31 @@ int main(int argc, char** argv)
 	}
 
 	mc.getSci().read(sciOut);
+	// G1_TRACE=N: el DSP 0 bloque a bloque (N bloques de 864 ciclos): IRQD, bufferes de salida, DMA4 y lo que sale por TX0.
+	if(const char* tr = std::getenv("G1_TRACE"))
+	{
+		auto& d = mc.getDsp(0);
+		std::vector<std::pair<int32_t, int32_t>> tx;
+		d.setAudioCallback([&](const uint32_t _essi, const int32_t _l, const int32_t _r) { if(_essi == 0) tx.push_back({_l, _r}); });
+		auto& mem = d.dsp().memory();
+		auto& dma = d.periph().getDMA();
+		uint64_t c = d.dsp().getCycles();
+		for(int f = 0; f < std::atoi(tr); ++f)
+		{
+			const auto irqd0 = d.irqdCount();
+			c += std::getenv("G1_TRACE_STEP") ? std::atoi(std::getenv("G1_TRACE_STEP")) : 864;
+			d.catchUp(c);
+			d.flushAudio();
+			std::printf("t%03d irqd+%llu x4=%03x x5=%03x | Y6C0:", f, static_cast<unsigned long long>(d.irqdCount() - irqd0), mem.get(dsp56k::MemArea_X, 4), mem.get(dsp56k::MemArea_X, 5));
+			for(dsp56k::TWord a = 0x6c0; a < 0x6c9; ++a) std::printf(" %06x", mem.get(dsp56k::MemArea_Y, a));
+			std::printf(" | Y6E0:");
+			for(dsp56k::TWord a = 0x6e0; a < 0x6e9; ++a) std::printf(" %06x", mem.get(dsp56k::MemArea_Y, a));
+			std::printf(" | DMA4 DSR=%03x DCO=%x DE=%d | TX:", dma.getDSR(4), dma.getDCO(4), (dma.getDCR(4) >> 23) & 1);
+			for(auto& [l, r] : tx) std::printf(" (%06x %06x)", l & 0xffffff, r & 0xffffff);
+			tx.clear();
+			std::printf("\n");
+		}
+	}
 	// ¿Esta calculando algo cada DSP? Memoria X/Y interna antes y despues de 200.000 instrucciones.
 	{
 		std::array<std::vector<uint32_t>, g1::g_dspCount> before;

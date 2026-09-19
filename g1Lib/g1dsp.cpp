@@ -17,18 +17,43 @@ namespace g1
 		constexpr dsp56k::TWord g_externalMemAddr = 0x8000;
 		constexpr dsp56k::TWord g_bootRom = 0xff0000;
 
-		// El G1 trabaja a 96 kHz. El DSP emulado va a 6 ciclos por ciclo de CPU (20,97 MHz),
-		// o sea ~125,8 MHz. El reloj del ESSI cuenta palabras y cada trama lleva dos
-		// (estereo): una palabra cada 655 ciclos da 96.000 tramas por segundo.
+		// El G1 trabaja a 96 kHz con los DSP a 82,944 MHz: 864 ciclos por muestra.
 		constexpr uint32_t g_samplerate = 96000;
-		constexpr uint32_t g_wordsPerFrame = 2;
-		constexpr uint32_t g_dspClock = 6u * 20971520u;
-		constexpr uint32_t g_cyclesPerSample = (g_dspClock / g_wordsPerFrame + g_samplerate / 2) / g_samplerate;
+		constexpr uint32_t g_dspClock = 82944000;
+		constexpr uint32_t g_cyclesPerFrame = g_dspClock / g_samplerate;	// 864
 
-		// La patilla IRQD de cada DSP recibe el reloj de muestra: su rutina (vector $16)
-		// solo cuenta, y el bucle principal procesa un bloque cada 4 cuentas.
+		// Los ESSI van con el reloj que sale de su CRA (modo "fine link" del nucleo):
+		// 2*(PM+1)*24 ciclos por palabra, 96 en los enlaces entre DSP (PM=1: 9 palabras por
+		// muestra, justo lo que manda el DMA4 en cada bloque) y 144 en el DSP 3 hacia el
+		// codec (PM=2). El reloj base solo sirve de tope: tiene que ser mas lento que ambos.
+		constexpr uint32_t g_essiBaseCyclesPerWord = g_cyclesPerFrame / 2;
+
+		// En modo asincrono el receptor usa el reloj del que le transmite (SC0 de fuera), no el
+		// de su CRA. Todos los que transmiten por la cadena llevan PM=1: 96 ciclos por palabra.
+		// El DSP 3 tiene PM=2 porque su CRA es para el codec: su receptor iria a 144 y solo
+		// podria recoger 6 de las 9 palabras de cada muestra.
+		constexpr uint32_t g_linkCyclesPerWord = 96;
+
+		// Retardo del enlace entre DSP, en bloques. Los hilos se sincronizan cada ~4.000 ciclos
+		// (unos 5 bloques): el que recibe coge el bloque de hace g_linkLatency, que seguro que
+		// ya ha llegado. En el aparato es menos de un bloque; aqui son ~83 us por DSP.
+		constexpr uint64_t g_linkLatency = 8;
+		// El DMA de recepcion de cada ESSI escribe en un anillo de 9 palabras: X:$6C0 (ESSI0) y
+		// X:$6C9 (ESSI1). La palabra i del bloque va siempre a base+i.
+		constexpr dsp56k::TWord g_linkBase[2] = {0x6c0, 0x6c9};
+
+		// Periodo de palabra que sale de un CRA (DSP56303UM, fig. 7-3), como el nucleo.
+		uint32_t essiWordCycles(const dsp56k::TWord _cra)
+		{
+			static constexpr uint32_t bits[8] = {8, 12, 16, 24, 32, 32, 24, 24};
+			const uint32_t pm = (_cra & 0xff) + 1;
+			const uint32_t prescale = (_cra & (1u << 11)) ? 1 : 8;
+			return 2 * pm * prescale * bits[(_cra >> 19) & 7];
+		}
+
+		// La patilla IRQD de cada DSP recibe el reloj de muestra; su vector ($16) salta a la
+		// rutina de bloque ($175), que calcula una muestra del patch.
 		constexpr dsp56k::TWord g_irqdVector = 0x16;
-		constexpr uint32_t g_cyclesPerFrame = g_cyclesPerSample * g_wordsPerFrame;
 
 		// Tope de ciclos que se deja correr a un DSP en una sola espera de la CPU.
 		constexpr uint64_t g_waitClamp = 200000;
@@ -60,8 +85,34 @@ namespace g1
 
 		auto& clock = m_periph.getEssiClock();
 		clock.setClockSource(dsp56k::EsxiClock::ClockSource::Cycles);
-		clock.setSamplerate(g_samplerate * g_wordsPerFrame);
-		clock.setCyclesPerSample(g_cyclesPerSample);
+		clock.setSamplerate(g_samplerate * 2);
+		clock.setCyclesPerSample(g_essiBaseCyclesPerWord);
+
+		// Tiene que estar activo antes de que el programa escriba CRA. El receptor de un enlace
+		// solo avanza cuando le ha llegado una palabra: si no, el DMA de recepcion cogeria
+		// palabras inventadas y los canales del enlace se desplazarian.
+		for(auto* essi : {&m_periph.getEssi0(), &m_periph.getEssi1()})
+			essi->setFineLinkMode(true);
+
+		// Enlace por posicion: cuando el receptor pide una trama, se mira a que palabra del
+		// anillo va a escribir su DMA y se le da ese canal del bloque del DSP anterior. Asi el
+		// canal i acaba siempre en base+i, como en el aparato, sin depender de la fase entre los
+		// ESSI ni de cuando se reactivo la recepcion (el aparato lo consigue con el reloj comun).
+		for(uint32_t e = 0; e < 2; ++e)
+		{
+			auto& essi = e == 0 ? m_periph.getEssi0() : m_periph.getEssi1();
+			essi.setReadRxCallback([this, e](uint64_t&, dsp56k::Audio::RxFrame& _frame)
+			{
+				if(!m_hasUpstream)
+				{
+					// El primer DSP no tiene a nadie delante: silencio.
+					_frame.resize(2);
+					_frame[0][0] = _frame[1][0] = 0;
+					return;
+				}
+				readLink(e, _frame);
+			});
+		}
 
 		// Mascaras de slots de los ESSI (TSMA/TSMB/RSMA/RSMB) a su valor de reset: todos los
 		// slots activos. El emulador las deja a 0, y los DSP de voz del G1 no las escriben
@@ -162,11 +213,23 @@ namespace g1
 				if(it != m_pcWatch.end()) ++it->second;
 			}
 			const auto before = m_dsp.getCycles();
-			if(before >= m_nextIrqd && irqdEnabled())
+			if(before >= m_nextIrqd)
 			{
-				m_dsp.injectInterrupt(g_irqdVector);	// como un periferico: no bloquea
-				m_nextIrqd = before + g_cyclesPerFrame;
-				++m_irqdCount;
+				// Rejilla fija (no "ahora + periodo"): la IRQD no deriva respecto al reloj de los
+				// ESSI, que tambien cuenta ciclos exactos. Si se ha quedado muy atras (parada de
+				// recarga, arranque), se vuelve a enganchar sin rafaga de interrupciones.
+				// En multiplos de 864 ciclos: los cuatro DSP comparten la rejilla, como en el aparato
+				// (van a la par en ciclos), y el numero de bloque vale para todos.
+				m_nextIrqd = (before - m_nextIrqd > g_cyclesPerFrame * 4) ? (before / g_cyclesPerFrame + 1) * g_cyclesPerFrame : m_nextIrqd + g_cyclesPerFrame;
+				if(irqdEnabled())
+				{
+					if(m_blockCallback)
+						tapBlock();
+					if(m_next)
+						tapLink(before / g_cyclesPerFrame);
+					m_dsp.injectInterrupt(g_irqdVector);	// como un periferico: no bloquea
+					++m_irqdCount;
+				}
 			}
 			m_dsp.exec();
 			const auto now = m_dsp.getCycles();
@@ -189,6 +252,66 @@ namespace g1
 		return ((iprc >> 9) & 3) != 0 && !m_dsp.isInterruptMasked(g_irqdVector);
 	}
 
+	// La salida del bloque anterior, antes de que empiece el siguiente. La rutina de bloque
+	// alterna sus bufferes ($6C0/$6E0) y deja en X:$5 y X:$6 los que acaba de mandar por el
+	// DMA4 (ESSI0) y el DMA5 (ESSI1): dos palabras cada uno. Leerlos aqui da exactamente una
+	// muestra por bloque, sin depender de como el ESSI la parte en tramas.
+	// Lo que este DSP acaba de mandar por sus dos ESSI en el bloque anterior: 9 palabras por
+	// ESSI desde X:$5 y X:$6 (mismos bufferes que tapBlock), para el DSP siguiente.
+	void Dsp::tapLink(const uint64_t _block)
+	{
+		auto& mem = m_dsp.memory();
+		const auto p0 = mem.get(dsp56k::MemArea_X, 5);
+		const auto p1 = mem.get(dsp56k::MemArea_X, 6);
+		if(p0 < 0x600 || p0 > 0x7f7 || p1 < 0x600 || p1 > 0x7f7 || _block == 0)
+			return;
+		LinkBlock b;
+		b.index = _block - 1;
+		for(dsp56k::TWord i = 0; i < 9; ++i)
+		{
+			b.words[i] = mem.get(dsp56k::MemArea_Y, p0 + i);
+			b.words[9 + i] = mem.get(dsp56k::MemArea_Y, p1 + i);
+		}
+		m_linkOut.push_back(b);
+	}
+
+	void Dsp::tapBlock()
+	{
+		auto& mem = m_dsp.memory();
+		const auto p0 = mem.get(dsp56k::MemArea_X, 5);
+		const auto p1 = mem.get(dsp56k::MemArea_X, 6);
+		if(p0 < 0x600 || p0 > 0x7fe || p1 < 0x600 || p1 > 0x7fe)
+			return;	// todavia no corre el programa de sonido
+		BlockFrame f;
+		f[0] = mem.get(dsp56k::MemArea_Y, p0);
+		f[1] = mem.get(dsp56k::MemArea_Y, p0 + 1);
+		f[2] = mem.get(dsp56k::MemArea_Y, p1);
+		f[3] = mem.get(dsp56k::MemArea_Y, p1 + 1);
+		m_blocks.push_back(f);
+	}
+
+	void Dsp::readLink(const uint32_t _essi, dsp56k::Audio::RxFrame& _frame)
+	{
+		_frame.resize(2);
+		const auto ddr = m_periph.getDMA().getDDR(2 + _essi);
+		const bool inRing = ddr >= g_linkBase[_essi] && ddr < g_linkBase[_essi] + 9;
+		// La trama se pide en el slot 0, pero el slot 1 entra 96 ciclos despues y puede caer
+		// ya en el bloque siguiente (9 palabras por bloque, 2 por trama): cada palabra se toma
+		// del bloque en el que se va a recibir.
+		for(uint32_t s = 0; s < 2; ++s)
+		{
+			const auto want = (m_dsp.getCycles() + s * g_linkCyclesPerWord) / g_cyclesPerFrame;
+			const auto block = want > g_linkLatency ? want - g_linkLatency : 0;
+			// Se tiran los bloques que ya no hacen falta. Si falta el que toca (el anterior estaba
+			// parado recargando, sin IRQD), silencio: repetir uno viejo dejaria un zumbido.
+			while(m_linkIn.size() > 1 && m_linkIn[1].index <= block)
+				m_linkIn.pop_front();
+			const LinkBlock* src = (!m_linkIn.empty() && m_linkIn.front().index == block) ? &m_linkIn.front() : nullptr;
+			const auto pos = (ddr - g_linkBase[_essi] + s) % 9;
+			_frame[s][0] = (src && inRing) ? src->words[_essi * 9 + pos] : 0;
+		}
+	}
+
 	void Dsp::catchUp(const uint64_t _cycles)
 	{
 		runUntil(_cycles);
@@ -203,9 +326,17 @@ namespace g1
 		uint32_t e = 0;
 		for(auto* essi : {&m_periph.getEssi0(), &m_periph.getEssi1()})
 		{
-			// Si no llega nada por la cadena (arranque, o el primer DSP), silencio.
-			if(essi->getAudioInputs().size() < 16)
-				essi->writeEmptyAudioIn(16);
+			// El receptor de un DSP con otro delante va al ritmo del que le transmite.
+			if(m_hasUpstream)
+			{
+				const dsp56k::TWord cra = essi->getCRA();
+				if(cra != m_craSeen[e])
+				{
+					m_craSeen[e] = cra;
+					if(essiWordCycles(cra) != g_linkCyclesPerWord && essiWordCycles(cra) < g_essiBaseCyclesPerWord)
+						m_periph.getEssiClock().setEsaiFinePeriod(essi, g_linkCyclesPerWord);
+				}
+			}
 			auto& out = essi->getAudioOutputs();
 			auto& meter = m_meter[e];
 			auto& slotCount = m_slotCount[e];
@@ -244,25 +375,31 @@ namespace g1
 				if(k >= m_staged[e].size())
 					continue;
 				const auto& f = m_staged[e][k];
-				if(m_next)
-				{
-					auto& in = (e == 0 ? m_next->m_periph.getEssi0() : m_next->m_periph.getEssi1()).getAudioInputs();
-					if(!in.full())
-					{
-						dsp56k::Audio::RxFrame rx;
-						rx.resize(f.slots);
-						for(uint32_t s = 0; s < f.slots; ++s)
-							rx[s][0] = f.v[s];
-						in.push_back(rx);
-						++m_chainedFrames;
-					}
-				}
 				if(m_audioCallback && f.slots >= 2)
 					m_audioCallback(e, static_cast<int32_t>(f.v[0] << 8) >> 8, static_cast<int32_t>(f.v[1] << 8) >> 8);
 			}
 		}
 		m_staged[0].clear();
 		m_staged[1].clear();
+
+		if(m_next)
+		{
+			for(const auto& b : m_linkOut)
+				m_next->m_linkIn.push_back(b);
+			m_chainedFrames += m_linkOut.size();
+			m_linkOut.clear();
+			// Tope por si el siguiente no consume (parado): unos 100 ms.
+			while(m_next->m_linkIn.size() > 10000)
+				m_next->m_linkIn.pop_front();
+		}
+
+		if(m_blockCallback)
+			for(const auto& f : m_blocks)
+			{
+				auto s24 = [](const dsp56k::TWord _v) { return static_cast<int32_t>(_v << 8) >> 8; };
+				m_blockCallback(s24(f[0]), s24(f[1]), s24(f[2]), s24(f[3]));
+			}
+		m_blocks.clear();
 	}
 
 	void Dsp::hostWord(const uint32_t _word)

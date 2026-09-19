@@ -172,7 +172,7 @@ namespace g1
 
 	void Microcontroller::catchUpDsps()
 	{
-		const auto target = m_ucCycles * g_dspCyclesPerUcCycle;
+		const auto target = m_ucCycles * g_dspCyclesPerUcNum / g_dspCyclesPerUcDen;
 		if(!m_threaded)
 		{
 			for(auto& dsp : m_dsps)

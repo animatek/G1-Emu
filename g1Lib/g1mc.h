@@ -52,7 +52,11 @@ namespace g1
 	// 8 puertos HI08 en $200000 + 8*n: DSP 0-3 en la placa base, 4-7 en la expansion.
 	static constexpr uint32_t g_hostPorts = 8;
 	static constexpr uint32_t g_dspCount = 4;			// G1 sin tarjeta de expansion
-	static constexpr uint32_t g_dspCyclesPerUcCycle = 6;	// aproximado: DSP ~100 MHz, CPU ~21 MHz
+	// Los DSP van a 12,288 MHz x 27/4 = 82,944 MHz (PCTL=$3C001A, el mismo en los cuatro):
+	// 864 ciclos por muestra a 96 kHz, que es justo lo que piden los enlaces entre DSP
+	// (9 palabras de 96 ciclos por bloque). Frente a los 20,97 MHz de la CPU: 2025/512.
+	static constexpr uint32_t g_dspClock = 82944000;
+	static constexpr uint64_t g_dspCyclesPerUcNum = 2025, g_dspCyclesPerUcDen = 512;
 	static constexpr uint32_t g_ucClock = 20971520;			// SYNCR=$D300 con cristal de 32768 Hz
 	static constexpr uint32_t g_sciRate = 44100;			// ritmo al que SciMidi mueve bytes
 	static constexpr uint32_t g_ucCyclesPerSciSample = g_ucClock / g_sciRate;

@@ -11,7 +11,7 @@
 //   "PC Port" = el PC PORT del editor (NME se conecta aqui)
 //   "MIDI"    = el MIDI IN/OUT normal
 // La salida 1/2 (ESSI0 del DSP 3) suena por ALSA ("default", o G1_AUDIO=dispositivo;
-// G1_AUDIO=no la desactiva). G1_GAIN_DB sube el nivel (por defecto +24 dB, provisional:
+// G1_AUDIO=no la desactiva). G1_GAIN_DB sube el nivel (por defecto +36 dB, provisional:
 // el G1 emulado sale muy flojo, ver NOTAS.md).
 // Ctrl+C guarda la flash y sale.
 
@@ -139,7 +139,7 @@ int main(int argc, char** argv)
 	if(!audioDev || std::string(audioDev) != "no")
 	{
 		const char* gainEnv = std::getenv("G1_GAIN_DB");
-		const float gainDb = gainEnv ? static_cast<float>(std::atof(gainEnv)) : 24.0f;
+		const float gainDb = gainEnv ? static_cast<float>(std::atof(gainEnv)) : 36.0f;
 		audio = std::make_unique<g1app::AlsaAudio>(audioDev ? audioDev : "default", std::pow(10.0f, gainDb / 20.0f));
 		if(audio->valid())
 			std::printf("audio: salida 1/2 por ALSA \"%s\" a 48 kHz, %+.0f dB\n", audioDev ? audioDev : "default", gainDb);
@@ -149,16 +149,17 @@ int main(int argc, char** argv)
 			audio.reset();
 		}
 	}
-	mc.getDsp(3).setAudioCallback([&](const uint32_t _essi, const int32_t _l, const int32_t _r)
+	// Una muestra por bloque del DSP 3 (96 kHz): salidas 1/2 y 3/4, lo que va al codec.
+	mc.getDsp(3).setBlockCallback([&](const int32_t _o1, const int32_t _o2, const int32_t _o3, const int32_t _o4)
 	{
-		if(audio && _essi == 0)
-			audio->push(_l, _r);
+		if(audio)
+			audio->push(_o1, _o2);
 		if(wavFrames >= wavMaxFrames)
 			return;
-		wavFrame[_essi * 2] = _l;
-		wavFrame[_essi * 2 + 1] = _r;
-		if(_essi != 1)	// se escribe la trama al completar el ESSI1
-			return;
+		wavFrame[0] = _o1;
+		wavFrame[1] = _o2;
+		wavFrame[2] = _o3;
+		wavFrame[3] = _o4;
 		char buf[12];
 		for(int c = 0; c < 4; ++c)
 		{
