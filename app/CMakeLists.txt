@@ -1,10 +1,10 @@
-# EmuHost: el G1 funcionando con flash, MIDI de ALSA, audio y tiempo real. Lo usan la consola
-# (g1run) y la ventana (g1gui).
+# EmuHost: the running G1 with flash, ALSA MIDI, audio and real time. Used by the console
+# (g1run) and the window (g1gui).
 add_library(g1Host STATIC emuhost.cpp emuhost.h alsamidi.h alsaaudio.h jackaudio.h)
 target_include_directories(g1Host PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(g1Host PUBLIC g1Lib asound)
 
-# JACK (con PipeWire, pipewire-jack): cuatro salidas y dos entradas como el panel trasero.
+# JACK (with PipeWire, pipewire-jack): four outputs and two inputs, like the back panel.
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
 	pkg_check_modules(JACK QUIET jack)
@@ -14,7 +14,7 @@ if(JACK_FOUND)
 	target_include_directories(g1Host PUBLIC ${JACK_INCLUDE_DIRS})
 	target_link_libraries(g1Host PUBLIC ${JACK_LIBRARIES})
 else()
-	message(STATUS "g1run: sin JACK, solo ALSA")
+	message(STATUS "g1run: no JACK, ALSA only")
 endif()
 
 add_executable(g1run g1run.cpp)

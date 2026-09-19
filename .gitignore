@@ -7,5 +7,5 @@ build/
 build-*/
 bin/
 
-# Borradores privados de Patreon
+# Private Patreon drafts
 /Patreon post/

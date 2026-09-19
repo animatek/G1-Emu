@@ -1,13 +1,14 @@
-# G1-Emu (para cualquier agente: Claude Code, Codex, opencode)
+# G1-Emu (for any agent: Claude Code, Codex, opencode)
 
-Las instrucciones del proyecto están en `CLAUDE.md`, lo averiguado del hardware y del OS en
-`NOTAS.md`, y el plan en `SIGUIENTES-PASOS.md`. Léelos antes de tocar nada.
+The project instructions are in `CLAUDE.md`, the hardware and OS findings in `NOTES.md`, and the
+plan in `ROADMAP.md`. Read them before touching anything.
 
-Reglas duras:
-- Las ROMs nunca entran en Git ni en un release (`Roms/` está fuera).
-- No se modifica `~/src/gearmulator-md-mm` (clon de terceros, GPLv3): se enlaza desde aquí.
-- **Regla: todo cambio que entre en el repo lleva su línea en `CHANGELOG.md`, en el mismo
-  commit.** Sin excepciones.
-- Cada cambio va en `CHANGELOG.md` de este repo y en el global `/mnt/SPEED/CODE/CHANGELOG.md`
-  (enlace a una nota de Obsidian: se edita el destino, no se reemplaza), con fecha de Madrid,
-  verificación real y "cambio local, sin commit" si no hay commit.
+Hard rules:
+- **Everything in this repo is in English**: code, comments, messages, docs, changelog, commits.
+- ROMs never go into Git nor into a release (`Roms/` is ignored).
+- Do not modify `~/src/gearmulator-md-mm` (third-party clone, GPLv3): it is linked from here.
+- **Every change that goes into the repo gets its line in `CHANGELOG.md`, in the same commit.**
+  No exceptions. Newest first, with who did it, what changes and the real verification; mark
+  "local change, not committed" if there is no commit yet.
+- In the maintainer's workspace it also goes into the global `/mnt/SPEED/CODE/CHANGELOG.md` (a link
+  to an Obsidian note: edit its target, never replace it), dated in Madrid time.

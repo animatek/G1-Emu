@@ -1,22 +1,22 @@
-// g1run: el Nord Modular G1 emulado, en tiempo real, en la consola.
+// g1run: the emulated Nord Modular G1, in real time, in the console.
 //
 //   g1run ROM [FLASH]
 //
-// ROM   = la ROM de 512 KB del rack (OS 3.03). Nunca entra en el repo.
-// FLASH = donde se guarda la flash de 1 MB (OS instalado + patches guardados). Por
-//         defecto ~/.local/share/Animatek/G1-Emu/flash.bin. Si no existe, se crea con el
-//         OS de fabrica de la ROM, como un G1 recien actualizado.
+// ROM   = the 512 KB rack ROM (OS 3.03). Never goes into the repo.
+// FLASH = where the 1 MB flash is saved (installed OS + stored patches). Default
+//         ~/.local/share/Animatek/G1-Emu/flash.bin. If missing, it is created with the
+//         factory OS from the ROM, like a freshly updated G1.
 //
-// Crea el cliente ALSA "G1-Emu" con dos puertos, como el aparato:
-//   "PC Port" = el PC PORT del editor (NME se conecta aqui)
-//   "MIDI"    = el MIDI IN/OUT normal
-// El audio va por JACK (PipeWire) si hay servidor: cliente "G1-Emu" con out_1..out_4 e in_L/in_R,
-// como el panel trasero; out_1/out_2 se conectan solos a la tarjeta (G1_JACK_CONNECT=0 no).
-// Si no hay JACK, o con G1_AUDIO=alsa o G1_AUDIO=dispositivo, salidas 1/2 por ALSA.
-// G1_AUDIO=no lo desactiva. G1_GAIN_DB sube el nivel (por defecto +36 dB: deshace el tope
-// de -36 dB que el OS pone al volumen maestro, ver NOTAS.md).
-// Ctrl+C guarda la flash y sale. Todo el trabajo lo hace EmuHost (emuhost.h), que tambien usa
-// la ventana (g1gui).
+// Creates the ALSA client "G1-Emu" with two ports, like the hardware:
+//   "PC Port" = the editor's PC PORT (NME connects here)
+//   "MIDI"    = the regular MIDI IN/OUT
+// Audio goes through JACK (PipeWire) if there is a server: client "G1-Emu" with out_1..out_4 and
+// in_L/in_R, like the back panel; out_1/out_2 connect themselves to the card (not with G1_JACK_CONNECT=0).
+// Without JACK, or with G1_AUDIO=alsa or G1_AUDIO=device, outputs 1/2 go through ALSA.
+// G1_AUDIO=no disables it. G1_GAIN_DB raises the level (default +36 dB: undoes the -36 dB
+// cap the OS puts on the master volume, see NOTES.md).
+// Ctrl+C saves the flash and quits. All the work is done by EmuHost (emuhost.h), which the
+// window (g1gui) also uses.
 
 #include "emuhost.h"
 
@@ -35,7 +35,7 @@ int main(int argc, char** argv)
 {
 	if(argc < 2)
 	{
-		std::fprintf(stderr, "uso: g1run ROM [FLASH]\n");
+		std::fprintf(stderr, "usage: g1run ROM [FLASH]\n");
 		return 2;
 	}
 	g1app::EmuHost host;
@@ -62,6 +62,6 @@ int main(int argc, char** argv)
 		}
 	}
 	host.stop();
-	std::printf("\nflash guardada\n");
+	std::printf("\nflash saved\n");
 	return 0;
 }

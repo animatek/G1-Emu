@@ -30,7 +30,7 @@ namespace g1app
 			return true;
 		}
 
-		// Segundos de CPU (usuario + sistema) de todo el proceso.
+		// CPU seconds (user + system) of the whole process.
 		double processCpuSeconds()
 		{
 			std::ifstream f("/proc/self/stat");
@@ -49,8 +49,8 @@ namespace g1app
 			return static_cast<double>(utime + stime) / static_cast<double>(sysconf(_SC_CLK_TCK));
 		}
 
-		// Las salidas llevan el desplazamiento X:$5F del DSP 3 ($155, casi nada); en el aparato lo
-		// quita el condensador de salida. Se resta para no mandar continua a la tarjeta.
+		// The outputs carry DSP 3's X:$5F offset ($155, almost nothing); on the hardware the
+		// output capacitor removes it. It is subtracted so no DC reaches the sound card.
 		constexpr int32_t g_dc = 0x155;
 	}
 
@@ -72,7 +72,7 @@ namespace g1app
 		std::vector<uint8_t> rom;
 		if(!loadFile(_romPath, rom) || rom.size() != g1::g_romSize)
 		{
-			_log += "la ROM debe medir 512 KB: " + _romPath + "\n";
+			_log += "the ROM must be 512 KB: " + _romPath + "\n";
 			return false;
 		}
 		m_flashPath = _flashPath.empty() ? defaultFlashPath() : _flashPath;
@@ -82,24 +82,24 @@ namespace g1app
 		if(loadFile(m_flashPath, flash) && flash.size() == g1::Flash::Size)
 		{
 			m_mc->getFlash().data() = flash;
-			_log += "flash cargada de " + m_flashPath + "\n";
+			_log += "flash loaded from " + m_flashPath + "\n";
 		}
 		else
 		{
 			m_mc->installRomOsInFlash();
-			_log += "flash nueva con el OS de fabrica (se guardara en " + m_flashPath + ")\n";
+			_log += "new flash with the factory OS (will be saved in " + m_flashPath + ")\n";
 		}
 
 		m_midi = std::make_unique<AlsaMidi>("G1-Emu");
 		if(!m_midi->valid())
 		{
-			_log += "no puedo abrir el secuenciador ALSA\n";
+			_log += "cannot open the ALSA sequencer\n";
 			return false;
 		}
 		m_pcPort = m_midi->addPort("PC Port");
 		m_midiPort = m_midi->addPort("MIDI");
-		m_stats.midi = "G1-Emu:PC Port (editor) y G1-Emu:MIDI, cliente " + std::to_string(m_midi->clientId());
-		_log += "puertos MIDI: " + m_stats.midi + "\n";
+		m_stats.midi = "G1-Emu:PC Port (editor) and G1-Emu:MIDI, client " + std::to_string(m_midi->clientId());
+		_log += "MIDI ports: " + m_stats.midi + "\n";
 
 		// Audio
 		const char* audioDev = std::getenv("G1_AUDIO");
@@ -115,7 +115,7 @@ namespace g1app
 				m_jack = std::make_unique<JackAudio>("G1-Emu", gain);
 				if(m_jack->valid())
 				{
-					std::snprintf(buf, sizeof(buf), "JACK G1-Emu a %u Hz, %+.0f dB (out_1..4, in_L/R)", m_jack->rate(), gainDb);
+					std::snprintf(buf, sizeof(buf), "JACK G1-Emu at %u Hz, %+.0f dB (out_1..4, in_L/R)", m_jack->rate(), gainDb);
 					m_mc->getDsp(0).setInputProvider([this](int32_t& _l, int32_t& _r) { m_jack->pullInput(_l, _r); });
 				}
 				else
@@ -127,29 +127,29 @@ namespace g1app
 				const char* dev = (!audioDev || std::string(audioDev) == "alsa" || std::string(audioDev) == "jack") ? "default" : audioDev;
 				m_alsa = std::make_unique<AlsaAudio>(dev, gain);
 				if(m_alsa->valid())
-					std::snprintf(buf, sizeof(buf), "ALSA \"%s\" a 48 kHz, salidas 1/2, %+.0f dB", dev, gainDb);
+					std::snprintf(buf, sizeof(buf), "ALSA \"%s\" at 48 kHz, outputs 1/2, %+.0f dB", dev, gainDb);
 				else
 				{
-					std::snprintf(buf, sizeof(buf), "no puedo abrir \"%s\": sin sonido", dev);
+					std::snprintf(buf, sizeof(buf), "cannot open \"%s\": no sound", dev);
 					m_alsa.reset();
 				}
 			}
 			m_stats.audio = buf;
 		}
 		else
-			m_stats.audio = "sin audio (G1_AUDIO=no)";
+			m_stats.audio = "no audio (G1_AUDIO=no)";
 		_log += "audio: " + m_stats.audio + "\n";
 
-		// WAV de 4 canales a 96 kHz y 24 bits, solo si se pide (G1_RECORD=segundos).
+		// 4-channel WAV at 96 kHz and 24 bits, only if asked for (G1_RECORD=seconds).
 		if(const char* rec = std::getenv("G1_RECORD"))
 		{
-			m_wavPath = (std::filesystem::path(m_flashPath).parent_path() / "salida.wav").string();
+			m_wavPath = (std::filesystem::path(m_flashPath).parent_path() / "output.wav").string();
 			m_wav = std::make_unique<std::ofstream>(m_wavPath, std::ios::binary | std::ios::trunc);
-			m_wav->write(std::string(44, '\0').data(), 44);	// cabecera, se rellena al acabar
+			m_wav->write(std::string(44, '\0').data(), 44);	// header, filled in at the end
 			m_wavMaxFrames = static_cast<uint64_t>(std::atof(rec) * 96000.0);
 		}
 
-		// Una muestra por bloque del DSP 3 (96 kHz): las cuatro salidas.
+		// One sample per DSP 3 block (96 kHz): the four outputs.
 		m_mc->getDsp(3).setBlockCallback([this](const int32_t _o1, const int32_t _o2, const int32_t _o3, const int32_t _o4)
 		{
 			if(m_alsa)
@@ -228,12 +228,12 @@ namespace g1app
 		auto lastStats = start;
 		auto lastSave = start;
 		uint64_t lastStatsCycles = 0;
-		double busy = 0;		// segundos que el hilo ha trabajado desde las ultimas estadisticas
+		double busy = 0;		// seconds the thread has worked since the last statistics
 		double lastCpu = processCpuSeconds();
 		uint32_t savedProgrammed = mc.getFlash().programmedBytes();
 		uint32_t savedErased = mc.getFlash().erasedSectors();
 
-		// Todo lo que entra por el PC Port se apunta para poder reproducir sesiones sin NME.
+		// Everything coming in through the PC Port is logged so sessions can be replayed without NME.
 		std::ofstream pcLog(std::filesystem::path(m_flashPath).parent_path() / "pcport-in.bin", std::ios::binary | std::ios::app);
 
 		std::vector<std::vector<uint8_t>> incoming;
@@ -243,7 +243,7 @@ namespace g1app
 		{
 			const auto t0 = clock::now();
 
-			// Lo que llega de fuera
+			// What comes in from outside
 			m_midi->poll(incoming);
 			if(!incoming[m_pcPort].empty())
 			{
@@ -260,14 +260,14 @@ namespace g1app
 				incoming[m_midiPort].clear();
 			}
 
-			// Emular hasta alcanzar el reloj real (como mucho 2 ms de golpe)
+			// Emulate until the real clock is reached (at most 2 ms at once)
 			const double elapsed = std::chrono::duration<double>(t0 - start).count();
 			const auto target = static_cast<uint64_t>(elapsed * g1::g_ucClock);
 			const auto limit = mc.ucCycles() + g1::g_ucClock / 500;
 			while(mc.ucCycles() < target && mc.ucCycles() < limit)
 				mc.exec();
 
-			// Lo que sale
+			// What goes out
 			out.clear();
 			mc.getPcPort().takeTx(out);
 			m_pcOut += out.size();
@@ -282,7 +282,7 @@ namespace g1app
 			if(mc.ucCycles() >= target)
 				std::this_thread::sleep_for(std::chrono::microseconds(500));
 
-			// Guardar la flash si el G1 ha escrito en ella (patches, ajustes), como mucho cada 5 s
+			// Save the flash if the G1 wrote to it (patches, settings), at most every 5 s
 			if(t1 - lastSave >= std::chrono::seconds(5))
 			{
 				lastSave = t1;
@@ -296,7 +296,7 @@ namespace g1app
 				}
 			}
 
-			// Estadisticas, dos veces por segundo
+			// Statistics, twice per second
 			if(t1 - lastStats >= std::chrono::milliseconds(500))
 			{
 				const double wall = std::chrono::duration<double>(t1 - lastStats).count();
@@ -335,11 +335,11 @@ namespace g1app
 		auto& mc = *m_mc;
 		char buf[256];
 		std::string r;
-		std::snprintf(buf, sizeof(buf), "[%6.0fs] velocidad %5.1f%%  carga %3.0f%%  CPU %.1f nucleos  DSP:", s.seconds, s.speed, s.load, s.cpuCores);
+		std::snprintf(buf, sizeof(buf), "[%6.0fs] speed %5.1f%%  load %3.0f%%  CPU %.1f cores  DSP:", s.seconds, s.speed, s.load, s.cpuCores);
 		r += buf;
 		for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 			r += s.dspOn[d] ? " on" : " --";
-		r += "  HI08 palabras/HC/respuestas:";
+		r += "  HI08 words/HC/replies:";
 		for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 		{
 			std::snprintf(buf, sizeof(buf), " %llu/%llu/%llu", static_cast<unsigned long long>(mc.getDsp(d).hostWords()),
@@ -355,7 +355,7 @@ namespace g1app
 		{
 			auto& dsp = mc.getDsp(d);
 			const auto frames = dsp.audioFrames();
-			std::snprintf(buf, sizeof(buf), "  DSP%u %.0f tr/s", d, wall > 0 ? (frames - m_lastFrames[d]) / wall / 2.0 : 0.0);	// 2 ESSI
+			std::snprintf(buf, sizeof(buf), "  DSP%u %.0f fr/s", d, wall > 0 ? (frames - m_lastFrames[d]) / wall / 2.0 : 0.0);	// 2 ESSI
 			r += buf;
 			m_lastFrames[d] = frames;
 			const auto& m = dsp.meter();
@@ -370,8 +370,8 @@ namespace g1app
 			dsp.resetMeter();
 		}
 		m_lastReportTime = s.seconds;
-		std::snprintf(buf, sizeof(buf), "  salida 1/2 %s  cortes %llu",
-			s.peak > 0.0f ? (std::to_string(static_cast<int>(20.0f * std::log10(s.peak))) + " dB").c_str() : "silencio",
+		std::snprintf(buf, sizeof(buf), "  output 1/2 %s  dropouts %llu",
+			s.peak > 0.0f ? (std::to_string(static_cast<int>(20.0f * std::log10(s.peak))) + " dB").c_str() : "silence",
 			static_cast<unsigned long long>(s.xruns));
 		r += buf;
 		return r;

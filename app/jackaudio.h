@@ -1,14 +1,14 @@
 #pragma once
 
-// Audio por JACK (con PipeWire, pipewire-jack): el G1 emulado aparece como el cliente "G1-Emu"
-// con los conectores del panel trasero del aparato: out_1..out_4 (salidas mono) e in_L/in_R.
-// Los auriculares del G1 son una copia de 1/2, asi que out_1/out_2 se conectan solos a las
-// dos primeras salidas fisicas (G1_JACK_CONNECT=0 lo evita); lo demas se enruta a mano.
+// Audio through JACK (with PipeWire, pipewire-jack): the emulated G1 shows up as the client "G1-Emu"
+// with the connectors of the hardware's back panel: out_1..out_4 (mono outputs) and in_L/in_R.
+// The G1's headphones are a copy of 1/2, so out_1/out_2 connect themselves to the first two
+// physical outputs (G1_JACK_CONNECT=0 prevents it); everything else is routed by hand.
 //
-// El emulador va a 96 kHz y JACK a lo que diga el servidor (normalmente 48 kHz): se convierte
-// con interpolacion lineal en los dos sentidos. Entre el hilo del emulador y el de JACK hay dos
-// colas sin bloqueos (un productor y un consumidor cada una); si el emulador no llega, JACK
-// saca silencio, se cuenta el corte y se vuelve a llenar un colchon de 30 ms.
+// The emulator runs at 96 kHz and JACK at whatever the server says (usually 48 kHz): linear
+// interpolation converts both ways. Between the emulator thread and the JACK thread there are
+// two lock-free queues (one producer and one consumer each); if the emulator falls behind, JACK
+// outputs silence, the dropout is counted and a 30 ms cushion is filled again.
 
 #include <jack/jack.h>
 
@@ -24,7 +24,7 @@
 
 namespace g1app
 {
-	// Cola sin bloqueos de tramas de N canales, un productor y un consumidor.
+	// Lock-free queue of N-channel frames, one producer and one consumer.
 	template<size_t N> class FrameRing
 	{
 	public:
@@ -107,7 +107,7 @@ namespace g1app
 		uint64_t xruns() const { return m_xruns; }
 		float peak() { return m_peak.exchange(0.0f); }
 
-		// Una muestra de las cuatro salidas a 96 kHz, en 24 bits con signo (hilo del emulador).
+		// One sample of the four outputs at 96 kHz, signed 24-bit (emulator thread).
 		void push(const int32_t _o1, const int32_t _o2, const int32_t _o3, const int32_t _o4)
 		{
 			const float scale = m_gain / 8388608.0f;
@@ -115,30 +115,30 @@ namespace g1app
 			const float a = std::max(std::fabs(cur[0]), std::fabs(cur[1]));
 			if(a > m_peak.load(std::memory_order_relaxed))
 				m_peak.store(a, std::memory_order_relaxed);
-			// De 96 kHz a la frecuencia de JACK: una muestra de salida cada EmuRate/rate de entrada.
+			// From 96 kHz to the JACK rate: one output sample every EmuRate/rate input samples.
 			const double step = EmuRate / m_rate;
 			while(m_outPos < 1.0)
 			{
 				std::array<float, 4> f;
 				for(size_t c = 0; c < 4; ++c)
 					f[c] = std::clamp(static_cast<float>(m_prevOut[c] + (cur[c] - m_prevOut[c]) * m_outPos), -1.0f, 1.0f);
-				m_out.push(f);	// llena: el emulador va por delante de JACK; se tira
+				m_out.push(f);	// full: the emulator is ahead of JACK; dropped
 				m_outPos += step;
 			}
 			m_outPos -= 1.0;
 			m_prevOut = cur;
 		}
 
-		// Las entradas L/R a 96 kHz, en 24 bits con signo (hilo del DSP 0).
+		// The L/R inputs at 96 kHz, signed 24-bit (DSP 0 thread).
 		void pullInput(int32_t& _l, int32_t& _r)
 		{
-			const double step = m_rate / EmuRate;	// muestras de JACK por muestra del emulador
+			const double step = m_rate / EmuRate;	// JACK samples per emulator sample
 			m_inPos += step;
 			while(m_inPos >= 1.0)
 			{
 				m_prevIn = m_curIn;
 				if(!m_in.pop(m_curIn))
-					m_curIn = m_prevIn;	// sin datos: se mantiene
+					m_curIn = m_prevIn;	// no data: hold
 				m_inPos -= 1.0;
 			}
 			const auto t = static_cast<float>(m_inPos);
@@ -162,15 +162,15 @@ namespace g1app
 				std::array<float, 4> f{};
 				if(!m_buffering && !m_out.pop(f))
 				{
-					m_buffering = true;	// el emulador no llega: hueco
+					m_buffering = true;	// the emulator is late: a gap
 					++m_xruns;
 				}
 				for(int c = 0; c < 4; ++c)
 					out[c][k] = f[c];
 				m_in.push({inL[k], inR[k]});
 			}
-			// Si el emulador va por delante (reloj distinto del de la tarjeta), se recorta el
-			// colchon para que la latencia no crezca.
+			// If the emulator runs ahead (a clock different from the sound card's), the cushion is
+			// trimmed so the latency does not grow.
 			while(m_out.available() > m_prefill * 4)
 			{
 				std::array<float, 4> drop;

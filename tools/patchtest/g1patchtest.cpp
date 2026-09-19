@@ -1,11 +1,11 @@
-// g1patchtest: banco de pruebas del G1 emulado, sin ventana ni editor.
+// g1patchtest: test bench for the emulated G1, with no window and no editor.
 //
-//   g1patchtest ROM patch.pch [--note 60] [--seconds 2] [--wav salida.wav]
+//   g1patchtest ROM patch.pch [--note 60] [--seconds 2] [--wav output.wav]
 //
-// Arranca el OS, saluda como NME (IAm), sube el patch con el mismo codigo que usa NME
-// (PchFileIO -> PatchSerializer -> UploadPacketizer), paquete a paquete esperando cada
-// respuesta, toca una nota por el PC Port y mide las cuatro salidas y los enlaces entre DSP.
-// Sirve para probar modulo a modulo que suena y que no, sin tocar el G1 de nadie.
+// Boots the OS, greets like NME (IAm), uploads the patch with the same code NME uses
+// (PchFileIO -> PatchSerializer -> UploadPacketizer), packet by packet waiting for each
+// reply, plays a note through the PC Port and measures the four outputs and the DSP links.
+// Useful to test module by module what sounds and what does not, without touching anyone's G1.
 #include "g1Lib/g1mc.h"
 #include "g1Lib/g1dsp.h"
 
@@ -27,7 +27,7 @@
 namespace
 {
 	constexpr uint64_t g_ms = g1::g_ucClock / 1000;
-	constexpr int32_t g_silence = 0x155;	// X:$5F del DSP 3: lo que sale sin senal
+	constexpr int32_t g_silence = 0x155;	// DSP 3's X:$5F: what comes out with no signal
 
 	void run(g1::Microcontroller& _mc, const uint64_t _ucCycles)
 	{
@@ -50,7 +50,7 @@ namespace
 		return s;
 	}
 
-	// Manda un mensaje por el PC Port y corre hasta que el OS conteste algo (o pase _timeoutMs).
+	// Sends a message through the PC Port and runs until the OS answers (or _timeoutMs passes).
 	std::vector<uint8_t> transact(g1::Microcontroller& _mc, const std::vector<uint8_t>& _msg, const uint32_t _timeoutMs = 300)
 	{
 		_mc.getPcPort().receive(_msg);
@@ -61,7 +61,7 @@ namespace
 			_mc.getPcPort().takeTx(out);
 			if(!out.empty() && out.back() == 0xf7)
 			{
-				run(_mc, 5 * g_ms);	// por si llega algo mas detras
+				run(_mc, 5 * g_ms);	// in case something else follows
 				_mc.getPcPort().takeTx(out);
 				return out;
 			}
@@ -81,7 +81,7 @@ namespace
 
 	double db(const double _v) { return _v > 0 ? 20.0 * std::log10(_v) : -200.0; }
 
-	// Frecuencia dominante por cruces por cero (vale para comprobar la nota, no para espectros).
+	// Dominant frequency from zero crossings (good enough to check the note, not for spectra).
 	double zeroCrossHz(const std::vector<double>& _x, const double _rate)
 	{
 		if(_x.size() < 2)
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
 {
 	if(argc < 3)
 	{
-		std::fprintf(stderr, "uso: g1patchtest ROM patch.pch [--note N] [--seconds S] [--wav fichero.wav] [--input-sine Hz]\n");
+		std::fprintf(stderr, "usage: g1patchtest ROM patch.pch [--note N] [--seconds S] [--wav file.wav] [--input-sine Hz]\n");
 		return 2;
 	}
 	int note = 60;
@@ -116,18 +116,18 @@ int main(int argc, char** argv)
 		else if(!std::strcmp(argv[i], "--input-sine")) inputHz = std::atof(argv[i + 1]);
 	}
 
-	// El patch, con las descripciones de modulos de NME.
+	// The patch, with NME's module descriptions.
 	ModuleDescriptions descs;
 	if(!descs.loadFromFile(juce::File(NME_DATA_DIR).getChildFile("modules.xml")))
 	{
-		std::fprintf(stderr, "no puedo cargar %s/modules.xml\n", NME_DATA_DIR);
+		std::fprintf(stderr, "cannot load %s/modules.xml\n", NME_DATA_DIR);
 		return 1;
 	}
 	PchFileIO io(descs);
 	auto patch = io.readFile(juce::File(juce::File::getCurrentWorkingDirectory().getChildFile(argv[2])));
 	if(!patch)
 	{
-		std::fprintf(stderr, "no puedo leer el patch %s\n", argv[2]);
+		std::fprintf(stderr, "cannot read the patch %s\n", argv[2]);
 		return 1;
 	}
 	PatchSerializer serializer;
@@ -137,13 +137,13 @@ int main(int argc, char** argv)
 	std::vector<uint8_t> rom((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 	if(rom.size() != g1::g_romSize)
 	{
-		std::fprintf(stderr, "la ROM debe medir 512 KB\n");
+		std::fprintf(stderr, "the ROM must be 512 KB\n");
 		return 1;
 	}
 	g1::Microcontroller mc(rom);
 	mc.installRomOsInFlash();
 
-	// Salida: una muestra por bloque del DSP 3 (4 canales).
+	// Output: one sample per DSP 3 block (4 channels).
 	std::vector<std::array<int32_t, 4>> blocks;
 	bool capture = false;
 	mc.getDsp(g1::g_dspCount - 1).setBlockCallback([&](const int32_t _a, const int32_t _b, const int32_t _c, const int32_t _d)
@@ -152,7 +152,7 @@ int main(int argc, char** argv)
 			blocks.push_back({_a, _b, _c, _d});
 	});
 
-	// --input-sine F: por las entradas de audio entra un seno de F Hz (L) y de 2F Hz (R), a -12 dBFS.
+	// --input-sine F: a sine of F Hz (L) and 2F Hz (R) goes into the audio inputs, at -12 dBFS.
 	uint64_t inputPhase = 0;
 	if(inputHz > 0)
 		mc.getDsp(0).setInputProvider([&](int32_t& _l, int32_t& _r)
@@ -162,7 +162,7 @@ int main(int argc, char** argv)
 			_r = static_cast<int32_t>(0.25 * 8388607.0 * std::sin(2.0 * M_PI * 2.0 * inputHz * t));
 		});
 
-	// Arranque y saludo.
+	// Boot and handshake.
 	run(mc, 1500 * g_ms);
 	std::vector<uint8_t> boot;
 	mc.getPcPort().takeTx(boot);
@@ -171,17 +171,17 @@ int main(int argc, char** argv)
 	auto showLcd = [&](const char* _when)
 	{
 		const auto& lcd = mc.getLcd();
-		std::printf("pantalla (%s, %llu escrituras):\n  |%s|\n  |%s|\n", _when, static_cast<unsigned long long>(lcd.writes()), lcd.line(0, 20).c_str(), lcd.line(1, 20).c_str());
+		std::printf("display (%s, %llu writes):\n  |%s|\n  |%s|\n", _when, static_cast<unsigned long long>(lcd.writes()), lcd.line(0, 20).c_str(), lcd.line(1, 20).c_str());
 	};
-	showLcd("al arrancar");
+	showLcd("at boot");
 	if(hello.empty())
 	{
-		std::printf("el OS no contesta al saludo\n");
+		std::printf("the OS does not answer the handshake\n");
 		return 1;
 	}
 
-	// Lo que NME manda al conectar, antes de subir nada (sacado de una sesion grabada: pide el
-	// estado de los slots, la lista de patches, etc.). Pid 0 = sin patch cargado todavia.
+	// What NME sends when it connects, before uploading anything (taken from a recorded session:
+	// it asks for the slot state, the patch list, etc.). PID 0 = no patch loaded yet.
 	for(const auto& m : std::vector<std::vector<uint8_t>>{
 		{0xf0,0x33,0x5c,0x06,0x41,0x14,0x00,0x00}, {0xf0,0x33,0x5c,0x06,0x44,0x02,0x06,0x08,0x04}, {0xf0,0x33,0x5c,0x06,0x41,0x35},
 		{0xf0,0x33,0x5c,0x06,0x00,0x20,0x28}, {0xf0,0x33,0x5c,0x06,0x00,0x4b,0x01}, {0xf0,0x33,0x5c,0x06,0x00,0x4b,0x00},
@@ -195,32 +195,32 @@ int main(int argc, char** argv)
 			std::printf("  init %s -> %s\n", hex(withChecksum(m), 12).c_str(), hex(reply, 16).c_str());
 	}
 
-	// Subida, como NME: un paquete, su respuesta, el siguiente.
+	// Upload, like NME: a packet, its reply, the next one.
 	int pid = -1;
 	for(size_t i = 0; i < packets.size(); ++i)
 	{
 		const auto msg = UploadPacketizer::frame(packets[i], i == 0, i + 1 == packets.size(), 0);
 		const auto reply = transact(mc, msg);
 		if(std::getenv("G1_VERBOSE"))
-			std::printf("  paquete %zu: %s -> %s\n", i + 1, hex(msg, 12).c_str(), hex(reply, 16).c_str());
-		// ACK del slot 0: F0 33 58 06 xx 36 pid ...
+			std::printf("  packet %zu: %s -> %s\n", i + 1, hex(msg, 12).c_str(), hex(reply, 16).c_str());
+		// Slot 0 ACK: F0 33 58 06 xx 36 pid ...
 		for(size_t k = 0; k + 6 < reply.size(); ++k)
 			if(reply[k] == 0xf0 && reply[k + 1] == 0x33 && (reply[k + 2] >> 2) == 0x16 && reply[k + 5] == 0x36)
 				pid = reply[k + 6];
 		if(reply.empty())
-			std::printf("  paquete %zu/%zu: SIN RESPUESTA\n", i + 1, packets.size());
+			std::printf("  packet %zu/%zu: NO REPLY\n", i + 1, packets.size());
 	}
-	std::printf("patch \"%s\" subido en %zu paquetes; pid=%d\n", patch->getName().toRawUTF8(), packets.size(), pid);
+	std::printf("patch \"%s\" uploaded in %zu packets; pid=%d\n", patch->getName().toRawUTF8(), packets.size(), pid);
 	if(pid < 0)
 	{
-		std::printf("el OS no ha confirmado el patch\n");
+		std::printf("the OS has not confirmed the patch\n");
 		return 1;
 	}
-	run(mc, 300 * g_ms);	// que el OS cargue los DSP
+	run(mc, 300 * g_ms);	// let the OS load the DSPs
 
-	// Asignaciones de mandos, como hace NME despues de subir: las del .pch y, con
-	// G1_KNOBS="mando:modulo:param,...", otras (mando 0-17 = 1-18, seccion poly).
-	std::vector<std::array<int, 4>> knobs;	// mando, seccion, modulo, parametro
+	// Knob assignments, as NME does after uploading: those in the .pch and, with
+	// G1_KNOBS="knob:module:param,...", others (knob 0-17 = 1-18, poly section).
+	std::vector<std::array<int, 4>> knobs;	// knob, section, module, parameter
 	for(int k = 0; k < 23; ++k)
 		if(patch->knobAssignments[static_cast<size_t>(k)].assigned)
 		{
@@ -238,15 +238,15 @@ int main(int argc, char** argv)
 	{
 		const auto reply = transact(mc, KnobAssignmentMessage::assign(pid, k[0], k[1], k[2], k[3], 0), 200);
 		if(std::getenv("G1_VERBOSE"))
-			std::printf("  mando %d -> modulo %d param %d: %s\n", k[0], k[2], k[3], hex(reply, 16).c_str());
+			std::printf("  knob %d -> module %d param %d: %s\n", k[0], k[2], k[3], hex(reply, 16).c_str());
 	}
 	if(!knobs.empty())
 		run(mc, 200 * g_ms);
 
 	for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 		mc.getDsp(d).resetLinkPeak();
-	// G1_PCWATCH=174,194: cuantas veces pasa cada DSP por esas direcciones durante la nota
-	// (solo cuenta al principio de un bloque del JIT: vale para bucles y saltos).
+	// G1_PCWATCH=174,194: how many times each DSP goes through those addresses during the note
+	// (only counted at the start of a JIT block: fine for loops and branches).
 	std::vector<uint32_t> watch;
 	if(const char* w = std::getenv("G1_PCWATCH"))
 		for(const auto& t : juce::StringArray::fromTokens(w, ",", ""))
@@ -256,7 +256,7 @@ int main(int argc, char** argv)
 			mc.getDsp(d).pcWatch()[a] = 0;
 	blocks.clear();
 	capture = true;
-	// Nota por el PC Port, como NME: cc $17, 56 00 nota (pulsar) ... 56 01 nota (soltar).
+	// Note through the PC Port, like NME: cc $17, 56 00 note (press) ... 56 01 note (release).
 	const auto on = withChecksum({0xf0, 0x33, 0x5c, 0x06, static_cast<uint8_t>(pid), 0x56, 0x00, static_cast<uint8_t>(note)});
 	mc.getPcPort().receive(on);
 	run(mc, static_cast<uint64_t>(seconds * 1000) * g_ms);
@@ -264,8 +264,8 @@ int main(int argc, char** argv)
 	std::vector<uint8_t> rest;
 	mc.getPcPort().takeTx(rest);
 	for(size_t k = 0; k + 5 < rest.size(); ++k)
-		if(rest[k] == 0xf0 && rest[k + 5] == 0x7f)	// error del OS
-			std::printf("el OS ha contestado un error: %s\n", hex({rest.begin() + static_cast<long>(k), rest.end()}).c_str());
+		if(rest[k] == 0xf0 && rest[k + 5] == 0x7f)	// error from the OS
+			std::printf("the OS answered with an error: %s\n", hex({rest.begin() + static_cast<long>(k), rest.end()}).c_str());
 
 	if(std::getenv("G1_VERBOSE"))
 		for(uint32_t d = 0; d < g1::g_dspCount; ++d)
@@ -276,7 +276,7 @@ int main(int argc, char** argv)
 			std::printf("DSP%u  ESSI0 SR=%06x CRB=%06x RX=%06x | ESSI1 SR=%06x CRB=%06x RX=%06x\n", d,
 				static_cast<uint32_t>(p.getEssi0().getSR()), static_cast<uint32_t>(p.getEssi0().getCRB()), 0u,
 				static_cast<uint32_t>(p.getEssi1().getSR()), static_cast<uint32_t>(p.getEssi1().getCRB()), 0u);
-			std::printf("DSP%u  DOR0=%06x DOR1=%06x DCO1=%06x (leidos por el programa: X:$FFFFF3/F2/E9 = %06x %06x %06x)\n", d,
+			std::printf("DSP%u  DOR0=%06x DOR1=%06x DCO1=%06x (as read by the program: X:$FFFFF3/F2/E9 = %06x %06x %06x)\n", d,
 				p.getDMA().getDOR(0), p.getDMA().getDOR(1), p.getDMA().getDCO(1),
 				p.read(0xfffff3, dsp56k::Instruction::Invalid), p.read(0xfffff2, dsp56k::Instruction::Invalid), p.read(0xffffe9, dsp56k::Instruction::Invalid));
 		}
@@ -287,7 +287,7 @@ int main(int argc, char** argv)
 			std::printf("  DSP%u %llu", d, static_cast<unsigned long long>(mc.getDsp(d).pcWatch()[a]));
 		std::printf("\n");
 	}
-	showLcd("con la nota");
+	showLcd("with the note");
 	auto leds = [&]
 	{
 		std::string r;
@@ -299,9 +299,9 @@ int main(int argc, char** argv)
 		}
 		return r;
 	};
-	std::printf("LEDs (filas 0-3): %s\n", leds().c_str());
-	// Estado de los 32 LEDs mirando 20 veces en 1 s: '#' encendido, '.' apagado, '*' parpadea.
-	// Fila 0 a 3, bit 7 a 0 (encendido = bit a 0).
+	std::printf("LEDs (rows 0-3): %s\n", leds().c_str());
+	// State of the 32 LEDs, looking 20 times in 1 s: '#' on, '.' off, '*' blinking.
+	// Row 0 to 3, bit 7 to 0 (on = bit at 0).
 	auto ledStates = [&]
 	{
 		std::array<int, 32> on{};
@@ -325,12 +325,12 @@ int main(int argc, char** argv)
 		return r;
 	};
 	if(std::getenv("G1_LEDSTATE"))
-		std::printf("LEDs (fila 0..3, bit 7..0): %s\n", ledStates().c_str());
-	// G1_PRESS=fila.bit: pulsa ese boton desde el estado de arranque y dice como quedan la pantalla
-	// y los LEDs (antes y despues). Para casar los botones, uno por proceso.
+		std::printf("LEDs (row 0..3, bit 7..0): %s\n", ledStates().c_str());
+	// G1_PRESS=row.bit: presses that button from the boot state and reports the display and the
+	// LEDs before and after. To identify buttons, one per process.
 	if(const char* pr = std::getenv("G1_PRESS"))
 	{
-		// Varios separados por comas: se pulsan en orden y se informa del ultimo.
+		// Several, comma-separated: they are pressed in order and the last one is reported.
 		const auto seq = juce::StringArray::fromTokens(pr, ",", "");
 		for(int k = 0; k + 1 < seq.size(); ++k)
 		{
@@ -351,10 +351,10 @@ int main(int argc, char** argv)
 		run(mc, 150 * g_ms);
 		mc.setButton(row, bit, false);
 		run(mc, 300 * g_ms);
-		std::printf("PULSA %s  pantalla %s -> %s  LEDs %s -> %s\n", pr, s0.c_str(), screen().c_str(), l0.c_str(), ledStates().c_str());
+		std::printf("PRESS %s  display %s -> %s  LEDs %s -> %s\n", pr, s0.c_str(), screen().c_str(), l0.c_str(), ledStates().c_str());
 	}
-	// G1_ADCSWEEP=1: sube cada canal del ADC de 0 a 200 y dice que manda el OS por el PC Port
-	// (con mandos asignados, un Parameter con el modulo y el valor: asi se sabe que mando es).
+	// G1_ADCSWEEP=1: raises each ADC channel from 0 to 200 and reports what the OS sends on the PC
+	// Port (with knobs assigned, a Parameter with the module and value: that tells which knob it is).
 	if(std::getenv("G1_ADCSWEEP"))
 		for(const uint8_t code : {0x31, 0x37, 0x2d, 0x32, 0x28, 0x2e, 0x33, 0x29, 0x2f, 0x34, 0x2a, 0x1a, 0x35, 0x2b, 0x1b, 0x36, 0x2c, 0x1c, 0x30, 0x18})
 		{
@@ -367,13 +367,13 @@ int main(int argc, char** argv)
 			std::printf("ADC $%02x ->", code);
 			for(size_t k = 0; k + 9 < outMsgs.size(); ++k)
 				if(outMsgs[k] == 0xf0 && (outMsgs[k + 2] >> 2) == 0x13 && outMsgs[k + 5] == 0x40)
-					std::printf(" [seccion %u modulo %u param %u = %u]", outMsgs[k + 6], outMsgs[k + 7], outMsgs[k + 8], outMsgs[k + 9]);
+					std::printf(" [section %u module %u param %u = %u]", outMsgs[k + 6], outMsgs[k + 7], outMsgs[k + 8], outMsgs[k + 9]);
 			std::printf("  %s\n", hex(outMsgs, 30).c_str());
 			mc.setAdc(code, 0);
 			run(mc, 100 * g_ms);
 		}
-	// G1_PROBE=1: pulsa uno a uno los 24 botones de la matriz y dice que cambia en la pantalla y
-	// en los LEDs. Sirve para saber que boton del panel es cada bit.
+	// G1_PROBE=1: presses the 24 matrix buttons one by one and reports what changes on the display
+	// and the LEDs. Useful to find out which panel button each bit is.
 	if(std::getenv("G1_PROBE"))
 		for(uint32_t row = 0; row < 3; ++row)
 			for(uint32_t bit = 0; bit < 8; ++bit)
@@ -386,12 +386,12 @@ int main(int argc, char** argv)
 				run(mc, 400 * g_ms);
 				const auto l1 = mc.getLcd().line(0, 20) + "|" + mc.getLcd().line(1, 20);
 				const auto led1 = leds();
-				std::printf("boton fila %u bit %u: %s%s%s%s\n", row, bit,
-					l1 != l0 ? ("pantalla [" + l1 + "]") .c_str() : "", led1 != led0 ? (" LEDs " + led0 + "-> " + led1).c_str() : "",
-					(l1 == l0 && led1 == led0) ? "sin cambios" : "", "");
+				std::printf("button row %u bit %u: %s%s%s%s\n", row, bit,
+					l1 != l0 ? ("display [" + l1 + "]") .c_str() : "", led1 != led0 ? (" LEDs " + led0 + "-> " + led1).c_str() : "",
+					(l1 == l0 && led1 == led0) ? "no change" : "", "");
 			}
-	// Informe: las cuatro salidas (sin el silencio $155) y los enlaces.
-	std::printf("\nsalidas (%.2f s, %zu muestras a 96 kHz):\n", blocks.size() / 96000.0, blocks.size());
+	// Report: the four outputs (without the $155 silence) and the links.
+	std::printf("\noutputs (%.2f s, %zu samples at 96 kHz):\n", blocks.size() / 96000.0, blocks.size());
 	for(uint32_t c = 0; c < 4; ++c)
 	{
 		std::vector<double> x;
@@ -404,11 +404,11 @@ int main(int argc, char** argv)
 			peak = std::max(peak, std::fabs(v));
 		}
 		if(peak == 0)
-			std::printf("  salida %u: silencio\n", c + 1);
+			std::printf("  output %u: silence\n", c + 1);
 		else
-			std::printf("  salida %u: pico %6.1f dBFS (%+.1f con los +36 dB de g1run), ~%.1f Hz\n", c + 1, db(peak), db(peak) + 36, zeroCrossHz(x, 96000));
+			std::printf("  output %u: peak %6.1f dBFS (%+.1f with g1run's +36 dB), ~%.1f Hz\n", c + 1, db(peak), db(peak) + 36, zeroCrossHz(x, 96000));
 	}
-	std::printf("enlaces (pico por canal, dBFS; '.' = cero):\n");
+	std::printf("links (peak per channel, dBFS; '.' = zero):\n");
 	for(uint32_t d = 0; d + 1 < g1::g_dspCount; ++d)
 	{
 		std::printf("  DSP%u -> DSP%u:", d, d + 1);
@@ -422,7 +422,7 @@ int main(int argc, char** argv)
 		std::printf("\n");
 	}
 
-	// G1_DUMP=carpeta: memoria P, X e Y de cada DSP al acabar (para desensamblar con dspdis).
+	// G1_DUMP=dir: P, X and Y memory of each DSP at the end (to disassemble with dspdis).
 	if(const char* dir = std::getenv("G1_DUMP"))
 		for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 			for(const auto& [area, name] : std::vector<std::pair<dsp56k::EMemArea, const char*>>{{dsp56k::MemArea_P, "p"}, {dsp56k::MemArea_X, "x"}, {dsp56k::MemArea_Y, "y"}})
@@ -450,7 +450,7 @@ int main(int argc, char** argv)
 				const char s[3] = {static_cast<char>(v & 0xff), static_cast<char>((v >> 8) & 0xff), static_cast<char>((v >> 16) & 0xff)};
 				w.write(s, 3);
 			}
-		std::printf("WAV (4 canales, 96 kHz, +36 dB) en %s\n", wavPath.c_str());
+		std::printf("WAV (4 channels, 96 kHz, +36 dB) in %s\n", wavPath.c_str());
 	}
 	return 0;
 }

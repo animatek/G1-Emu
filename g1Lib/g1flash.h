@@ -1,9 +1,9 @@
 #pragma once
 
-// La flash de 1 MB del G1 en $300000, donde vive el OS instalado. El OS acepta un
-// Intel 28F008 ($89/$A6), un Fujitsu MBM29F080 ($04/$D5) o un AMD Am29F080 ($01/$D5):
-// aqui se emula el AMD, con su juego de ordenes de 8 bits. Programar y borrar son
-// instantaneos, asi que cualquier sondeo de estado ve la operacion ya terminada.
+// The G1's 1 MB flash at $300000, where the installed OS lives. The OS accepts an
+// Intel 28F008 ($89/$A6), a Fujitsu MBM29F080 ($04/$D5) or an AMD Am29F080 ($01/$D5):
+// the AMD is emulated here, with its 8-bit command set. Programming and erasing are
+// instantaneous, so any status poll sees the operation already finished.
 
 #include <algorithm>
 #include <cstdint>
@@ -15,7 +15,7 @@ namespace g1
 	{
 	public:
 		static constexpr uint32_t Size = 0x100000;
-		static constexpr uint32_t SectorSize = 0x10000;	// Am29F080: 16 sectores de 64 KB
+		static constexpr uint32_t SectorSize = 0x10000;	// Am29F080: 16 sectors of 64 KB
 		static constexpr uint8_t ManufacturerId = 0x01;	// AMD
 		static constexpr uint8_t DeviceId = 0xd5;			// Am29F080
 
@@ -33,7 +33,7 @@ namespace g1
 				{
 				case 0: return ManufacturerId;
 				case 1: return DeviceId;
-				case 2: return 0;	// sector no protegido
+				case 2: return 0;	// sector not protected
 				default: return 0;
 				}
 			}
@@ -46,13 +46,13 @@ namespace g1
 
 			if(m_state == State::Program)
 			{
-				m_data[_offset & (Size - 1)] &= _val;	// en flash solo se pueden bajar bits
+				m_data[_offset & (Size - 1)] &= _val;	// flash can only clear bits
 				++m_programmed;
 				m_state = State::Idle;
 				return;
 			}
 
-			if(_val == 0xf0)	// reset: vuelve a leer el contenido
+			if(_val == 0xf0)	// reset: back to reading the contents
 			{
 				m_state = State::Idle;
 				m_autoselect = false;
@@ -83,12 +83,12 @@ namespace g1
 				break;
 			case State::EraseUnlock2:
 				m_state = State::Idle;
-				if(_val == 0x10 && cmdAddr == 0x555)	// borrado completo
+				if(_val == 0x10 && cmdAddr == 0x555)	// chip erase
 				{
 					std::fill(m_data.begin(), m_data.end(), 0xff);
 					m_erased += Size / SectorSize;
 				}
-				else if(_val == 0x30)					// borrado de un sector
+				else if(_val == 0x30)					// sector erase
 				{
 					const auto base = (_offset & (Size - 1)) & ~(SectorSize - 1);
 					std::fill_n(m_data.begin() + base, SectorSize, 0xff);

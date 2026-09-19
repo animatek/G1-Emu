@@ -1,4 +1,4 @@
-# g1gui: la ventana con el panel del G1.
+# g1gui: the window with the G1 panel.
 juce_add_gui_app(g1gui PRODUCT_NAME "G1-Emu")
 target_sources(g1gui PRIVATE Main.cpp Panel.cpp Panel.h LcdFont.h)
 target_compile_definitions(g1gui PRIVATE

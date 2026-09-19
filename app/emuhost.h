@@ -1,11 +1,11 @@
 #pragma once
 
-// EmuHost: el G1 emulado funcionando, con todo lo que lo rodea: la flash en disco, los puertos
-// MIDI de ALSA (PC Port y MIDI), el audio (JACK o ALSA) y el ritmo de tiempo real, en un hilo
-// propio. Lo usan la consola (g1run) y la ventana (g1gui).
+// EmuHost: the emulated G1 running, with everything around it: the flash on disk, the ALSA
+// MIDI ports (PC Port and MIDI), the audio (JACK or ALSA) and real-time pacing, on a thread
+// of its own. Used by the console (g1run) and the window (g1gui).
 //
-// Variables de entorno: G1_AUDIO (jack, alsa, dispositivo ALSA o no), G1_GAIN_DB (+36 por
-// defecto), G1_JACK_CONNECT=0, G1_RECORD=segundos (WAV de 4 canales junto a la flash).
+// Environment variables: G1_AUDIO (jack, alsa, an ALSA device or no), G1_GAIN_DB (+36 by
+// default), G1_JACK_CONNECT=0, G1_RECORD=seconds (4-channel WAV next to the flash).
 
 #include "g1Lib/g1mc.h"
 
@@ -29,33 +29,33 @@ namespace g1app
 	public:
 		struct Stats
 		{
-			double seconds = 0;			// tiempo desde el arranque
-			double speed = 0;			// % del tiempo real
-			double load = 0;			// % del tiempo que el hilo del emulador no descansa
-			double cpuCores = 0;		// nucleos que usa el proceso (los hilos de los DSP esperan girando)
+			double seconds = 0;			// time since start
+			double speed = 0;			// % of real time
+			double load = 0;			// % of the time the emulator thread is busy
+			double cpuCores = 0;		// cores used by the process (the DSP threads spin while waiting)
 			bool dspOn[g1::g_dspCount] = {};
 			uint64_t pcIn = 0, pcOut = 0, midiIn = 0, midiOut = 0;
-			float peak = 0;				// pico de las salidas 1/2 (0-1) desde la ultima consulta
+			float peak = 0;				// peak of outputs 1/2 (0-1) since the last query
 			uint64_t xruns = 0;
-			std::string audio;			// que salida de audio hay
-			std::string midi;			// los puertos MIDI
+			std::string audio;			// which audio output is in use
+			std::string midi;			// the MIDI ports
 		};
 
 		EmuHost();
 		~EmuHost();
 
-		// Carga la ROM y la flash (o instala el OS de fabrica) y arranca el hilo. _log recibe los
-		// mensajes de arranque.
+		// Loads the ROM and the flash (or installs the factory OS) and starts the thread. _log gets
+		// the startup messages.
 		bool start(const std::string& _romPath, const std::string& _flashPath, std::string& _log);
 		void stop();
 		bool running() const { return m_thread.joinable(); }
 
-		// El G1. El panel (getLcd, ledRow, setButton, setAdc) se puede usar desde otro hilo.
+		// The G1. The panel (getLcd, ledRow, setButton, setAdc) can be used from another thread.
 		g1::Microcontroller& mc() { return *m_mc; }
 
 		Stats stats();
 
-		// Lo mismo que g1run escribia cada 5 s (velocidad, DSP, HI08, audio por DSP).
+		// What g1run used to print every 5 s (speed, DSPs, HI08, audio per DSP).
 		std::string report();
 
 		static std::string defaultFlashPath();

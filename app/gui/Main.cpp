@@ -1,10 +1,10 @@
-// g1gui: el G1 emulado con su panel en una ventana.
+// g1gui: the emulated G1 with its panel in a window.
 //
 //   g1gui [ROM] [FLASH]
 //
-// Sin ROM, la busca en Roms/ del directorio actual y del arbol de G1-Emu. La flash, como g1run
-// (por defecto ~/.local/share/Animatek/G1-Emu/flash.bin). Todo lo demas (MIDI, audio por JACK,
-// variables G1_*) es igual que en g1run: lo hace EmuHost.
+// Without a ROM argument it looks in Roms/ of the current directory and of the G1-Emu tree. The
+// flash works like g1run (default ~/.local/share/Animatek/G1-Emu/flash.bin). Everything else
+// (MIDI, JACK audio, G1_* variables) is the same as in g1run: EmuHost does it.
 
 #include "Panel.h"
 
@@ -58,7 +58,7 @@ namespace g1gui
 			if(!rom.existsAsFile() || !m_host.start(rom.getFullPathName().toStdString(), args.size() > 1 ? args[1].toStdString() : "", log))
 			{
 				juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "G1-Emu",
-					"No puedo arrancar el G1 emulado.\n\n" + juce::String(log) + (rom.existsAsFile() ? "" : "\nFalta la ROM (" + juce::String(g_romName) + ") en Roms/."));
+					"Cannot start the emulated G1.\n\n" + juce::String(log) + (rom.existsAsFile() ? "" : "\nThe ROM (" + juce::String(g_romName) + ") is missing in Roms/."));
 				return;
 			}
 			std::printf("%s", log.c_str());
@@ -68,7 +68,7 @@ namespace g1gui
 		void shutdown() override
 		{
 			m_window.reset();
-			m_host.stop();	// guarda la flash
+			m_host.stop();	// saves the flash
 		}
 
 	private:

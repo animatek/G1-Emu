@@ -1,6 +1,6 @@
-// Extensiones del JIT de dsp56300 necesarias para el OS del G1 (GPLv3).
-// cmake/Dsp56300.cmake declara estas instrucciones en la copia de compilacion
-// del nucleo; el clon externo se mantiene intacto.
+// dsp56300 JIT extensions needed by the G1 OS (GPLv3).
+// cmake/Dsp56300.cmake declares these instructions in the build copy of the core;
+// the external clone stays untouched.
 #include "dsp56kEmu/jitops.h"
 #include "dsp56kEmu/jitops_mem.inl"
 
@@ -18,8 +18,8 @@ namespace dsp56k
 		}
 		else
 		{
-			// decode conserva los efectos laterales: leer SSH saca una palabra
-			// de la pila. El OS lo usa para reescribir el destino de IRQD.
+			// decode keeps the side effects: reading SSH pops a word off the
+			// stack. The OS uses it to rewrite the IRQD target.
 			decode_dddddd_read(value, reg);
 			m_block.mem().writeDspMemory(MemArea_P, address, value);
 			const DspValue target(m_block, address, DspValue::Immediate24);
@@ -31,8 +31,8 @@ namespace dsp56k
 
 	void JitOps::op_DoForever(const TWord)
 	{
-		// Como DO, apila LA/LC y PC/SR; a diferencia de DO, conserva LC
-		// y activa FV para repetir incluso si el contador vale cero.
+		// Like DO, it pushes LA/LC and PC/SR; unlike DO, it keeps LC
+		// and sets FV to repeat even if the counter is zero.
 		{
 			DspValue la(m_block), lc(m_block);
 			m_dspRegs.getLA(la);

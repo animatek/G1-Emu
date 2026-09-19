@@ -7,24 +7,24 @@ namespace g1gui
 {
 	namespace
 	{
-		// Mandos 1-18: su canal del multiplexor del ADC. Comprobado asignando un mando a cada
-		// modulo y moviendo cada canal: el OS avisa al editor del mando que ha cambiado.
+		// Knobs 1-18: their ADC multiplexer channel. Checked by assigning a knob to each
+		// module and moving each channel: the OS tells the editor which knob moved.
 		constexpr std::array<uint8_t, 18> g_knobAdc = {0x31, 0x37, 0x2d, 0x32, 0x28, 0x2e, 0x33, 0x29, 0x2f, 0x34, 0x2a, 0x1a, 0x35, 0x2b, 0x1b, 0x36, 0x2c, 0x1c};
 		constexpr uint8_t g_volumeAdc = 0x30;
 
-		// Botones (fila.bit de la matriz), identificados pulsandolos uno a uno con g1patchtest.
+		// Buttons (matrix row.bit), identified by pressing them one by one with g1patchtest.
 		constexpr MatrixBit g_btnA{0, 2}, g_btnB{0, 3}, g_btnC{0, 4}, g_btnD{0, 5};
 		constexpr MatrixBit g_btnStore{0, 6}, g_btnSystem{0, 7}, g_btnEdit{1, 2}, g_btnPatchLoad{1, 3};
 		constexpr MatrixBit g_btnUp{1, 4}, g_btnLeft{1, 5}, g_btnDown{1, 6}, g_btnRight{1, 7};
-		constexpr MatrixBit g_btnPanelSplit{2, 2};	// enciende el LED 3.2; falta confirmarlo
+		constexpr MatrixBit g_btnPanelSplit{2, 2};	// lights LED 3.2; still to be confirmed
 		constexpr MatrixBit g_unknown{};
 
-		// LEDs (activos a nivel bajo). Los de los mandos: mando k (0-17) en fila k%3, bit 1+k/3.
+		// LEDs (active low). Knob LEDs: knob k (0-17) in row k%3, bit 1+k/3.
 		constexpr std::array<MatrixBit, 4> g_slotLeds = {MatrixBit{0, 7}, MatrixBit{1, 7}, MatrixBit{2, 7}, MatrixBit{3, 7}};
 		constexpr std::array<MatrixBit, 4> g_modeLeds = {MatrixBit{3, 3}, MatrixBit{3, 4}, MatrixBit{3, 5}, MatrixBit{3, 6}};
 		constexpr MatrixBit g_panelSplitLed{3, 2};
-		// Los cinco que quedan (bit 0 de las cuatro filas y 3.1) deben de ser los de Oct Shift;
-		// el orden esta sin comprobar.
+		// The five left (bit 0 of the four rows and 3.1) should be the Oct Shift ones;
+		// the order is unchecked.
 		constexpr std::array<MatrixBit, 5> g_octLeds = {MatrixBit{0, 0}, MatrixBit{1, 0}, MatrixBit{2, 0}, MatrixBit{3, 0}, MatrixBit{3, 1}};
 
 		const juce::Colour g_chassis(0xffb21f2d), g_face(0xff2b2346), g_panel(0xffc9c9c6), g_groupLine(0xffe0a040);
@@ -32,12 +32,12 @@ namespace g1gui
 	}
 
 	// ________________________________________________________________________
-	// Pantalla: 2 x 16 caracteres de 5x8 puntos, como el HD44780.
+	// Display: 2 x 16 characters of 5x8 dots, like the HD44780.
 
 	void LcdView::paint(juce::Graphics& _g)
 	{
 		const auto area = getLocalBounds().toFloat();
-		_g.setColour(juce::Colour(0xffc4232f));	// el marco rojo del aparato
+		_g.setColour(juce::Colour(0xffc4232f));	// the hardware's red frame
 		_g.fillRoundedRectangle(area, 6.0f);
 		const auto glass = area.reduced(10.0f, 9.0f);
 		const bool on = m_lcd.displayOn();
@@ -96,7 +96,7 @@ namespace g1gui
 		if(!_bit.known())
 		{
 			setEnabled(false);
-			setTooltip(_name + ": todavia sin identificar en la matriz del panel");
+			setTooltip(_name + ": not yet identified in the panel matrix");
 			return;
 		}
 		setTooltip(_name);
@@ -130,7 +130,7 @@ namespace g1gui
 		const auto area = juce::Rectangle<float>(static_cast<float>(_x), static_cast<float>(_y), static_cast<float>(_w), static_cast<float>(_h)).reduced(3.0f);
 		const auto c = area.getCentre();
 		const float radius = std::min(area.getWidth(), area.getHeight()) * 0.5f;
-		// Anillo rojo con marcas, como el del aparato
+		// Red ring with ticks, like the hardware's
 		_g.setColour(juce::Colour(0xffc4232f));
 		_g.fillEllipse(area);
 		_g.setColour(juce::Colours::white.withAlpha(0.8f));
@@ -140,7 +140,7 @@ namespace g1gui
 			const auto p1 = c.getPointOnCircumference(radius * 0.97f, a), p2 = c.getPointOnCircumference(radius * 0.82f, a);
 			_g.drawLine({p1, p2}, 1.2f);
 		}
-		// Cuerpo negro y el indicador blanco
+		// Black body and the white pointer
 		const float knob = radius * 0.72f;
 		_g.setGradientFill(juce::ColourGradient(juce::Colour(0xff3a3a3e), c.x - knob, c.y - knob, juce::Colour(0xff0e0e10), c.x + knob, c.y + knob, false));
 		_g.fillEllipse(c.x - knob, c.y - knob, knob * 2.0f, knob * 2.0f);
@@ -171,7 +171,7 @@ namespace g1gui
 		setupKnob(m_volume, g_volumeAdc, 255, "Master Volume");
 		for(size_t i = 0; i < m_knobs.size(); ++i)
 		{
-			setupKnob(m_knobs[i], g_knobAdc[i], 0, "Mando " + juce::String(static_cast<int>(i + 1)));
+			setupKnob(m_knobs[i], g_knobAdc[i], 0, "Knob " + juce::String(static_cast<int>(i + 1)));
 			m_knobLeds[i] = &addLed({static_cast<int>(i % 3), 1 + static_cast<int>(i / 3)});
 		}
 
@@ -200,10 +200,10 @@ namespace g1gui
 		}
 		m_assign = &addButton("Assign / Morph", g_unknown);
 		m_shift = &addButton("Shift", g_unknown);
-		m_nav[0] = &addButton("Arriba", g_btnUp);
-		m_nav[1] = &addButton("Izquierda", g_btnLeft);
-		m_nav[2] = &addButton("Derecha", g_btnRight);
-		m_nav[3] = &addButton("Abajo", g_btnDown);
+		m_nav[0] = &addButton("Up", g_btnUp);
+		m_nav[1] = &addButton("Left", g_btnLeft);
+		m_nav[2] = &addButton("Right", g_btnRight);
+		m_nav[3] = &addButton("Down", g_btnDown);
 
 		m_status.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 12.5f, juce::Font::plain));
 		m_status.setColour(juce::Label::textColourId, juce::Colours::white);
@@ -243,7 +243,7 @@ namespace g1gui
 		_g.setColour(g_face);
 		_g.fillRoundedRectangle(face, 16.0f);
 
-		// Los grupos de mandos y la zona de la pantalla, grises con el borde naranja
+		// The knob groups and the display area, grey with the orange border
 		const juce::Rectangle<float> groups[] = {{140, 26, 196, 330}, {350, 26, 196, 330}, {560, 26, 100, 330}, {674, 26, 100, 330}, {790, 26, 380, 330}};
 		for(const auto& g : groups)
 		{
@@ -283,7 +283,7 @@ namespace g1gui
 		label("Assign/Morph", m_assign->getBounds().translated(-14, -15).withWidth(m_assign->getWidth() + 28).withHeight(13), g_textDark, 10.0f);
 		label("Shift", m_shift->getBounds().translated(0, -15).withHeight(13), g_textDark);
 
-		// La rueda (todavia sin conectar)
+		// The dial (not connected yet)
 		const auto d = m_dial.toFloat();
 		_g.setColour(juce::Colours::black.withAlpha(0.4f));
 		_g.fillEllipse(d.translated(2.0f, 3.0f));
@@ -295,7 +295,7 @@ namespace g1gui
 
 	void Panel::resized()
 	{
-		// Columna izquierda
+		// Left column
 		m_volume.setBounds(42, 54, 66, 66);
 		m_midiLed->setBounds(46, 130, 10, 10);
 		m_panelSplitLed->setBounds(34, 158, 10, 10);
@@ -306,7 +306,7 @@ namespace g1gui
 		m_oct[0]->setBounds(42, 316, 28, 38);
 		m_oct[1]->setBounds(78, 316, 28, 38);
 
-		// Mandos: 1-3 y 4-6 en el primer grupo, 7-12 en el segundo, 13-15 y 16-18 en los otros
+		// Knobs: 1-3 and 4-6 in the first group, 7-12 in the second, 13-15 and 16-18 in the others
 		const int colX[] = {158, 250, 368, 460, 578, 692};
 		const int rowY[] = {52, 158, 264};
 		for(size_t i = 0; i < m_knobs.size(); ++i)
@@ -316,7 +316,7 @@ namespace g1gui
 			m_knobLeds[i]->setBounds(colX[col] + 66, rowY[row] - 14, 10, 10);
 		}
 
-		// Derecha: pantalla, modos, slots, navegador, Assign/Morph, Shift y la rueda
+		// Right: display, modes, slots, navigator, Assign/Morph, Shift and the dial
 		m_lcd.setBounds(810, 40, 250, 74);
 		for(size_t i = 0; i < 4; ++i)
 		{
@@ -344,7 +344,7 @@ namespace g1gui
 			led->setOn(!(m_mc.ledRow(static_cast<uint32_t>(bit.row)) & (1u << bit.bit)));
 
 		const auto s = m_host.stats();
-		// LED de MIDI: se enciende un momento con lo que entre por el puerto MIDI (notas, CC)
+		// MIDI LED: lights briefly with whatever comes in on the MIDI port (notes, CC)
 		if(s.midiIn != m_lastMidiIn)
 		{
 			m_lastMidiIn = s.midiIn;
@@ -358,9 +358,9 @@ namespace g1gui
 		juce::String dsp;
 		for(bool on : s.dspOn)
 			dsp << (on ? "o" : "-");
-		m_status.setText(juce::String::formatted("velocidad %5.1f%%   carga %3.0f%%   CPU %.1f nucleos   DSP %s   salida 1/2 %s   cortes %llu   |  ",
+		m_status.setText(juce::String::formatted("speed %5.1f%%   load %3.0f%%   CPU %.1f cores   DSP %s   output 1/2 %s   dropouts %llu   |  ",
 			s.speed, s.load, s.cpuCores, dsp.toRawUTF8(),
-			m_peakHold > 1e-6 ? juce::String::formatted("%+.0f dB", 20.0 * std::log10(m_peakHold)).toRawUTF8() : "silencio",
+			m_peakHold > 1e-6 ? juce::String::formatted("%+.0f dB", 20.0 * std::log10(m_peakHold)).toRawUTF8() : "silence",
 			static_cast<unsigned long long>(s.xruns)) + juce::String(s.audio) + "   |  MIDI: G1-Emu:MIDI", juce::dontSendNotification);
 	}
 }

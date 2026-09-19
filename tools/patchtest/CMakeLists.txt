@@ -1,10 +1,10 @@
-# g1patchtest: banco de pruebas sin ventana. Carga un .pch con el codigo de NME (el mismo
-# que usa el editor para subirlo), lo sube al G1 emulado paquete a paquete como NME, toca una
-# nota y mide lo que sale. Solo se compila si esta NME al lado (../Nomad2026): el emulador
-# no depende de NME.
-set(NME_DIR "${CMAKE_SOURCE_DIR}/../Nomad2026" CACHE PATH "Arbol de Animatek NME")
+# g1patchtest: headless test bench. It loads a .pch with NME's own code (the one the editor uses
+# to upload it), uploads it to the emulated G1 packet by packet like NME, plays a note and
+# measures the output. Only built if NME is next to this repo (../Nomad2026): the emulator does
+# not depend on NME.
+set(NME_DIR "${CMAKE_SOURCE_DIR}/../Nomad2026" CACHE PATH "Animatek NME tree")
 if(NOT G1_HAVE_JUCE OR NOT EXISTS "${NME_DIR}/source/model/PatchSerializer.cpp")
-	message(STATUS "g1patchtest: no encuentro NME en ${NME_DIR}; no se compila")
+	message(STATUS "g1patchtest: NME not found in ${NME_DIR}; not built")
 	return()
 endif()
 

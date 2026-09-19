@@ -15,18 +15,18 @@ namespace g1
 		std::copy_n(_rom.begin(), std::min<size_t>(_rom.size(), g_romSize), m_mem.begin());
 		for(uint32_t i = 0; i < g_dspCount; ++i)
 			m_dsps[i] = std::make_unique<Dsp>(m_hostPorts[i], i);
-		// Cadena de audio por los ESSI: DSP0 -> DSP1 -> DSP2 -> DSP3 -> codec. Cada DSP copia lo
-		// que recibe a su bufer de salida (DMA0) y le suma sus voces; el DSP 3 aplica el volumen.
+		// Audio chain through the ESSIs: DSP0 -> DSP1 -> DSP2 -> DSP3 -> codec. Each DSP copies what
+		// it receives into its output buffer (DMA0) and adds its voices; DSP 3 applies the volume.
 		for(uint32_t i = 0; i + 1 < g_dspCount; ++i)
 			m_dsps[i]->setNext(m_dsps[i + 1].get());
 
-		// El OS lee el volumen maestro del ADC al encender y con el pone la ganancia del DSP 3
-		// (Y:$5F). A cero, no sale nada. Los demas mandos se quedan a cero.
+		// The OS reads the master volume from the ADC and sets DSP 3's gain (Y:$5F) with it.
+		// At zero, nothing comes out. The other knobs stay at zero.
 		m_adc[g_adcVolume] = 0xff;
 
-		// Bus del DUART: el puerto E lleva /CS, /RD, /WR y la direccion del registro.
+		// DUART bus: port E carries /CS, /RD, /WR and the register address.
 		getPortE().setWriteTXCallback([this](const mc68k::Port& _port) { onPortE(_port.read()); });
-		reset();	// lee la pila y el PC de los vectores en $0 y $4
+		reset();	// reads the stack and the PC from the vectors at $0 and $4
 
 		if(const char* t = std::getenv("G1_THREADS"))
 			m_threaded = std::atoi(t) != 0;
@@ -51,8 +51,8 @@ namespace g1
 		uint64_t seen = 0;
 		while(true)
 		{
-			// Las sincronizaciones son muy seguidas (~20.000 por segundo): se espera girando y
-			// solo se duerme si la CPU tarda (por ejemplo, cuando el emulador va sobrado).
+			// Syncs are very frequent (~20,000 per second): the threads spin while waiting and only
+			// sleep if the CPU takes long (for instance when the emulator has time to spare).
 			uint32_t spins = 0;
 			while(m_generation.load() == seen && !m_quitWorkers)
 			{
@@ -81,8 +81,8 @@ namespace g1
 		auto& flash = m_flash.data();
 		std::fill(flash.begin(), flash.end(), 0xff);
 		const uint32_t bytes = g_romOsLongs * 4;
-		const uint32_t len = (g_romOsLongs - 1) * 4;	// el cargador copia (len >> 2) + 1 palabras largas
-		for(int i = 0; i < 4; ++i)	// big endian, como lo lee el 68k
+		const uint32_t len = (g_romOsLongs - 1) * 4;	// the loader copies (len >> 2) + 1 long words
+		for(int i = 0; i < 4; ++i)	// big endian, as the 68k reads it
 			flash[8 + static_cast<size_t>(i)] = static_cast<uint8_t>(len >> (24 - 8 * i));
 		std::copy_n(m_mem.begin() + g_romOsOffset, std::min<uint32_t>(bytes, g_romSize - g_romOsOffset), flash.begin() + 0x20);
 	}
@@ -98,11 +98,11 @@ namespace g1
 		m_ucCycles += cycles;
 		for(auto& port : m_hostPorts)
 			port.exec(cycles);
-		if((m_ucCycles & 0x3ff) < cycles)	// cada ~1000 ciclos de CPU
+		if((m_ucCycles & 0x3ff) < cycles)	// every ~1000 CPU cycles
 			catchUpDsps();
 		execPcPort();
 		execPit(cycles);
-		while(m_ucCycles >= m_nextSciSample)	// la UART avanza al ritmo de su reloj
+		while(m_ucCycles >= m_nextSciSample)	// the UART advances at its clock rate
 		{
 			m_sci.process(1);
 			m_nextSciSample += g_ucCyclesPerSciSample;
@@ -110,12 +110,12 @@ namespace g1
 		return cycles;
 	}
 
-	// Flanco de bajada de /RD o /WR con /CS activo = acceso a un registro del DUART.
+	// Falling edge of /RD or /WR with /CS active = access to a DUART register.
 	void Microcontroller::onPortE(const uint8_t _value)
 	{
 		const auto prev = m_prevPortE;
 		m_prevPortE = _value;
-		if(_value & 0x01)	// /CS inactivo
+		if(_value & 0x01)	// /CS inactive
 			return;
 		const auto reg = static_cast<uint8_t>(((_value >> 3) & 1) | (((_value >> 6) & 1) << 1) | (((_value >> 7) & 1) << 2));
 		const bool rd = (prev & 0x02) && !(_value & 0x02);
@@ -126,9 +126,9 @@ namespace g1
 			m_pcPort.write(reg, getPortGP().read());
 	}
 
-	// RxRDY del DUART va a la patilla PAI. El OS deja PACNT en $FF con la interrupcion de
-	// desbordamiento (PAOVI, bit 5 de TMSK2) activa: el primer pulso la dispara. El 68331
-	// real lo hace en su GPT; el de Gearmulator no emula el acumulador, asi que va aqui.
+	// The DUART's RxRDY goes to the PAI pin. The OS leaves PACNT at $FF with the overflow
+	// interrupt (PAOVI, TMSK2 bit 5) enabled: the first pulse fires it. The real 68331 does it
+	// in its GPT; Gearmulator's does not emulate the accumulator, so it is done here.
 	void Microcontroller::execPcPort()
 	{
 		if(m_ucCycles < m_nextPcPortByte || !m_pcPort.hasRx())
@@ -137,17 +137,17 @@ namespace g1
 		const auto tflg2 = Mc68k::read8(0xfff923);
 		if(!(tmsk2 & 0x20) || (tflg2 & 0x20))
 			return;
-		Mc68k::write8(0xfff90d, 0x00);						// PACNT desborda
+		Mc68k::write8(0xfff90d, 0x00);						// PACNT overflows
 		Mc68k::write8(0xfff923, static_cast<uint8_t>(tflg2 | 0x20));	// PAOVF
-		getGPT().injectInterrupt(0xa);						// PAOV: el OS pone su manejador en IVBA+$A
+		getGPT().injectInterrupt(0xa);						// PAOV: the OS puts its handler at IVBA+$A
 		++m_pcPortIrqs;
 		m_nextPcPortByte = m_ucCycles + g_ucCyclesPerSerialByte;
 	}
 
-	// PIT del SIM del 68331 (el SIM de Gearmulator no lo emula). PICR ($FFFA22): nivel en
-	// los bits 10-8 y vector en 7-0. PITR ($FFFA24): modulo en 7-0 y prescaler /512 en el
-	// bit 8. Periodo = PITM * 4 (* 512) / 32768 s. El OS lo usa como reloj del sistema
-	// ($1008A4, cada 244 us): sin el, sus temporizadores por software no vencen nunca.
+	// The 68331 SIM's PIT (Gearmulator's SIM does not emulate it). PICR ($FFFA22): level in
+	// bits 10-8 and vector in 7-0. PITR ($FFFA24): modulus in 7-0 and the /512 prescaler in
+	// bit 8. Period = PITM * 4 (* 512) / 32768 s. The OS uses it as its system clock
+	// ($1008A4, every 244 us): without it, its software timers never expire.
 	void Microcontroller::execPit(const uint32_t _cycles)
 	{
 		const uint32_t pitm = m_pitr & 0xff;
@@ -196,7 +196,7 @@ namespace g1
 #endif
 			}
 		}
-		// Con todos los DSP quietos, el audio pasa de cada uno al siguiente.
+		// With all DSPs stopped, the audio goes from each one to the next.
 		for(auto& dsp : m_dsps)
 			dsp->flushAudio();
 	}
@@ -218,7 +218,7 @@ namespace g1
 
 	uint16_t Microcontroller::read16(const uint32_t _addr)
 	{
-		const auto addr = _addr & 0xffffff;	// el 68331 tiene 24 lineas de direccion
+		const auto addr = _addr & 0xffffff;	// the 68331 has 24 address lines
 		if(addr < g_memSize)
 			return mc68k::memoryOps::readU16(m_mem.data(), addr);
 		if(isInternalPeripheral(addr))
@@ -263,9 +263,9 @@ namespace g1
 			return buttonRow();
 		if(addr == g_panelAdc)
 		{
-			// Cada lectura devuelve la conversion anterior y arranca otra con el canal elegido. Asi
-			// lo usa el OS: al encender elige y lee dos veces (la segunda es la buena); en marcha
-			// elige el canal siguiente y lee, y guarda lo leido en el anterior ($1041BE).
+			// Each read returns the previous conversion and starts a new one on the selected channel.
+			// That is how the OS uses it: at boot it selects and reads twice (the second is the good one);
+			// at runtime it selects the next channel, reads, and stores the value in the previous one ($1041BE).
 			const auto v = m_adcResult;
 			m_adcResult = m_adc[m_adcSelect];
 			return v;
@@ -311,7 +311,7 @@ namespace g1
 		logUnknown(addr, true, _val);
 	}
 
-	// Los botones de la fila elegida en $202005 (bits 4-6, a nivel bajo). Pulsado = 0.
+	// The buttons of the row selected in $202005 (bits 4-6, active low). Pressed = 0.
 	uint8_t Microcontroller::buttonRow() const
 	{
 		uint8_t v = 0xff;
@@ -354,7 +354,7 @@ namespace g1
 			return;
 		}
 		if(addr == g_panelOut)
-			m_adcSelect = _val;	// canal del multiplexor del ADC
+			m_adcSelect = _val;	// ADC multiplexer channel
 		else if(addr == g_panelLeds)
 		{
 			m_ledLatch = _val;
@@ -362,8 +362,8 @@ namespace g1
 		}
 		else if(addr == g_panelRows)
 		{
-			// Nibble bajo: la fila de LEDs que se enciende con lo ultimo que se puso en $202004
-			// (bit 3 = fila 0 ... bit 0 = fila 3). Bits 4-6: fila de botones, a nivel bajo.
+			// Low nibble: the LED row lit with whatever was last put in $202004
+			// (bit 3 = row 0 ... bit 0 = row 3). Bits 4-6: button row, active low.
 			m_panelRows = _val;
 			for(uint32_t row = 0; row < 4; ++row)
 				if(_val & (8u >> row))

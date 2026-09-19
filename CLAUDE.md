@@ -1,99 +1,104 @@
 # G1-Emu
 
-Emulación del **Nord Modular G1** sobre el núcleo de Gearmulator: el OS original
-del G1 corriendo en un 68331 y unos DSP56303 emulados, y tocado desde **Animatek NME**
-(`../Nomad2026/`) como si fuera el sinte. Nombre provisional: el producto todavía no
-tiene nombre, y es mejor que no lleve "Nord" ni "Clavia", porque son marcas.
+Emulation of the **Nord Modular G1** on the Gearmulator core: the G1's original OS running on an
+emulated 68331 and emulated DSP56303s, played from **Animatek NME** (`../Nomad2026/`) as if it
+were the real synth. Working name: the product has no final name yet, and it is better if it does
+not carry "Nord" or "Clavia", which are trademarks.
 
-Es un proyecto aparte de `../Elektron-Emu/` (MM Voice). No comparten build ni ROMs.
+It is a separate project from `../Elektron-Emu/` (MM Voice). They share neither build nor ROMs.
 
-## Estado
+## Status
 
-**El OS 3.03 arranca en el 68331 emulado y carga sus programas en los 4 DSP56303**, que
-quedan corriendo; todo va al ~88% del tiempo real. **Contesta al saludo de NME por el PC
-PORT**, y `g1run` lo corre en tiempo real (~94%) con puertos MIDI virtuales de ALSA. Con un
-patch y una nota **ya suena**: el audio recorre los 4 DSP y sale por el DSP 3 a la altura
-correcta, y `g1run` lo saca por la tarjeta de sonido. Los 4 DSP van en hilos propios: 100% del
-tiempo real con margen. **Suena limpio** (desde el 2026-09-19 por la tarde: los DSP a su reloj real
-de 82,944 MHz y los enlaces entre ellos a 9 palabras por muestra; ver `NOTAS.md`). Sale flojo porque
-el propio OS limita el volumen maestro a −36 dB; `g1run` lo compensa. Los módulos de control
-(envolventes, relojes, maestros, el LFO del chorus) funcionan desde que se arregló el fin de bucle
-del JIT. Cuatro salidas y dos entradas por JACK. Falta el panel (ver `SIGUIENTES-PASOS.md`).
+**OS 3.03 boots on the emulated 68331 and loads its programs into the 4 DSP56303s.** It answers
+NME's handshake on the PC PORT, and `g1run` runs it in real time with virtual ALSA MIDI ports. With
+a patch and a note **it sounds, and sounds clean**: the DSPs run at their real clock (82.944 MHz)
+and the links between them carry 9 words per sample (see `NOTES.md`). The level is low because the
+OS itself caps the master volume at −36 dB; `g1run` compensates. Control-rate modules (envelopes,
+clocks, master oscillators, the chorus LFO) work since the JIT loop-end fix. Four outputs and two
+inputs over JACK. The panel window (`g1gui`) shows the display, knobs, buttons and LEDs; a few
+buttons are still unidentified (see `ROADMAP.md`).
 
-## Usarlo
+## Language
+
+**Everything in this repo is in English**: code, comments, messages, documentation, changelog and
+commit messages.
+
+## Using it
 
 ```bash
-./g1.sh      # arranca el G1 emulado en la consola; Ctrl+C guarda la flash y sale
-./g1gui.sh   # lo mismo con su panel en una ventana (JUCE); al cerrarla guarda la flash
+./g1.sh      # runs the emulated G1 in the console; Ctrl+C saves the flash and quits
+./g1gui.sh   # the same with its panel in a window (JUCE); closing it saves the flash
 ```
 
-La ventana (`app/gui`) enseña la pantalla, los 18 mandos y el volumen, los botones y LEDs ya
-identificados y una barra con la velocidad, la carga del emulador y los núcleos que usa. «Matriz»
-abre los 24 botones y los 32 LEDs en crudo, para identificar los que faltan. JUCE sale de
-`../Nomad2026/JUCE` (o `G1_JUCE_DIR`); sin él solo se compilan la consola y las herramientas.
+The window (`app/gui`) shows the display, the 18 knobs and the master volume, the identified
+buttons and LEDs, and a status bar with speed, emulator load and CPU cores. JUCE comes from
+`../Nomad2026/JUCE` (or `G1_JUCE_DIR`); without it only the console and the tools are built.
 
-Crea el cliente ALSA **G1-Emu** con dos puertos, como el aparato: **PC Port** (el del editor:
-en NME se elige como entrada y salida) y **MIDI** (el MIDI IN/OUT normal). La flash (OS +
-patches guardados) vive en `~/.local/share/Animatek/G1-Emu/flash.bin`; si no existe, se crea
-con el OS de fábrica de la ROM.
+It creates the ALSA client **G1-Emu** with two ports, like the hardware: **PC Port** (the editor
+port: in NME, choose it as input and output) and **MIDI** (the regular MIDI IN/OUT). The flash (OS
++ stored patches) lives in `~/.local/share/Animatek/G1-Emu/flash.bin`; if missing, it is created
+with the factory OS from the ROM.
 
-El audio va por JACK (pipewire-jack): cliente **G1-Emu** con `out_1..out_4` e `in_L`/`in_R`, como el
-panel trasero; `out_1`/`out_2` se conectan solos a la tarjeta (`G1_JACK_CONNECT=0` no). Sin JACK, o
-con `G1_AUDIO=alsa`/`G1_AUDIO=dispositivo`, salidas 1/2 por ALSA; `G1_AUDIO=no` sin audio. Más: `G1_GAIN_DB` (por defecto +36 dB, que deshace el tope de
-−36 dB que el OS pone al volumen maestro); `G1_THREADS=0` para correr los DSP en serie; `G1_RECORD=segundos` graba un WAV de 4 canales. El mapa de memoria, el cargador y el plan están en `NOTAS.md`. La
-plantilla es la emulación del Nord Lead 2X de Gearmulator (`source/nord/n2x`).
+Audio goes through JACK (pipewire-jack): client **G1-Emu** with `out_1..out_4` and `in_L`/`in_R`,
+like the back panel; `out_1`/`out_2` connect themselves to the sound card (`G1_JACK_CONNECT=0`
+disables that). Without JACK, or with `G1_AUDIO=alsa`/`G1_AUDIO=device`, outputs 1/2 go through
+ALSA; `G1_AUDIO=no` disables audio. Also: `G1_GAIN_DB` (default +36 dB, which undoes the −36 dB cap
+the OS puts on the master volume); `G1_THREADS=0` runs the DSPs serially; `G1_RECORD=seconds`
+records a 4-channel WAV. The memory map, the loader and the findings are in `NOTES.md`. The
+template is Gearmulator's Nord Lead 2X emulation (`source/nord/n2x`).
 
-## Compilar y probar
+## Building and testing
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target g1boot -j$(nproc)
-cmake --build build --target g1dspcheck -j$(nproc)
-ctest --test-dir build -R '^g1dspcheck$' --output-on-failure
-./build/tools/g1boot Roms/NORD-MODULAR-RACK-VER-3.03.BIN 60     # 60 M de instrucciones
-./build/tools/g1boot Roms/NORD-MODULAR-RACK-VER-3.03.BIN dis C800 C900   # desensamblar
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
+./build/tools/g1boot Roms/NORD-MODULAR-RACK-VER-3.03.BIN 60     # 60 M instructions
+./build/tools/g1boot Roms/NORD-MODULAR-RACK-VER-3.03.BIN dis C800 C900   # disassemble
 ```
 
-`g1boot` dice por dónde va el PC, en qué bucle se queda, los chip-selects programados y
-cada acceso a hardware que aún no se emula. Ojo: el OS corre en RAM (`$100000`) copiado
-desde la ROM en `$C800`, así que la dirección de RAM X está en la ROM en `X - $100000 + $C800`.
+`g1boot` reports where the PC is, which loop it is stuck in, the programmed chip-selects and every
+access to hardware that is not emulated yet. Note: the OS runs from RAM (`$100000`), copied from
+the ROM at `$C800`, so RAM address X is at ROM offset `X - $100000 + $C800`.
 
-| Ruta | Qué es |
+`g1patchtest` (needs `../Nomad2026`) uploads a `.pch` exactly like NME, plays a note and measures
+the four outputs and the links between DSPs; it also has probes for the panel (see `NOTES.md`).
+
+| Path | What it is |
 | --- | --- |
-| `g1Lib/g1mc.*` | La CPU (68331) con su mapa de memoria: ROM, RAM y flash. |
-| `g1Lib/g1flash.h` | La flash AMD Am29F080 de `$300000`. |
-| `g1Lib/g1duart.h` | El PC PORT: DUART SCN2681 en bus paralelo (puerto GP + puerto E). |
-| `g1Lib/g1dsp.*` | Un DSP56303 con su ROM de arranque HI08, conectado al puerto host de la CPU. |
-| `tools/dspdis.cpp` | Desensamblador de DSP56300 (palabras en hex por stdin). |
-| `app/g1run.cpp`, `app/alsamidi.h`, `app/alsaaudio.h`, `g1.sh` | El G1 en tiempo real: MIDI virtual y audio por ALSA, flash persistente. |
-| `cmake/Dsp56300.cmake`, `g1Lib/dsp56300.cpp` | Correcciones del núcleo DSP (JIT y DMA), aplicadas a una copia de compilación. |
-| `tools/g1boot.cpp` | Arranque sin interfaz y desensamblador. |
-| `tools/patchtest/` | `g1patchtest`: sube un `.pch` como NME, toca una nota y mide (necesita `../Nomad2026`). |
-| `app/jackaudio.h` | Audio por JACK: 4 salidas y 2 entradas. |
-| `app/emuhost.*` | El G1 funcionando (flash, MIDI, audio, tiempo real) en su hilo; lo usan `g1run` y `g1gui`. |
-| `app/gui/` | `g1gui`: la ventana con el panel. |
-| `g1Lib/g1lcd.h` | La pantalla (HD44780). |
+| `g1Lib/g1mc.*` | The CPU (68331) with its memory map: ROM, RAM, flash and the panel. |
+| `g1Lib/g1flash.h` | The AMD Am29F080 flash at `$300000`. |
+| `g1Lib/g1duart.h` | The PC PORT: SCN2681 DUART on a parallel bus (GP port + port E). |
+| `g1Lib/g1dsp.*` | A DSP56303 with its HI08 boot ROM, attached to the CPU host port. |
+| `g1Lib/g1lcd.h` | The display (HD44780). |
+| `cmake/Dsp56300.cmake`, `g1Lib/dsp56300.cpp` | DSP core fixes (JIT and DMA), applied to a build copy. |
+| `app/emuhost.*` | The running G1 (flash, MIDI, audio, real time) on its own thread; used by `g1run` and `g1gui`. |
+| `app/g1run.cpp`, `g1.sh` | The console front end. |
+| `app/gui/`, `g1gui.sh` | `g1gui`: the window with the panel. |
+| `app/alsamidi.h`, `app/alsaaudio.h`, `app/jackaudio.h` | ALSA MIDI, ALSA audio and JACK audio (4 outputs, 2 inputs). |
+| `tools/g1boot.cpp` | Headless boot and disassembler. |
+| `tools/patchtest/` | `g1patchtest`: the test bench. |
+| `tools/dspdis.cpp` | DSP56300 disassembler (hex words on stdin). |
 
-**El plan y las ideas pendientes están en `SIGUIENTES-PASOS.md`.**
+**The plan and the pending ideas are in `ROADMAP.md`.**
 
-## Reglas
+## Rules
 
-- **Las ROMs nunca entran en el repo** ni en un release. `Roms/` está fuera de Git:
-  el OS 3.03 del rack, el actualizador oficial y el editor de Mac.
-- **Licencia:** si se enlaza con Gearmulator es GPLv3. NME solo habla MIDI y es otro programa.
-- Antes de tocar el sinte de verdad desde aquí, mirar la conexión (ver la memoria
-  "NME: mirar la conexión antes de tocar slots").
+- **ROMs never go into the repo** nor into a release. `Roms/` is ignored by Git: the rack OS 3.03,
+  the official updater and the Mac editor.
+- **License:** linking Gearmulator makes it GPLv3. NME only speaks MIDI and is a separate program.
+- Before touching the real synth from here, check which device NME is connected to.
 
-## Changelog — regla
+## Changelog rule
 
-**Todo cambio que entre en el repo lleva su línea en `CHANGELOG.md`, en el mismo commit.** Sin
-excepciones: código, documentación, herramientas, arreglos pequeños. Lo más reciente arriba,
-bajo la fecha, con quién lo hizo, qué cambia y cómo se ha verificado. No hace falta el hash: la
-entrada va en el mismo commit que el cambio. Lo que quede sin commitear se marca «cambio local, sin
-commit». El repo es público: el changelog es lo que lee la gente.
+**Every change that goes into the repo gets its line in `CHANGELOG.md`, in the same commit.** No
+exceptions: code, documentation, tools, small fixes. Newest first, under the date, with who did
+it, what changes and how it was verified. No hash needed: the entry lands in the same commit as the
+change. Anything left uncommitted is marked "local change, not committed". The repo is public: the
+changelog is what people read.
 
-## Changelog global
+## Maintainer's workspace changelog
 
-Cada cambio va en `CHANGELOG.md` de este repo **y** en el global
-`/mnt/SPEED/CODE/CHANGELOG.md` (regla de `/mnt/SPEED/CODE/AGENTS.md`, sección Global
-Changelog). El global es un enlace a Obsidian: se edita su destino, no se reemplaza.
+In the maintainer's workspace, every change also goes into the global changelog
+`/mnt/SPEED/CODE/CHANGELOG.md` (rule in `/mnt/SPEED/CODE/AGENTS.md`, section Global Changelog; that
+one is written in Spanish). It is a link to an Obsidian note: edit its target, never replace it.

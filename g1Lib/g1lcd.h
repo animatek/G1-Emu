@@ -1,9 +1,9 @@
 #pragma once
 
-// La pantalla del panel: un LCD de caracteres con controlador HD44780, en bus de 8 bits.
-// La CPU pone el byte en $202006 y mueve las lineas de control en $202007: bit 0 = RS
-// (0 orden, 1 caracter) y bit 1 = E. El controlador lo recoge al bajar E. El OS lo inicia
-// con $30 tres veces y $38 (8 bits, dos lineas) y no lee nunca el flag de ocupado: espera.
+// The panel display: a character LCD with an HD44780 controller on an 8-bit bus.
+// The CPU puts the byte in $202006 and moves the control lines in $202007: bit 0 = RS
+// (0 command, 1 character) and bit 1 = E. The controller latches it when E falls. The OS
+// initialises it with $30 three times and $38 (8 bits, two lines) and never reads the busy flag.
 
 #include <array>
 #include <cstdint>
@@ -15,7 +15,7 @@ namespace g1
 	class Lcd
 	{
 	public:
-		static constexpr uint32_t Columns = 40;	// memoria por linea del HD44780 (se ven menos)
+		static constexpr uint32_t Columns = 40;	// HD44780 memory per line (fewer are visible)
 
 		void writeData(const uint8_t _v) { m_bus = _v; }
 
@@ -28,8 +28,8 @@ namespace g1
 			m_control = _v;
 		}
 
-		// Texto de una linea (0 o 1), _cols caracteres. Los caracteres propios (0-7) salen como
-		// su codigo; quien pinte puede dibujarlos con cgram().
+		// Text of one line (0 or 1), _cols characters. Custom characters (0-7) come out as their
+		// code; whoever draws them can use cgram().
 		std::string line(const uint32_t _line, const uint32_t _cols = 16) const
 		{
 			std::lock_guard lock(m_mutex);
@@ -100,7 +100,7 @@ namespace g1
 			}
 		}
 
-		// Dos lineas: 0x00-0x27 y 0x40-0x67.
+		// Two lines: 0x00-0x27 and 0x40-0x67.
 		void move()
 		{
 			if(!m_increment) { moveBack(); return; }

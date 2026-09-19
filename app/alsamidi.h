@@ -1,9 +1,9 @@
 #pragma once
 
-// Puertos MIDI virtuales de ALSA (secuenciador). Cada puerto es de entrada y de salida
-// a la vez y aparece en cualquier programa de MIDI del sistema (NME, Bitwig, aconnect).
-// Se trabaja en bytes crudos: lo que entra se convierte a bytes MIDI y lo que sale se
-// parte en eventos con el codificador de ALSA, SysEx incluido.
+// Virtual ALSA MIDI ports (sequencer). Every port is input and output at the same time
+// and shows up in any MIDI program on the system (NME, Bitwig, aconnect).
+// It works on raw bytes: incoming events are turned into MIDI bytes and outgoing bytes are
+// split into events with ALSA's encoder, SysEx included.
 
 #include <alsa/asoundlib.h>
 
@@ -41,7 +41,7 @@ namespace g1app
 		bool valid() const { return m_seq != nullptr; }
 		int clientId() const { return m_seq ? snd_seq_client_id(m_seq) : -1; }
 
-		// Crea un puerto y devuelve su indice.
+		// Creates a port and returns its index.
 		int addPort(const char* _name)
 		{
 			const int port = snd_seq_create_simple_port(m_seq, _name,
@@ -54,7 +54,7 @@ namespace g1app
 			return static_cast<int>(m_ports.size()) - 1;
 		}
 
-		// Recoge todo lo que haya llegado, repartido por puerto.
+		// Collects everything that has arrived, split by port.
 		void poll(std::vector<std::vector<uint8_t>>& _perPort)
 		{
 			_perPort.resize(m_ports.size());
@@ -82,7 +82,7 @@ namespace g1app
 			}
 		}
 
-		// Envia bytes crudos por un puerto (se agrupan en eventos completos).
+		// Sends raw bytes through a port (grouped into complete events).
 		void send(const int _index, const std::vector<uint8_t>& _bytes)
 		{
 			if(_bytes.empty())

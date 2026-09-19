@@ -1,5 +1,5 @@
-# Correcciones del nucleo necesarias para el G1, aplicadas solo a la copia de
-# compilacion. El clon de Gearmulator sigue siendo la fuente y no se modifica.
+# Core fixes needed by the G1, applied only to the build copy. The Gearmulator clone
+# remains the source and is never modified.
 get_target_property(g1_dsp_source dsp56kEmu SOURCE_DIR)
 set(g1_dsp_overlay "${CMAKE_BINARY_DIR}/g1-dsp/dsp56kEmu")
 set(g1_dsp_prepare "${CMAKE_BINARY_DIR}/g1-dsp/prepare")
@@ -15,7 +15,7 @@ function(g1_dsp_replace name before after)
 	file(READ "${path}" contents)
 	string(FIND "${contents}" "${before}" match)
 	if(match EQUAL -1)
-		message(FATAL_ERROR "Revisar correccion G1 de ${name}: el nucleo externo ha cambiado")
+		message(FATAL_ERROR "Check the G1 fix for ${name}: the external core has changed")
 	endif()
 	string(REPLACE "${before}" "${after}" contents "${contents}")
 	file(WRITE "${path}" "${contents}")
@@ -31,12 +31,12 @@ g1_dsp_replace(opcodeanalysis.h
 	"case Movem_ea:\n\t\t\t{\n\t\t\t\tconst auto write = getFieldValue<Movem_ea, Field_W>(op);"
 	"case Movem_aa:\n\t\t\treturn !getFieldValue<Movem_aa, Field_W>(op);\n\t\tcase Movem_ea:\n\t\t\t{\n\t\t\t\tconst auto write = getFieldValue<Movem_ea, Field_W>(op);")
 
-# DO FOREVER conserva LC. En el final de bucle, FV evita decrementar LC o salir.
+# DO FOREVER keeps LC. At the loop end, FV prevents decrementing LC or leaving.
 g1_dsp_replace(jitblock.cpp
 	"\t\t\tm_asm.cmp(lc, asmjit::Imm(1));\n\t\t\tm_asm.jle(enddo);\n\t\t\tm_asm.dec(lc);"
 	"\t\t\tconst auto repeatForever = m_asm.newLabel();\n\t\t\tm_asm.bitTest(sr, SRB_FV);\n\t\t\tm_asm.jnz(repeatForever);\n\t\t\tm_asm.cmp(lc, asmjit::Imm(1));\n\t\t\tm_asm.jle(enddo);\n\t\t\tm_asm.dec(lc);\n\t\t\tm_asm.bind(repeatForever);")
 
-# Los DO anidados y ENDDO guardan/restauran tambien FV, no solo LF.
+# Nested DO and ENDDO also save/restore FV, not only LF.
 g1_dsp_replace(jitops.cpp
 	"m_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));"
 	"m_asm.and_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(~SR_FV));\n\t\t\tm_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));")
@@ -47,10 +47,10 @@ g1_dsp_replace(jitops.cpp
 	"m_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_LF));"
 	"m_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~(SR_LF | SR_FV)));")
 
-# DMA con doble contador en origen y destino a la vez (DAM = 011 011 en el DMA0 del G1:
-# copia X:$6C0 -> Y:bufer de salida en cada bloque). Gearmulator no lo implementa y en
-# Release daba el bloque por hecho sin copiar: el audio no pasaba de un DSP al siguiente.
-# Ambos lados comparten DCOH/DCOL y cada uno suma su DOR al terminar cada linea.
+# DMA with dual counters on source and destination at once (DAM = 011 011 in the G1's DMA0:
+# copies X:$6C0 -> Y:output buffer on every block). Gearmulator does not implement it and in
+# Release it reported the block done without copying: audio never passed from one DSP to the next.
+# Both sides share DCOH/DCOL and each adds its DOR at the end of every line.
 g1_dsp_replace(dma.cpp
 	[=[		assert(false && "DMA transfer mode not supported yet");]=]
 	[=[		if(agmS <= AddressGenMode::DualCounterDOR3 && agmD <= AddressGenMode::DualCounterDOR3)
@@ -75,17 +75,17 @@ g1_dsp_replace(dma.cpp
 
 		assert(false && "DMA transfer mode not supported yet");]=])
 
-# Las transferencias de bloque (disparadas por DE) se hacen al momento. Retrasadas, el DMA0
-# copiaba la entrada al bufer de salida despues de que las voces sumaran su muestra y la pisaba.
-# En el DSP real van en paralelo y acaban mucho antes (unos 36 ciclos).
+# Block transfers (triggered by DE) happen immediately. Delayed, DMA0 copied the input to the
+# output buffer after the voices had added their sample, and overwrote it.
+# On the real DSP they run in parallel and finish much earlier (about 36 cycles).
 g1_dsp_replace(dma.cpp
 	"constexpr bool g_delayedDmaTransfer = true;"
 	"constexpr bool g_delayedDmaTransfer = false;")
 
-# DMA por peticion en modo bloque sin borrar DE (DTM=100). El DSP 0 del G1 mete asi la entrada
-# de audio L: el DMA3 lleva el RX del ESSI1 a X:$6C5 (bloque de 1 palabra) y su interrupcion
-# (vector $1E) copia el RX del ESSI0 a X:$6C4. Gearmulator lo ignoraba en silencio (solo
-# aceptaba palabra o linea). Una peticion mueve el bloque entero; con DE puesto, sigue armado.
+# DMA per request in block mode without clearing DE (DTM=100). The G1's DSP 0 brings in the
+# left audio input this way: DMA3 moves ESSI1 RX to X:$6C5 (a 1-word block) and its interrupt
+# (vector $1E) copies ESSI0 RX to X:$6C4. Gearmulator silently ignored it (it only accepted
+# word or line). One request moves the whole block; with DE set, it stays armed.
 g1_dsp_replace(dma.cpp
 	"const auto isSupportedTransferMode = tm == TransferMode::WordTriggerRequest || tm == TransferMode::WordTriggerRequestClearDE || tm == TransferMode::LineTriggerRequestClearDE;"
 	"const auto isSupportedTransferMode = tm == TransferMode::WordTriggerRequest || tm == TransferMode::WordTriggerRequestClearDE || tm == TransferMode::LineTriggerRequestClearDE || tm == TransferMode::BlockTriggerRequest || tm == TransferMode::BlockTriggerRequestClearDE;")
@@ -93,9 +93,9 @@ g1_dsp_replace(dma.cpp
 	"		if(!bittest(m_dcr, De))\n			return;\n\n		if(execTransfer())\n			finishTransfer();"
 	"		if(!bittest(m_dcr, De))\n			return;\n\n		const auto btm = getTransferMode();\n		if(btm == TransferMode::BlockTriggerRequest || btm == TransferMode::BlockTriggerRequestClearDE)\n		{\n			while(!execTransfer()) {}\n			finishTransfer();\n			return;\n		}\n\n		if(execTransfer())\n			finishTransfer();")
 
-# DMA de direccion fija a direccion fija (DAM 100 100): un registro de periferico a una celda de
-# memoria. El DSP 0 lo usa para las entradas de audio (RX del ESSI1 -> X:$6C5). No tenia rama:
-# caia en el assert final y, en Release, daba el bloque por hecho sin copiar nada.
+# DMA from a fixed address to a fixed address (DAM 100 100): a peripheral register to a memory
+# cell. The G1's DSP 0 uses it for the audio inputs (ESSI1 RX -> X:$6C5). It had no branch:
+# it fell into the final assert and, in Release, reported the block done without copying.
 g1_dsp_replace(dma.cpp
 	"		assert(false && \"DMA transfer mode not supported yet\");\n		return true;\n	}"
 	"		if(agmS == AddressGenMode::SingleCounterAnoUpdate && agmD == AddressGenMode::SingleCounterAnoUpdate)\n		{\n			memWrite(areaD, m_ddr, memRead(areaS, m_dsr));\n			if(isRequestTrigger() && m_dco)\n			{\n				--m_dco;\n				return false;\n			}\n			m_dco = m_dcomInit;\n			return true;\n		}\n\n		assert(false && \"DMA transfer mode not supported yet\");\n		return true;\n	}")

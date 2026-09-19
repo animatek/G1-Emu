@@ -12,39 +12,39 @@ namespace g1
 {
 	namespace
 	{
-		// El DSP56303 tiene 4K de P y 2K+2K de X/Y internos. Se reserva de sobra por si
-		// algun programa del G1 usa mas; la ROM de arranque vive en $FF0000.
+		// The DSP56303 has 4K of internal P and 2K+2K of X/Y. Plenty is reserved in case some
+		// G1 program uses more; the boot ROM lives at $FF0000.
 		constexpr dsp56k::TWord g_pMemSize = 0x10000;
 		constexpr dsp56k::TWord g_xyMemSize = 0x10000;
 		constexpr dsp56k::TWord g_externalMemAddr = 0x8000;
 		constexpr dsp56k::TWord g_bootRom = 0xff0000;
 
-		// El G1 trabaja a 96 kHz con los DSP a 82,944 MHz: 864 ciclos por muestra.
+		// The G1 works at 96 kHz with the DSPs at 82.944 MHz: 864 cycles per sample.
 		constexpr uint32_t g_samplerate = 96000;
 		constexpr uint32_t g_dspClock = 82944000;
 		constexpr uint32_t g_cyclesPerFrame = g_dspClock / g_samplerate;	// 864
 
-		// Los ESSI van con el reloj que sale de su CRA (modo "fine link" del nucleo):
-		// 2*(PM+1)*24 ciclos por palabra, 96 en los enlaces entre DSP (PM=1: 9 palabras por
-		// muestra, justo lo que manda el DMA4 en cada bloque) y 144 en el DSP 3 hacia el
-		// codec (PM=2). El reloj base solo sirve de tope: tiene que ser mas lento que ambos.
+		// The ESSIs run on the clock derived from their CRA (the core's "fine link" mode):
+		// 2*(PM+1)*24 cycles per word, 96 on the links between DSPs (PM=1: 9 words per sample,
+		// exactly what DMA4 sends each block) and 144 on DSP 3 towards the codec (PM=2). The base
+		// clock is only an upper bound: it has to be slower than both.
 		constexpr uint32_t g_essiBaseCyclesPerWord = g_cyclesPerFrame / 2;
 
-		// En modo asincrono el receptor usa el reloj del que le transmite (SC0 de fuera), no el
-		// de su CRA. Todos los que transmiten por la cadena llevan PM=1: 96 ciclos por palabra.
-		// El DSP 3 tiene PM=2 porque su CRA es para el codec: su receptor iria a 144 y solo
-		// podria recoger 6 de las 9 palabras de cada muestra.
+		// In asynchronous mode the receiver uses the transmitter's clock (external SC0), not its
+		// own CRA. Every DSP transmitting down the chain has PM=1: 96 cycles per word. DSP 3 has
+		// PM=2 because its CRA is set for the codec: its receiver would run at 144 and could only
+		// take 6 of the 9 words of each sample.
 		constexpr uint32_t g_linkCyclesPerWord = 96;
 
-		// Retardo del enlace entre DSP, en bloques. Los hilos se sincronizan cada ~4.000 ciclos
-		// (unos 5 bloques): el que recibe coge el bloque de hace g_linkLatency, que seguro que
-		// ya ha llegado. En el aparato es menos de un bloque; aqui son ~83 us por DSP.
+		// Link delay between DSPs, in blocks. The threads sync every ~4,000 cycles (about 5
+		// blocks): the receiver takes the block from g_linkLatency blocks ago, which has surely
+		// arrived. On the hardware it is less than a block; here it is ~83 us per DSP.
 		constexpr uint64_t g_linkLatency = 8;
-		// El DMA de recepcion de cada ESSI escribe en un anillo de 9 palabras: X:$6C0 (ESSI0) y
-		// X:$6C9 (ESSI1). La palabra i del bloque va siempre a base+i.
+		// Each ESSI's receive DMA writes into a 9-word ring: X:$6C0 (ESSI0) and X:$6C9 (ESSI1).
+		// Word i of the block always goes to base+i.
 		constexpr dsp56k::TWord g_linkBase[2] = {0x6c0, 0x6c9};
 
-		// Periodo de palabra que sale de un CRA (DSP56303UM, fig. 7-3), como el nucleo.
+		// Word period derived from a CRA (DSP56303UM, fig. 7-3), as in the core.
 		uint32_t essiWordCycles(const dsp56k::TWord _cra)
 		{
 			static constexpr uint32_t bits[8] = {8, 12, 16, 24, 32, 32, 24, 24};
@@ -53,13 +53,13 @@ namespace g1
 			return 2 * pm * prescale * bits[(_cra >> 19) & 7];
 		}
 
-		// La patilla IRQD de cada DSP recibe el reloj de muestra; su vector ($16) salta a la
-		// rutina de bloque ($175), que calcula una muestra del patch.
+		// Each DSP's IRQD pin gets the sample clock; its vector ($16) jumps to the block routine
+		// ($175 or later), which computes one sample of the patch.
 		constexpr dsp56k::TWord g_irqdVector = 0x16;
 
-		// Tope de ciclos que se deja correr a un DSP en una sola espera de la CPU.
+		// Maximum number of cycles a DSP is allowed to run in one CPU wait.
 		constexpr uint64_t g_waitClamp = 200000;
-		// ...y en una consulta de estado (ISR), mucho menos: unas pocas palabras de margen.
+		// ...and in a status (ISR) poll, much less: a few words of margin.
 		constexpr uint64_t g_isrWaitClamp = 2000;
 	}
 
@@ -78,7 +78,7 @@ namespace g1
 		config.maxDoIterations = 1;
 		m_dsp.getJit().setConfig(config);
 
-		// Memoria de programa llena de RTS: un salto a basura no compila cosas raras.
+		// Program memory full of RTS: a jump into garbage does not compile odd things.
 		for(dsp56k::TWord i = 0; i < m_memory.sizeP(); ++i)
 		{
 			m_memory.set(dsp56k::MemArea_P, i, 0x00000c);
@@ -90,16 +90,14 @@ namespace g1
 		clock.setSamplerate(g_samplerate * 2);
 		clock.setCyclesPerSample(g_essiBaseCyclesPerWord);
 
-		// Tiene que estar activo antes de que el programa escriba CRA. El receptor de un enlace
-		// solo avanza cuando le ha llegado una palabra: si no, el DMA de recepcion cogeria
-		// palabras inventadas y los canales del enlace se desplazarian.
+		// Must be enabled before the program writes CRA.
 		for(auto* essi : {&m_periph.getEssi0(), &m_periph.getEssi1()})
 			essi->setFineLinkMode(true);
 
-		// Enlace por posicion: cuando el receptor pide una trama, se mira a que palabra del
-		// anillo va a escribir su DMA y se le da ese canal del bloque del DSP anterior. Asi el
-		// canal i acaba siempre en base+i, como en el aparato, sin depender de la fase entre los
-		// ESSI ni de cuando se reactivo la recepcion (el aparato lo consigue con el reloj comun).
+		// Link by position: when the receiver asks for a frame, the emulator looks at which ring
+		// word its DMA will write next and gives it that channel from the previous DSP's block. So
+		// channel i always ends up at base+i, like on the hardware, regardless of the phase between
+		// the ESSIs or of when the receiver was re-enabled (the hardware gets that from its common clock).
 		for(uint32_t e = 0; e < 2; ++e)
 		{
 			auto& essi = e == 0 ? m_periph.getEssi0() : m_periph.getEssi1();
@@ -107,9 +105,9 @@ namespace g1
 			{
 				if(!m_hasUpstream)
 				{
-					// El primer DSP no tiene un DSP delante: recibe el codec, las entradas de
-					// audio del panel trasero (R por el ESSI0 -> X:$6C4, L por el ESSI1 ->
-					// X:$6C5; de ahi pasan a los demas por el enlace, en los canales 4 y 5).
+					// The first DSP has no DSP upstream: it receives the codec, the back-panel audio
+					// inputs (R on ESSI0 -> X:$6C4, L on ESSI1 -> X:$6C5; from there they travel down
+					// the link to the other DSPs, in channels 4 and 5).
 					_frame.resize(2);
 					_frame[0][0] = _frame[1][0] = static_cast<dsp56k::TWord>(m_input[e]) & 0xffffff;
 					return;
@@ -118,21 +116,21 @@ namespace g1
 			});
 		}
 
-		// Mascaras de slots de los ESSI (TSMA/TSMB/RSMA/RSMB) a su valor de reset: todos los
-		// slots activos. El emulador las deja a 0, y los DSP de voz del G1 no las escriben
-		// nunca (solo el DSP 3 las ajusta): con 0 no transmitian ni pedian datos al DMA.
+		// ESSI slot masks (TSMA/TSMB/RSMA/RSMB) at their reset value: all slots enabled. The
+		// emulator leaves them at 0, and the G1's voice DSPs never write them (only DSP 3 sets
+		// them): with 0 they neither transmitted nor requested data from the DMA.
 		for(const dsp56k::TWord reg : {0xffffb4u, 0xffffb3u, 0xffffb2u, 0xffffb1u, 0xffffa4u, 0xffffa3u, 0xffffa2u, 0xffffa1u})
 			m_periph.write(reg, 0xffffff);
 
-		// Sin hilos, un ESSI que espera audio de entrada bloquea todo. En el aparato real
-		// el codec siempre entrega tramas: aqui se rellenan vacias (ver drainAudio).
+		// An ESSI waiting for input audio must not block. On the hardware the codec always
+		// delivers frames: here the input starts with empty ones.
 		m_periph.getEssi0().writeEmptyAudioIn(64);
 		m_periph.getEssi1().writeEmptyAudioIn(64);
 
 		hdi08().setRXRateLimit(0);
-		// Sin arbitraje: los host commands del G1 son interrupciones rapidas (un solo movep
-		// en el vector, sin JSR/RTI). El arbitraje de Gearmulator espera ver el RTI en la
-		// pila para dar el comando por terminado y con ellas se quedaba "ocupado" para siempre.
+		// No arbitration: the G1's host commands are fast interrupts (a single movep in the vector,
+		// no JSR/RTI). Gearmulator's arbitration waits for the RTI on the stack to consider the
+		// command done, and with these it stayed "busy" forever.
 		hdi08().setHostCommandArbitration(false);
 		m_dsp.setInterruptServicedCallback([this](const dsp56k::TWord _vba)
 		{
@@ -140,7 +138,7 @@ namespace g1
 			m_lastVector = _vba;
 		});
 
-		// Banderas HF0/HF1 del ICR de la CPU hacia el HSR del DSP.
+		// HF0/HF1 flags from the CPU's ICR to the DSP's HSR.
 		m_hdiUc.setIcrWriteCallback([this](const uint8_t _icr)
 		{
 			hdi08().setHostFlags((_icr & mc68k::Hdi08::Hf0) ? 1 : 0, (_icr & mc68k::Hdi08::Hf1) ? 1 : 0);
@@ -160,23 +158,22 @@ namespace g1
 			m_hdiUc.isr(m_hdiUc.isr() | mc68k::Hdi08::IsrBits::Txde | mc68k::Hdi08::IsrBits::Trdy);
 		});
 
-		// G1_INTERP=mascara: esos DSP (bit n = DSP n) corren en el interprete del nucleo en vez
-		// del JIT. Mucho mas lento; sirve para ver si un fallo es del JIT.
-		m_noLaFix = std::getenv("G1_NO_LA_FIX") != nullptr;	// solo para comparar con el fallo
+		// G1_INTERP=mask: those DSPs (bit n = DSP n) run on the core's interpreter instead of the
+		// JIT. Much slower; useful to tell whether a fault is the JIT's.
+		m_noLaFix = std::getenv("G1_NO_LA_FIX") != nullptr;	// only to compare against the bug
 		if(const char* in = std::getenv("G1_INTERP"))
 			m_interpreter = ((std::strtoul(in, nullptr, 0) >> _index) & 1) != 0;
 
 		armBoot();
 	}
 
-	// Vuelve al estado de la ROM de arranque: las siguientes palabras son longitud,
-	// direccion y programa.
+	// Back to the boot ROM state: the next words are length, address and program.
 	void Dsp::armBoot()
 	{
 		m_booted = false;
 
-		// Lo que la CPU ya habia mandado y el programa anterior no llego a leer espera en
-		// el puerto: en el aparato lo lee la ROM de arranque, asi que se le entrega en orden.
+		// What the CPU had already sent and the previous program did not read waits in the
+		// port: on the hardware the boot ROM reads it, so it is handed over in order.
 		std::vector<dsp56k::TWord> pending;
 		auto& rx = const_cast<std::remove_const_t<std::remove_reference_t<decltype(hdi08().rxData())>>&>(hdi08().rxData());
 		while(!rx.empty())
@@ -211,7 +208,7 @@ namespace g1
 	{
 		while(m_booted && m_dsp.getCycles() < _cycles)
 		{
-			// `jmp $FF0000`: el programa vuelve a la ROM de arranque.
+			// `jmp $FF0000`: the program returns to the boot ROM.
 			if(m_dsp.getPC().toWord() >= g_bootRom)
 			{
 				armBoot();
@@ -225,21 +222,20 @@ namespace g1
 			const auto before = m_dsp.getCycles();
 			if(before >= m_nextIrqd)
 			{
-				// Rejilla fija (no "ahora + periodo"): la IRQD no deriva respecto al reloj de los
-				// ESSI, que tambien cuenta ciclos exactos. Si se ha quedado muy atras (parada de
-				// recarga, arranque), se vuelve a enganchar sin rafaga de interrupciones.
-				// En multiplos de 864 ciclos: los cuatro DSP comparten la rejilla, como en el aparato
-				// (van a la par en ciclos), y el numero de bloque vale para todos.
+				// Fixed grid (not "now + period"): IRQD does not drift against the ESSI clock, which
+				// also counts exact cycles. If it fell far behind (reload stop, boot), it re-locks
+				// without a burst of interrupts. In multiples of 864 cycles: the four DSPs share the
+				// grid, like on the hardware (they stay in lock-step), so the block number is common.
 				m_nextIrqd = (before - m_nextIrqd > g_cyclesPerFrame * 4) ? (before / g_cyclesPerFrame + 1) * g_cyclesPerFrame : m_nextIrqd + g_cyclesPerFrame;
 				if(irqdEnabled())
 				{
 					if(m_inputProvider)
-						m_inputProvider(m_input[1], m_input[0]);	// L entra por el ESSI1 y R por el ESSI0
+						m_inputProvider(m_input[1], m_input[0]);	// L comes in on ESSI1 and R on ESSI0
 					if(m_blockCallback)
 						tapBlock();
 					if(m_next)
 						tapLink(before / g_cyclesPerFrame);
-					m_dsp.injectInterrupt(g_irqdVector);	// como un periferico: no bloquea
+					m_dsp.injectInterrupt(g_irqdVector);	// like a peripheral: does not block
 					++m_irqdCount;
 				}
 			}
@@ -250,31 +246,27 @@ namespace g1
 			if(static_cast<dsp56k::TWord>(m_dsp.regs().la.var) != m_lastLa && !m_noLaFix)
 				onLaChanged();
 			const auto now = m_dsp.getCycles();
-			if(now == before)	// DSP parado (WAIT/STOP o detenido): no insistir
+			if(now == before)	// DSP stopped (WAIT/STOP or halted): do not insist
 			{
 				++m_stalls;
 				return;
 			}
-			if((now & 0x3ff) < now - before)	// cada ~1000 ciclos (menos de una trama)
+			if((now & 0x3ff) < now - before)	// every ~1000 cycles (less than a frame)
 				drainAudio();
 		}
 	}
 
-	// IRQD solo cuenta si el programa la tiene habilitada en el IPRC (X:$FFFFFF, nivel IDL en
-	// los bits 9-10; 0 = deshabilitada) y la mascara del SR la deja pasar. El emulador solo
-	// mira el SR: durante la parada de recarga (IPRC=$FF0800) el G1 la deshabilita a proposito.
+	// IRQD only counts if the program enables it in the IPRC (X:$FFFFFF, IDL level in bits
+	// 9-10; 0 = disabled) and the SR mask lets it through. The emulator only checks the SR:
+	// during the reload stop (IPRC=$FF0800) the G1 disables it on purpose.
 	bool Dsp::irqdEnabled()
 	{
 		const auto iprc = m_periph.read(0xffffff, dsp56k::Instruction::Invalid);
 		return ((iprc >> 9) & 3) != 0 && !m_dsp.isInterruptMasked(g_irqdVector);
 	}
 
-	// La salida del bloque anterior, antes de que empiece el siguiente. La rutina de bloque
-	// alterna sus bufferes ($6C0/$6E0) y deja en X:$5 y X:$6 los que acaba de mandar por el
-	// DMA4 (ESSI0) y el DMA5 (ESSI1): dos palabras cada uno. Leerlos aqui da exactamente una
-	// muestra por bloque, sin depender de como el ESSI la parte en tramas.
-	// Lo que este DSP acaba de mandar por sus dos ESSI en el bloque anterior: 9 palabras por
-	// ESSI desde X:$5 y X:$6 (mismos bufferes que tapBlock), para el DSP siguiente.
+	// What this DSP sent through its two ESSIs in the previous block: 9 words per ESSI from
+	// X:$5 and X:$6 (the same buffers as tapBlock), for the next DSP.
 	void Dsp::tapLink(const uint64_t _block)
 	{
 		auto& mem = m_dsp.memory();
@@ -297,20 +289,24 @@ namespace g1
 		m_linkOut.push_back(b);
 	}
 
+	// The previous block's output, before the next one starts. The block routine alternates its
+	// buffers ($6C0/$6E0) and leaves in X:$5 and X:$6 the ones it just sent through DMA4 (ESSI0)
+	// and DMA5 (ESSI1): two words each. Reading them here gives exactly one sample per block,
+	// regardless of how the ESSI splits it into frames.
 	void Dsp::tapBlock()
 	{
 		auto& mem = m_dsp.memory();
 		const auto p0 = mem.get(dsp56k::MemArea_X, 5);
 		const auto p1 = mem.get(dsp56k::MemArea_X, 6);
 		if(p0 < 0x600 || p0 > 0x7fe || p1 < 0x600 || p1 > 0x7fe)
-			return;	// todavia no corre el programa de sonido
+			return;	// the sound program is not running yet
 		BlockFrame f;
-		// Cada ESSI lleva la pareja al reves: primero la salida par (2 y 4) y luego la impar
-		// (1 y 3). Comprobado con un 4Output y una senal distinta en cada salida.
-		f[0] = mem.get(dsp56k::MemArea_Y, p0 + 1);	// salida 1
-		f[1] = mem.get(dsp56k::MemArea_Y, p0);		// salida 2
-		f[2] = mem.get(dsp56k::MemArea_Y, p1 + 1);	// salida 3
-		f[3] = mem.get(dsp56k::MemArea_Y, p1);		// salida 4
+		// Each ESSI carries its pair reversed: first the even output (2 and 4), then the odd one
+		// (1 and 3). Checked with a 4Output and a different signal on each output.
+		f[0] = mem.get(dsp56k::MemArea_Y, p0 + 1);	// output 1
+		f[1] = mem.get(dsp56k::MemArea_Y, p0);		// output 2
+		f[2] = mem.get(dsp56k::MemArea_Y, p1 + 1);	// output 3
+		f[3] = mem.get(dsp56k::MemArea_Y, p1);		// output 4
 		m_blocks.push_back(f);
 	}
 
@@ -319,15 +315,15 @@ namespace g1
 		_frame.resize(2);
 		const auto ddr = m_periph.getDMA().getDDR(2 + _essi);
 		const bool inRing = ddr >= g_linkBase[_essi] && ddr < g_linkBase[_essi] + 9;
-		// La trama se pide en el slot 0, pero el slot 1 entra 96 ciclos despues y puede caer
-		// ya en el bloque siguiente (9 palabras por bloque, 2 por trama): cada palabra se toma
-		// del bloque en el que se va a recibir.
+		// The frame is requested at slot 0, but slot 1 comes 96 cycles later and may already fall
+		// into the next block (9 words per block, 2 per frame): each word is taken from the block
+		// in which it will be received.
 		for(uint32_t s = 0; s < 2; ++s)
 		{
 			const auto want = (m_dsp.getCycles() + s * g_linkCyclesPerWord) / g_cyclesPerFrame;
 			const auto block = want > g_linkLatency ? want - g_linkLatency : 0;
-			// Se tiran los bloques que ya no hacen falta. Si falta el que toca (el anterior estaba
-			// parado recargando, sin IRQD), silencio: repetir uno viejo dejaria un zumbido.
+			// Blocks no longer needed are dropped. If the one needed is missing (the previous DSP
+			// is stopped reloading, without IRQD), silence: repeating an old one would buzz.
 			while(m_linkIn.size() > 1 && m_linkIn[1].index <= block)
 				m_linkIn.pop_front();
 			const LinkBlock* src = (!m_linkIn.empty() && m_linkIn.front().index == block) ? &m_linkIn.front() : nullptr;
@@ -336,12 +332,12 @@ namespace g1
 		}
 	}
 
-	// El OS alarga el bucle principal sin reescribir el DO: al cargar un patch con modulos de
-	// control (envolventes, relojes, osciladores maestros...) mete su codigo al final del bucle
-	// (desde $174) y cambia el registro LA con un host command (vector $7C: movep ...,la). En el
-	// DSP el fin de bucle se compara con LA en cada vuelta; el JIT de Gearmulator, en cambio, se
-	// apunta el fin al compilar el DO y corta ahi los bloques. Sin esto solo se ejecutaba la
-	// primera instruccion del codigo de control y todo lo de ritmo de control se quedaba quieto.
+	// The OS extends the main loop without rewriting the DO: when it loads a patch with
+	// control-rate modules (envelopes, clocks, master oscillators...) it puts their code at the
+	// end of the loop (from $174) and changes the LA register with a host command (vector $7C:
+	// movep ...,la). On the DSP the loop end is compared with LA on every pass; Gearmulator's
+	// JIT, instead, records the end when it compiles the DO and cuts its blocks there. Without
+	// this, only the first instruction of the control code ran and all control rate stood still.
 	void Dsp::onLaChanged()
 	{
 		const dsp56k::TWord oldLa = m_lastLa;
@@ -354,10 +350,10 @@ namespace g1
 			if(end == oldLa + 1)
 				begin = b;
 		if(begin == none)
-			return;	// ese bucle no esta compilado: el JIT lo apuntara bien cuando lo compile
+			return;	// that loop is not compiled: the JIT will record it correctly when it compiles it
 		jit.removeLoop(begin);
 		jit.addLoop(begin, newLa + 1);
-		// Los bloques que acababan en el fin viejo o que pasan por el nuevo se recompilan.
+		// Blocks that ended at the old end or run through the new one are recompiled.
 		for(const dsp56k::TWord pc : std::array<dsp56k::TWord, 4>{oldLa, oldLa + 1, newLa, newLa + 1})
 			jit.destroy(pc);
 		++m_laChanges;
@@ -370,14 +366,13 @@ namespace g1
 		transferToHost();
 	}
 
-	// Saca lo que ha salido por los ESSI (a la cola de flushAudio) y rellena con silencio la
-	// entrada si no llega nada, para que el ESSI no se quede esperando. Se miden los picos.
+	// Collects what left the ESSIs (for flushAudio) and measures the peaks.
 	void Dsp::drainAudio()
 	{
 		uint32_t e = 0;
 		for(auto* essi : {&m_periph.getEssi0(), &m_periph.getEssi1()})
 		{
-			// El receptor de un DSP con otro delante va al ritmo del que le transmite.
+			// The receiver of a DSP with another one upstream runs at its transmitter's rate.
 			if(m_hasUpstream)
 			{
 				const dsp56k::TWord cra = essi->getCRA();
@@ -403,7 +398,7 @@ namespace g1
 					for(uint32_t s = 0; s < std::min<uint32_t>(_frame.size(), MeterSlots); ++s)
 						for(uint32_t l = 0; l < MeterLines; ++l)
 						{
-							auto v = static_cast<int32_t>(_frame[s][l] << 8) >> 8;	// 24 bits con signo
+							auto v = static_cast<int32_t>(_frame[s][l] << 8) >> 8;	// signed 24-bit
 							const auto a = static_cast<uint32_t>(v < 0 ? -v : v);
 							if(a > meter[s][l])
 								meter[s][l] = a;
@@ -417,7 +412,7 @@ namespace g1
 
 	void Dsp::flushAudio()
 	{
-		// Los dos ESSI van intercalados, trama a trama, como salian del DSP.
+		// Both ESSIs interleaved, frame by frame, as they left the DSP.
 		const auto n = std::max(m_staged[0].size(), m_staged[1].size());
 		for(size_t k = 0; k < n; ++k)
 		{
@@ -439,7 +434,7 @@ namespace g1
 				m_next->m_linkIn.push_back(b);
 			m_chainedFrames += m_linkOut.size();
 			m_linkOut.clear();
-			// Tope por si el siguiente no consume (parado): unos 100 ms.
+			// Cap in case the next DSP does not consume (stopped): about 100 ms.
 			while(m_next->m_linkIn.size() > 10000)
 				m_next->m_linkIn.pop_front();
 		}
@@ -455,11 +450,11 @@ namespace g1
 
 	void Dsp::hostWord(const uint32_t _word)
 	{
-		// HRX guarda una sola palabra: si la anterior sigue ahi, se deja correr al DSP.
+		// HRX holds a single word: if the previous one is still there, let the DSP run.
 		const auto stop = m_dsp.getCycles() + g_waitClamp;
 		while(hdi08().hasRXData() && m_booted && m_dsp.getCycles() < stop)
 			runUntil(m_dsp.getCycles() + 64);
-		// Si mientras tanto el programa ha vuelto a la ROM de arranque, la palabra es suya.
+		// If meanwhile the program went back to the boot ROM, the word belongs to it.
 		if(!m_booted)
 		{
 			if(m_boot->hdiWriteTX(_word))
@@ -474,14 +469,14 @@ namespace g1
 	{
 		if(!m_booted)
 			return;
-		// El DSP real atiende cada host command en cuanto llega. Aqui, en un solo hilo, se le
-		// deja correr hasta despachar lo pendiente: si no, la cola de interrupciones externas
-		// (32 entradas) se llena e injectExternalInterrupt espera para siempre.
+		// The real DSP services each host command as soon as it arrives. Here it is allowed to run
+		// until it has dispatched what is pending: otherwise the external interrupt queue
+		// (32 entries) fills up and injectExternalInterrupt waits forever.
 		const auto stop = m_dsp.getCycles() + g_waitClamp;
 		while(m_dsp.hasPendingInterrupts() && m_booted && m_dsp.getCycles() < stop)
 			runUntil(m_dsp.getCycles() + 16);
 		if(m_dsp.hasPendingInterrupts())
-			return;	// el DSP no las atiende (parado): mejor perder el comando que colgarse
+			return;	// the DSP does not service them (stopped): better to lose the command than hang
 		hdi08().writeHostCommand(_vector);
 		++m_hostCommands;
 		transferToHost();
@@ -489,11 +484,11 @@ namespace g1
 
 	uint8_t Dsp::readIsr(uint8_t _isr)
 	{
-		// En el aparato el DSP recoge enseguida la palabra que le llega; aqui puede ir
-		// por detras. Si la CPU pregunta con una palabra pendiente, se deja correr al DSP
-		// hasta que la recoja: la rutina del OS descarta la palabra tras 10 consultas.
-		// Espera corta: si el DSP esta en un bucle que no lee el puerto (por ejemplo parado
-		// con HF2 esperando a que la CPU baje HF0), la consulta devuelve el estado tal cual.
+		// On the hardware the DSP takes the incoming word at once; here it may lag. If the CPU
+		// polls with a word pending, the DSP runs until it takes it: the OS routine drops the word
+		// after 10 polls. Short wait: if the DSP is in a loop that does not read the port (for
+		// example stopped with HF2 up waiting for the CPU to lower HF0), the poll returns the status
+		// as it is.
 		if(m_booted && hdi08().hasRXData())
 		{
 			const auto stop = m_dsp.getCycles() + g_isrWaitClamp;
@@ -503,11 +498,11 @@ namespace g1
 		transferToHost();
 		_isr = static_cast<uint8_t>((_isr & ~mc68k::Hdi08::Rxdf) | (m_hdiUc.canReceiveData() ? 0 : mc68k::Hdi08::Rxdf));
 
-		// HF2/HF3 del DSP hacia el ISR de la CPU.
+		// HF2/HF3 from the DSP to the CPU's ISR.
 		const auto hf23 = hdi08().readControlRegister() & 0x18;
 		_isr = static_cast<uint8_t>((_isr & ~0x18) | hf23);
 
-		// TXDE: hay sitio para otra palabra. Durante el arranque, la ROM siempre acepta.
+		// TXDE: room for another word. During boot, the ROM always accepts.
 		_isr &= static_cast<uint8_t>(~(mc68k::Hdi08::Txde | mc68k::Hdi08::Trdy));
 		const auto depth = m_booted ? hdi08().rxData().size() : 0;
 		if(depth == 0)

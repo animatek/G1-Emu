@@ -1,4 +1,4 @@
-// Regresiones del nucleo que usa G1-Emu. Programas sinteticos, sin ROM.
+// Regression tests for the core G1-Emu uses. Synthetic programs, no ROM.
 #include "dsp56kEmu/dsp.h"
 #include "dsp56kEmu/memory.h"
 #include "dsp56kEmu/peripherals.h"
@@ -29,7 +29,7 @@ namespace
 			config.maxInstructionsPerBlock = blockSize;
 			config.maxDoIterations = 1;
 			dsp.getJit().setConfig(config);
-			// writeReg no implementa SR; actualizar tambien el modo cacheado del JIT.
+			// writeReg does not implement SR; also update the JIT's cached mode.
 			dsp.regs().sr.var = 0;
 			dsp.getJit().checkModeChange();
 		}
@@ -42,7 +42,7 @@ namespace
 		void until(uint32_t pc)
 		{
 			for(unsigned i = 0; dsp.getPC().toWord() != pc && i < 100; ++i) dsp.exec();
-			require(dsp.getPC().toWord() == pc, "no se alcanza el PC esperado");
+			require(dsp.getPC().toWord() == pc, "expected PC not reached");
 		}
 	};
 
@@ -53,15 +53,15 @@ namespace
 		m.program(0x100, {0x05f43c, 0x175, 0x07173c, 0x079704, 0x0c0105, 0x0c0105});
 		m.dsp.setPC(0x100);
 		m.until(0x105);
-		require(m.memory.get(dsp56k::MemArea_P, 0x17) == 0x175, "MOVEM no escribe P:$17");
-		require(m.dsp.regs().x.var == 0x175, "MOVEM no lee P:$17");
-		require(m.dsp.regs().sp.var == 0, "MOVEM SSH no equilibra la pila");
+		require(m.memory.get(dsp56k::MemArea_P, 0x17) == 0x175, "MOVEM does not write P:$17");
+		require(m.dsp.regs().x.var == 0x175, "MOVEM does not read P:$17");
+		require(m.dsp.regs().sp.var == 0, "MOVEM SSH does not balance the stack");
 	}
 
 	void invalidateProgramMove(uint32_t blockSize)
 	{
 		Machine m(blockSize);
-		// Cachea primero el codigo que luego reescribe MOVEM.
+		// First cache the code that MOVEM rewrites afterwards.
 		m.program(0x30, {0x241100, 0x0c0200}); // move #$11,x0; jmp $200
 		m.program(0x200, {0x0c0200});
 		m.dsp.setPC(0x30);
@@ -71,8 +71,8 @@ namespace
 		m.program(0x100, {0x45f400, 0x242200, 0x073005, 0x0c0030});
 		m.dsp.setPC(0x100);
 		m.until(0x200);
-		require(m.memory.get(dsp56k::MemArea_P, 0x30) == 0x242200, "MOVEM no reescribe el codigo");
-		require((m.dsp.regs().x.var & 0xffffff) != (before & 0xffffff), "MOVEM deja codigo JIT obsoleto");
+		require(m.memory.get(dsp56k::MemArea_P, 0x30) == 0x242200, "MOVEM does not rewrite the code");
+		require((m.dsp.regs().x.var & 0xffffff) != (before & 0xffffff), "MOVEM leaves stale JIT code");
 	}
 
 	void foreverLoop(uint32_t blockSize, uint32_t lc)
@@ -83,33 +83,33 @@ namespace
 		m.dsp.regs().lc.var = lc;
 		m.dsp.setPC(0x100);
 		for(unsigned i = 0; i < 100; ++i) m.dsp.exec();
-		require(m.dsp.getPC().toWord() >= 0x102 && m.dsp.getPC().toWord() <= 0x104, "DO FOREVER sale del bucle");
-		require(m.dsp.regs().lc.var == lc, "DO FOREVER modifica LC");
-		require(m.dsp.regs().sp.var == 2, "DO FOREVER no conserva su contexto en la pila");
-		require(m.dsp.regs().a.var > 10, "DO FOREVER no repite el cuerpo");
-		// Una IRQ larga debe volver al bucle, conservando sus dos entradas de pila.
+		require(m.dsp.getPC().toWord() >= 0x102 && m.dsp.getPC().toWord() <= 0x104, "DO FOREVER leaves the loop");
+		require(m.dsp.regs().lc.var == lc, "DO FOREVER modifies LC");
+		require(m.dsp.regs().sp.var == 2, "DO FOREVER does not keep its context on the stack");
+		require(m.dsp.regs().a.var > 10, "DO FOREVER does not repeat the body");
+		// A long IRQ must return to the loop, keeping its two stack entries.
 		m.program(0x16, {0x0bf080, 0x180});
 		m.program(0x180, {0x000009, 0x000004}); // inc b; rti
 		m.dsp.injectInterrupt(0x16);
 		for(unsigned i = 0; i < 30; ++i) m.dsp.exec();
-		// B tiene desplazamiento interno; comprobar el registro arquitectonico B0.
+		// B has an internal offset; check the architectural register B0.
 		dsp56k::TReg24 b0;
 		m.dsp.readReg(dsp56k::Reg_B0, b0);
-		require(b0.var == 1, "IRQD no ejecuta el manejador");
-		require(m.dsp.regs().sp.var == 2, "IRQD desequilibra DO FOREVER");
-		require(m.dsp.getPC().toWord() >= 0x102 && m.dsp.getPC().toWord() <= 0x104, "RTI no vuelve a DO FOREVER");
+		require(b0.var == 1, "IRQD does not run the handler");
+		require(m.dsp.regs().sp.var == 2, "IRQD unbalances DO FOREVER");
+		require(m.dsp.getPC().toWord() >= 0x102 && m.dsp.getPC().toWord() <= 0x104, "RTI does not return to DO FOREVER");
 	}
 
 	void nestedLoop(uint32_t blockSize)
 	{
 		Machine m(blockSize);
-		// DO FOREVER exterior, DO #2 interior. El fin del interior debe restaurar FV.
+		// Outer DO FOREVER, inner DO #2. The end of the inner one must restore FV.
 		m.program(0x100, {0x000203, 0x106, 0x060280, 0x104, 0x000008, 0x000009, 0, 0x0c0107});
 		m.dsp.setPC(0x100);
 		for(unsigned i = 0; i < 200; ++i) m.dsp.exec();
-		require(m.dsp.regs().a.var > 10 && m.dsp.regs().b.var > 5, "el DO anidado no termina o pierde FV");
-		require(m.dsp.regs().sp.var == 2 || m.dsp.regs().sp.var == 4, "DO anidado corrompe la pila");
-		require(m.dsp.getPC().toWord() >= 0x102 && m.dsp.getPC().toWord() <= 0x106, "el DO exterior deja de repetir");
+		require(m.dsp.regs().a.var > 10 && m.dsp.regs().b.var > 5, "the nested DO does not finish or loses FV");
+		require(m.dsp.regs().sp.var == 2 || m.dsp.regs().sp.var == 4, "nested DO corrupts the stack");
+		require(m.dsp.getPC().toWord() >= 0x102 && m.dsp.getPC().toWord() <= 0x106, "the outer DO stops repeating");
 	}
 }
 
@@ -125,7 +125,7 @@ int main()
 			foreverLoop(blockSize, 7);
 			nestedLoop(blockSize);
 		}
-		std::puts("OK: MOVEM corto, invalidacion JIT, DO FOREVER, IRQD y DO anidado (bloques 1/32)");
+		std::puts("OK: short MOVEM, JIT invalidation, DO FOREVER, IRQD and nested DO (blocks 1/32)");
 		return 0;
 	}
 	catch(const std::exception& error)

@@ -1,9 +1,9 @@
 #pragma once
 
-// Fuente de 5x7 puntos para la pantalla, como la ROM de caracteres A00 del HD44780 (ASCII de
-// $20 a $7F; $5C es el yen y $7E/$7F son las flechas, como en el chip). Cinco columnas por
-// caracter; en cada columna, bit 0 = fila de arriba. Los caracteres propios ($00-$0F) no estan
-// aqui: salen de la CGRAM.
+// 5x7 dot font for the display, like the HD44780's A00 character ROM (ASCII $20 to $7F;
+// $5C is the yen sign and $7E/$7F are the arrows, as on the chip). Five columns per
+// character; in each column, bit 0 = top row. The custom characters ($00-$0F) are not
+// here: they come from the CGRAM.
 
 #include <array>
 #include <cstdint>

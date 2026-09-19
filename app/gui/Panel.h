@@ -1,9 +1,9 @@
 #pragma once
 
-// El panel del G1 emulado, como el del aparato: la pantalla, el volumen y los 18 mandos con sus
-// LEDs, los botones y una barra de estado con la velocidad y la carga. Lee y escribe el panel
-// del emulador (Microcontroller: getLcd, ledRow, setButton, setAdc), que se puede tocar desde
-// este hilo. Donde esta cada boton y cada LED en las matrices: ver NOTAS.md, «El panel».
+// The panel of the emulated G1, like the hardware's: the display, the volume and the 18 knobs
+// with their LEDs, the buttons, and a status bar with speed and load. It reads and writes the
+// emulator's panel (Microcontroller: getLcd, ledRow, setButton, setAdc), which can be used from
+// this thread. Where every button and LED sits in the matrices: see NOTES.md, "The panel".
 
 #include "emuhost.h"
 
@@ -35,8 +35,8 @@ namespace g1gui
 		bool m_on = false;
 	};
 
-	// Un boton del panel: mientras se pulsa, su bit de la matriz esta a 1. Sin bit conocido,
-	// se dibuja apagado y no hace nada.
+	// A panel button: while pressed, its matrix bit is 1. Without a known bit it is drawn
+	// greyed out and does nothing.
 	class PanelButton : public juce::Button
 	{
 	public:
@@ -91,7 +91,7 @@ namespace g1gui
 		std::array<LedView*, 4> m_slotLeds{};
 		PanelButton* m_assign = nullptr;
 		PanelButton* m_shift = nullptr;
-		std::array<PanelButton*, 4> m_nav{};			// arriba, izquierda, derecha, abajo
+		std::array<PanelButton*, 4> m_nav{};			// up, left, right, down
 		juce::Rectangle<int> m_dial;
 
 		juce::Label m_status;

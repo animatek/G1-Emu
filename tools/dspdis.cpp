@@ -1,5 +1,5 @@
-// dspdis: desensambla palabras de DSP56300 (una en hex por linea, por stdin).
-//   dspdis [PC_inicial_hex] < palabras.hex
+// dspdis: disassembles DSP56300 words (one hex word per line, on stdin).
+//   dspdis [start_PC_hex] < words.hex
 #include "dsp56kEmu/disasm.h"
 #include "dsp56kEmu/opcodes.h"
 

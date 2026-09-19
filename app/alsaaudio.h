@@ -1,9 +1,9 @@
 #pragma once
 
-// Salida de audio por ALSA (dispositivo "default": con PipeWire aparece como un cliente
-// mas). El emulador empuja tramas estereo a 96 kHz desde su hilo; un hilo propio las pasa a
-// 48 kHz (media de cada par) y las escribe. Si el emulador se queda corto, ALSA se queda sin
-// datos: se espera a tener un colchon y se cuenta el corte (PipeWire no avisa de los xrun).
+// Audio output through ALSA (device "default": with PipeWire it shows up as one more
+// client). The emulator pushes 96 kHz stereo frames from its thread; a thread of its own
+// converts them to 48 kHz (average of each pair) and writes them. If the emulator falls short,
+// ALSA runs dry: it waits for a cushion and counts a dropout (PipeWire does not report xruns).
 
 #include <alsa/asoundlib.h>
 
@@ -23,8 +23,8 @@ namespace g1app
 	{
 	public:
 		static constexpr uint32_t Rate = 48000;
-		static constexpr uint32_t Block = 240;			// 5 ms por escritura
-		static constexpr uint32_t Prefill = Block * 6;	// 30 ms de colchon tras un corte
+		static constexpr uint32_t Block = 240;			// 5 ms per write
+		static constexpr uint32_t Prefill = Block * 6;	// 30 ms cushion after a dropout
 
 		AlsaAudio(const char* _device, float _gain) : m_gain(_gain)
 		{
@@ -58,7 +58,7 @@ namespace g1app
 		uint64_t xruns() const { return m_xruns; }
 		float peak() { return m_peak.exchange(0.0f); }
 
-		// Una trama a 96 kHz, en 24 bits con signo. Se acumulan de dos en dos.
+		// One frame at 96 kHz, signed 24-bit. They are accumulated two by two.
 		void push(const int32_t _l, const int32_t _r)
 		{
 			m_acc[0] += static_cast<float>(_l);
@@ -73,7 +73,7 @@ namespace g1app
 			if(a > m_peak.load(std::memory_order_relaxed))
 				m_peak.store(a, std::memory_order_relaxed);
 			std::lock_guard lock(m_mutex);
-			if(m_fifo.size() < Rate * 2)	// como mucho 1 s: si el audio no avanza, no crece sin fin
+			if(m_fifo.size() < Rate * 2)	// at most 1 s: if the audio does not advance, it does not grow forever
 			{
 				m_fifo.push_back(std::clamp(l, -1.0f, 1.0f));
 				m_fifo.push_back(std::clamp(r, -1.0f, 1.0f));
@@ -100,7 +100,7 @@ namespace g1app
 					else
 					{
 						if(!buffering)
-							++m_xruns;	// el emulador no llega: hueco en el audio
+							++m_xruns;	// the emulator is late: a gap in the audio
 						buffering = true;
 						block.clear();
 					}

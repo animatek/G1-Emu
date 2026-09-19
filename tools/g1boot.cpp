@@ -1,11 +1,11 @@
-// g1boot: arranca el OS del G1 en el 68331 emulado y cuenta lo que pasa.
+// g1boot: boots the G1 OS on the emulated 68331 and reports what happens.
 //
-//   g1boot ROM [millones_de_instrucciones]
-//   g1boot ROM dis DESDE HASTA        (desensamblado, direcciones en hex)
+//   g1boot ROM [millions_of_instructions]
+//   g1boot ROM dis FROM TO            (disassembly, hex addresses)
 //
-// Imprime por donde va el PC, en que bucles se queda, los chip-selects que
-// programa el arranque (= el mapa de memoria real) y los accesos a hardware que
-// todavia no emulamos. La ROM es la del usuario y nunca entra en el repo.
+// Prints where the PC goes, which loops it gets stuck in, the chip-selects the
+// boot programs (= the real memory map) and the accesses to hardware that is
+// not emulated yet. The ROM is the user's and never goes into the repo.
 
 #include "g1Lib/g1mc.h"
 
@@ -22,7 +22,7 @@
 
 namespace
 {
-	// Chip-selects del SIM del 68331: CSBARBT/CSORBT y CSBAR0..10/CSOR0..10.
+	// 68331 SIM chip-selects: CSBARBT/CSORBT and CSBAR0..10/CSOR0..10.
 	void printChipSelects(g1::Microcontroller& _mc)
 	{
 		static const char* sizes[] = {"2K", "8K", "16K", "64K", "128K", "256K", "512K", "1M"};
@@ -37,7 +37,7 @@ namespace
 			const uint32_t base = static_cast<uint32_t>(bar & 0xfff8) << 8;
 			const int mode = (orr >> 13) & 3;	// 0 off, 1 lower, 2 upper, 3 both bytes
 			const char* rw[] = {"-", "R", "W", "R/W"};
-			std::printf("  CS%-4s base=$%06x tam=%-4s bytes=%d %s dsack=%d\n", i < 0 ? "BOOT" : std::to_string(i).c_str(),
+			std::printf("  CS%-4s base=$%06x size=%-4s bytes=%d %s dsack=%d\n", i < 0 ? "BOOT" : std::to_string(i).c_str(),
 				base, sizes[bar & 7], mode, rw[(orr >> 11) & 3], (orr >> 6) & 0xf);
 		}
 	}
@@ -47,19 +47,19 @@ int main(int argc, char** argv)
 {
 	if(argc < 2)
 	{
-		std::fprintf(stderr, "uso: g1boot ROM [millones_de_instrucciones]\n");
+		std::fprintf(stderr, "usage: g1boot ROM [millions_of_instructions]\n");
 		return 2;
 	}
 	std::ifstream f(argv[1], std::ios::binary);
 	std::vector<uint8_t> rom((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 	if(rom.size() != g1::g_romSize)
 	{
-		std::fprintf(stderr, "la ROM debe medir 512 KB (mide %zu)\n", rom.size());
+		std::fprintf(stderr, "the ROM must be 512 KB (it is %zu)\n", rom.size());
 		return 1;
 	}
 	g1::Microcontroller mc(rom);
 
-	// g1boot ROM dis DESDE HASTA: desensambla (direcciones en hex)
+	// g1boot ROM dis FROM TO: disassembles (hex addresses)
 	if(argc > 4 && std::string(argv[2]) == "dis")
 	{
 		for(uint32_t pc = std::stoul(argv[3], nullptr, 16), end = std::stoul(argv[4], nullptr, 16); pc < end;)
@@ -78,10 +78,10 @@ int main(int argc, char** argv)
 		for(auto pcw : {0xcau, 0xccu, 0xd2u, 0x175u, 0x200u, 0x9eu, 0xc4u})
 			mc.getDsp(d).pcWatch()[pcw] = 0;
 
-	// Historial de lo que sale por el ESSI0 de cada DSP (valores distintos, min, max)
+	// History of what leaves each DSP's ESSI0 (distinct values, min, max)
 	struct Tap { int32_t mn = 0x7fffffff, mx = -0x7fffffff; std::map<int32_t, uint64_t> values; uint64_t n = 0; };
 	std::array<std::array<Tap, 2>, g1::g_dspCount> taps;
-	// G1_TAP=fichero: las muestras del slot 0 del ESSI0 de cada DSP, en crudo (int32 por DSP y trama).
+	// G1_TAP=file: slot 0 samples of each DSP's ESSI0, raw (int32 per DSP and frame).
 	FILE* tapFile = std::getenv("G1_TAP") ? std::fopen(std::getenv("G1_TAP"), "wb") : nullptr;
 	std::array<int32_t, g1::g_dspCount> tapFrame{};
 	for(uint32_t d = 0; d < g1::g_dspCount; ++d)
@@ -96,8 +96,8 @@ int main(int argc, char** argv)
 			t.mn = std::min(t.mn, _l); t.mx = std::max(t.mx, _l); ++t.n;
 			if(t.values.size() < 64) ++t.values[_l];
 		});
-	// G1_BLOCKS=fichero: la salida del DSP 3 bloque a bloque (una muestra a 96 kHz): 4 canales
-	// int32 (salidas 1-4), en crudo. Es lo que g1run manda a la tarjeta de sonido.
+	// G1_BLOCKS=file: DSP 3's output block by block (one sample at 96 kHz): 4 int32 channels
+	// (outputs 1-4), raw. It is what g1run sends to the sound card.
 	FILE* blockFile = std::getenv("G1_BLOCKS") ? std::fopen(std::getenv("G1_BLOCKS"), "wb") : nullptr;
 	if(blockFile)
 		mc.getDsp(g1::g_dspCount - 1).setBlockCallback([blockFile](const int32_t _a, const int32_t _b, const int32_t _c, const int32_t _d)
@@ -105,8 +105,8 @@ int main(int argc, char** argv)
 			const int32_t f[4] = {_a, _b, _c, _d};
 			std::fwrite(f, sizeof(int32_t), 4, blockFile);
 		});
-	// G1_ADCMUX=codigo: ese canal del ADC (un mando) a $FF desde el encendido, para identificarlo
-	// G1_ADCALL=valor (hex): todos los canales del ADC a ese valor desde el encendido.
+	// G1_ADCMUX=code: that ADC channel (a knob) at $FF from power-on, to identify it
+	// G1_ADCALL=value (hex): all ADC channels at that value from power-on.
 	if(const char* all = std::getenv("G1_ADCALL"))
 		for(const uint8_t code : {0x31, 0x37, 0x2d, 0x32, 0x28, 0x2e, 0x33, 0x29, 0x2f, 0x34, 0x2a, 0x1a, 0x35, 0x2b, 0x1b, 0x36, 0x2c, 0x1c, 0x30, 0x18})
 			mc.setAdc(code, static_cast<uint8_t>(std::stoul(all, nullptr, 16)));
@@ -115,8 +115,8 @@ int main(int argc, char** argv)
 	std::printf("reset: PC=$%06x SP=$%06x\n", mc.getPC(), mc.getAReg(7));
 	std::fflush(stdout);
 
-	// G1_WATCH="123e94,1239e8": cuenta cuantas veces pasa el PC por esas direcciones y
-	// enseña los registros las primeras veces.
+	// G1_WATCH="123e94,1239e8": counts how many times the PC goes through those addresses and
+	// shows the registers the first times.
 	std::map<uint32_t, uint32_t> watch;
 	if(const char* w = std::getenv("G1_WATCH"))
 	{
@@ -131,20 +131,20 @@ int main(int argc, char** argv)
 		}
 	}
 	std::array<uint64_t, 8> iplHist{};
-	std::array<uint32_t, 64> lastPcs{};	// ultimos PCs, para ver como se llega a un fallo
+	std::array<uint32_t, 64> lastPcs{};	// last PCs, to see how a crash is reached
 	size_t lastPcPos = 0;
-	std::map<uint32_t, uint64_t> pcHits;	// PC -> veces, para ver en que bucle se queda
+	std::map<uint32_t, uint64_t> pcHits;	// PC -> count, to see which loop it is stuck in
 	uint64_t cycles = 0;
 	uint32_t lastReport = 0;
-	// A mitad de la ejecucion se manda el saludo de NME (IAm, version 3.3) por la UART
-	// y se apunta todo lo que el OS saque por ella.
+	// Halfway through, NME's handshake (IAm, version 3.3) is sent over the UART
+	// and everything the OS sends out on it is logged.
 	std::vector<uint8_t> sciOut;
 	bool iamSent = false;
-	// g1boot ROM N replay FICHERO: a mitad de la ejecucion se mete por el PC Port todo lo
-	// que NME mando en una sesion (lo graba g1run en pcport-in.bin).
+	// g1boot ROM N replay FILE: everything NME sent in a session (recorded by g1run in
+	// pcport-in.bin) is fed into the PC Port along the run.
 	std::vector<uint8_t> replay;
-	// g1boot ROM N diff A.bin B.bin: A a 1/4, B a 1/2; se comparan los PCs ejecutados en
-	// [3/8, 1/2) (reposo tras A) y en [1/2, 5/8) (tras B).
+	// g1boot ROM N diff A.bin B.bin: A at 1/4, B at 1/2; the PCs executed in [3/8, 1/2)
+	// (idle after A) and in [1/2, 5/8) (after B) are compared.
 	std::vector<uint8_t> diffB;
 	std::set<uint32_t> pcIdle, pcAfter;
 	const bool diffMode = argc > 5 && std::string(argv[3]) == "diff";
@@ -158,7 +158,7 @@ int main(int argc, char** argv)
 	}
 	std::vector<std::vector<uint8_t>> replayMsgs;
 	size_t replayNext = 0;
-	std::vector<uint8_t> pcOutSoFar;	// lo que el OS ha mandado por el PC Port hasta ahora
+	std::vector<uint8_t> pcOutSoFar;	// what the OS has sent on the PC Port so far
 	size_t pcOutScan = 0;
 	std::array<int, 4> slotPid{-1, -1, -1, -1};
 	uint32_t pidRewrites = 0;
@@ -166,8 +166,8 @@ int main(int argc, char** argv)
 	{
 		std::ifstream rf(argv[4], std::ios::binary);
 		replay.assign(std::istreambuf_iterator<char>(rf), std::istreambuf_iterator<char>());
-		iamSent = true;	// el replay ya trae su IAm
-		// Se parte en mensajes para mandarlos espaciados, como NME (que espera cada ACK).
+		iamSent = true;	// the replay carries its own IAm
+		// Split into messages to send them spaced out, like NME (which waits for each ACK).
 		std::vector<uint8_t> cur;
 		for(auto b : replay)
 		{
@@ -182,7 +182,7 @@ int main(int argc, char** argv)
 		{
 			iamSent = true;
 			mc.getPcPort().receive({0xf0, 0x33, 0x00, 0x06, 0x00, 0x03, 0x03, 0xf7});
-			std::printf("  >> IAm enviado por el PC PORT en la instruccion %llu\n", static_cast<unsigned long long>(i));
+			std::printf("  >> IAm sent on the PC PORT at instruction %llu\n", static_cast<unsigned long long>(i));
 		}
 		if(diffMode)
 		{
@@ -192,23 +192,23 @@ int main(int argc, char** argv)
 		}
 		if(std::getenv("G1_MARK") && i >= steps * 9 / 10 && (i % 20000) == 0)
 		{
-			// Marca los bufferes de audio del DSP 0 para ver cual sale por el ESSI
+			// Mark DSP 0's audio buffers to see which one leaves through the ESSI
 			auto& mem = mc.getDsp(0).dsp().memory();
 			for(dsp56k::TWord a = 0x6c0; a < 0x700; ++a) { mem.set(dsp56k::MemArea_Y, a, 0x111111 + (a & 0x3f)); mem.set(dsp56k::MemArea_X, a, 0x222222 + (a & 0x3f)); }
 			if(i == steps * 9 / 10) for(auto& t : taps[0]) t = {};
 		}
 		if(!replay.empty() && !diffMode && i == steps * 3 / 4)
 		{
-			mc.getSci().write({0x90, 60, 100});	// nota mantenida por el MIDI IN, canal 1
-			std::printf("  >> nota 60 on por MIDI IN\n");
+			mc.getSci().write({0x90, 60, 100});	// held note on MIDI IN, channel 1
+			std::printf("  >> note 60 on via MIDI IN\n");
 			for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 				for(auto& t : taps[d]) t = {};
 		}
 		if(!replayMsgs.empty() && replayNext < replayMsgs.size() && i >= steps / 10 && (i % 500000) == 0)
 		{
-			// El pid de cada slot lo decide el OS al recibir un patch (ACK $36). La sesion
-			// grabada puede traer otros (NME se reconecto a un G1 reiniciado): se reescriben
-			// con los que ha dado este OS y se rehace el checksum.
+			// Each slot's PID is decided by the OS when it receives a patch (ACK $36). The recorded
+			// session may carry others (NME reconnected to a rebooted G1): they are rewritten
+			// with the ones this OS gave and the checksum is redone.
 			mc.getPcPort().takeTx(pcOutSoFar);
 			for(; pcOutScan + 7 < pcOutSoFar.size(); ++pcOutScan)
 			{
@@ -223,7 +223,7 @@ int main(int argc, char** argv)
 				const auto slot = msg[2] & 3;
 				uint8_t* pid = nullptr;
 				if((cc == 0x13 || cc == 0x17) && msg[4] != 0x41) pid = &msg[4];			// Parameter, PatchModification
-				else if(cc >= 0x1c && cc <= 0x1f && !(msg[4] & 0x40)) pid = &msg[4];	// PatchPacket de un patch ya cargado
+				else if(cc >= 0x1c && cc <= 0x1f && !(msg[4] & 0x40)) pid = &msg[4];	// PatchPacket of an already loaded patch
 				if(pid && slotPid[slot] >= 0 && (*pid & 0x3f) != slotPid[slot])
 				{
 					*pid = static_cast<uint8_t>((*pid & 0x40) | slotPid[slot]);
@@ -235,7 +235,7 @@ int main(int argc, char** argv)
 			}
 			mc.getPcPort().receive(msg);
 			if(replayNext == replayMsgs.size())
-				std::printf("  >> replay: %zu mensajes enviados (el ultimo en la instruccion %llu)\n", replayMsgs.size(), static_cast<unsigned long long>(i));
+				std::printf("  >> replay: %zu messages sent (the last one at instruction %llu)\n", replayMsgs.size(), static_cast<unsigned long long>(i));
 		}
 		if((i & 0xfff) == 0)
 			mc.getSci().read(sciOut);
@@ -245,8 +245,8 @@ int main(int argc, char** argv)
 		if(pc >= g1::g_memSize || (mc.readImm16(pc) == 0 && mc.readImm16(pc + 2) == 0))
 		{
 			if(pc < g1::g_memSize)
-				std::printf("PC en memoria vacia (opcode 0000): $%06x\n", pc);
-			std::printf("PC fuera de ROM/RAM: $%06x tras %llu instrucciones. Ultimos PCs:\n", pc, static_cast<unsigned long long>(i));
+				std::printf("PC in empty memory (opcode 0000): $%06x\n", pc);
+			std::printf("PC outside ROM/RAM: $%06x after %llu instructions. Last PCs:\n", pc, static_cast<unsigned long long>(i));
 			for(size_t k = 0; k < lastPcs.size(); ++k)
 			{
 				const auto p = lastPcs[(lastPcPos + k) % lastPcs.size()];
@@ -280,7 +280,7 @@ int main(int argc, char** argv)
 		if(report != lastReport)
 		{
 			lastReport = report;
-			std::printf("  %3u%%  PC=$%06x  ciclos=%llu  DSP:", report * 10, mc.getPC(), static_cast<unsigned long long>(cycles));
+			std::printf("  %3u%%  PC=$%06x  cycles=%llu  DSP:", report * 10, mc.getPC(), static_cast<unsigned long long>(cycles));
 			for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 				std::printf(" %u:%s/%06x", d, mc.getDsp(d).booted() ? "on" : "boot", mc.getDsp(d).dsp().getPC().toWord());
 			std::printf("\n");
@@ -289,7 +289,7 @@ int main(int argc, char** argv)
 	}
 
 	mc.getSci().read(sciOut);
-	// G1_TRACE=N: el DSP 0 bloque a bloque (N bloques de 864 ciclos): IRQD, bufferes de salida, DMA4 y lo que sale por TX0.
+	// G1_TRACE=N: DSP 0 block by block (N blocks of 864 cycles): IRQD, output buffers, DMA4 and what leaves on TX0.
 	if(const char* tr = std::getenv("G1_TRACE"))
 	{
 		auto& d = mc.getDsp(0);
@@ -314,7 +314,7 @@ int main(int argc, char** argv)
 			std::printf("\n");
 		}
 	}
-	// ¿Esta calculando algo cada DSP? Memoria X/Y interna antes y despues de 200.000 instrucciones.
+	// Is each DSP computing something? Internal X/Y memory before and after 200,000 instructions.
 	{
 		std::array<std::vector<uint32_t>, g1::g_dspCount> before;
 		for(uint32_t d = 0; d < g1::g_dspCount; ++d)
@@ -326,7 +326,7 @@ int main(int argc, char** argv)
 		for(int k = 0; k < 200000; ++k) mc.exec();
 		for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 		{
-			std::printf("DSP%u cambios en X/Y internas:", d);
+			std::printf("DSP%u changes in internal X/Y:", d);
 			uint32_t n = 0;
 			for(dsp56k::TWord a = 0; a < 0x800; ++a)
 				for(int xy = 0; xy < 2; ++xy)
@@ -342,7 +342,7 @@ int main(int argc, char** argv)
 	{
 		std::vector<uint32_t> only;
 		for(auto p : pcAfter) if(!pcIdle.count(p)) only.push_back(p);
-		std::printf("\nPCs nuevos tras B: %zu. Rangos:\n", only.size());
+		std::printf("\nnew PCs after B: %zu. Ranges:\n", only.size());
 		for(size_t k = 0; k < only.size();)
 		{
 			size_t j = k;
@@ -358,20 +358,20 @@ int main(int argc, char** argv)
 		mc.read16(0xfffa00), mc.read8(0xfffa11), mc.read8(0xfffa15), mc.read8(0xfffa17),
 		mc.read8(0xfffa19), mc.read8(0xfffa1d), mc.read8(0xfffa1f),
 		mc.read16(0xfff920), mc.read16(0xfff922), mc.read16(0xfff91e));
-	std::printf("SCDR: %u lecturas, %u escrituras de la CPU\n", mc.sciDataReads(), mc.sciDataWrites());
+	std::printf("SCDR: %u reads, %u writes by the CPU\n", mc.sciDataReads(), mc.sciDataWrites());
 	std::vector<uint8_t> pcOut = pcOutSoFar;
 	mc.getPcPort().takeTx(pcOut);
 	if(pidRewrites)
-		std::printf("replay: %u mensajes con el pid reescrito (pid por slot: %d %d %d %d)\n", pidRewrites, slotPid[0], slotPid[1], slotPid[2], slotPid[3]);
+		std::printf("replay: %u messages with a rewritten pid (pid per slot: %d %d %d %d)\n", pidRewrites, slotPid[0], slotPid[1], slotPid[2], slotPid[3]);
 	auto& pc = mc.getPcPort();
-	std::printf("PC PORT: %u interrupciones, %u bytes leidos por el OS, %u enviados; escrituras MR=%u CSR=%u CR=%u THR=%u ACR=%u IMR=%u\n",
+	std::printf("PC PORT: %u interrupts, %u bytes read by the OS, %u sent; writes MR=%u CSR=%u CR=%u THR=%u ACR=%u IMR=%u\n",
 		mc.pcPortIrqs(), pc.rxCount(), pc.txCount(), pc.writes(0), pc.writes(1), pc.writes(2), pc.writes(3), pc.writes(4), pc.writes(5));
-	std::printf("PC PORT -> fuera (%zu bytes):", pcOut.size());
+	std::printf("PC PORT -> out (%zu bytes):", pcOut.size());
 	for(size_t k = 0; k < std::min<size_t>(pcOut.size(), 300); ++k)
 		std::printf(" %02x", pcOut[k]);
 	if(FILE* f = std::fopen("/tmp/g1_pcout.bin", "wb")) { std::fwrite(pcOut.data(), 1, pcOut.size(), f); std::fclose(f); }
 	std::printf("\n");
-	std::printf("SCI -> fuera (%zu bytes):", sciOut.size());
+	std::printf("SCI -> out (%zu bytes):", sciOut.size());
 	for(size_t k = 0; k < std::min<size_t>(sciOut.size(), 300); ++k)
 		std::printf(" %02x", sciOut[k]);
 	std::printf("\n");
@@ -379,7 +379,7 @@ int main(int argc, char** argv)
 	std::vector<std::pair<uint64_t, uint32_t>> hot;
 	for(auto& [pc, n] : pcHits) hot.push_back({n, pc});
 	std::sort(hot.rbegin(), hot.rend());
-	std::printf("\nsegunda mitad, PCs mas repetidos (el bucle donde se queda):\n");
+	std::printf("\nsecond half, most repeated PCs (the loop it is stuck in):\n");
 	for(size_t i = 0; i < std::min<size_t>(12, hot.size()); ++i)
 	{
 		char dis[128];
@@ -387,7 +387,7 @@ int main(int argc, char** argv)
 		std::printf("  $%06x  %10llu  %s\n", hot[i].second, static_cast<unsigned long long>(hot[i].first), dis);
 	}
 
-	// Traza HI08: por cada puerto, las primeras escrituras (palabras de 24 bits reconstruidas)
+	// HI08 trace: for each port, the first writes (24-bit words rebuilt)
 	{
 		std::map<uint32_t, std::vector<std::string>> perPort;
 		std::map<uint32_t, uint32_t> pendingHigh;
@@ -405,18 +405,18 @@ int main(int argc, char** argv)
 			else std::snprintf(buf, sizeof(buf), "w%u=%02x", reg, a.value & 0xff);
 			v.push_back(buf);
 		}
-		std::printf("\ntraza HI08 (primeros eventos por puerto):\n");
+		std::printf("\nHI08 trace (first events per port):\n");
 		for(auto& [port, v] : perPort)
 		{
-			std::printf("  $%06x (%zu eventos):", port, v.size());
-			// del puerto $200000 se enseñan los ultimos 80 (lo que llega tras crear el patch)
+			std::printf("  $%06x (%zu events):", port, v.size());
+			// for port $200000 the last 80 are shown (what arrives after creating the patch)
 			const size_t from = (port == 0x200000 && v.size() > 80) ? v.size() - 80 : 0;
 			for(size_t k = from; k < v.size() && k < from + 80; ++k) std::printf(" %s", v[k].c_str());
 			std::printf("\n");
 		}
 	}
 
-	// G1_FINDTX=palabra (hex): quien manda esa palabra de 24 bits a un DSP (puerto, PC de la CPU).
+	// G1_FINDTX=word (hex): who sends that 24-bit word to a DSP (port, CPU PC).
 	if(const char* ft = std::getenv("G1_FINDTX"))
 	{
 		const auto want = static_cast<uint32_t>(std::stoul(ft, nullptr, 16));
@@ -432,26 +432,26 @@ int main(int argc, char** argv)
 			const auto w = ((high[port] & 0xff) << 16) | (a.value & 0xffff);
 			if(w == want && found++ < 10)
 			{
-				std::printf("G1_FINDTX %06x -> $%06x desde PC=$%06x (evento %zu). Antes:", w, port, a.pc, k);
+				std::printf("G1_FINDTX %06x -> $%06x from PC=$%06x (event %zu). Before:", w, port, a.pc, k);
 				for(size_t j = k >= 12 ? k - 12 : 0; j < k; ++j)
 					if(mc.hostTrace()[j].write && (mc.hostTrace()[j].addr & ~7u) == port)
 						std::printf(" [r%u=%x pc=%06x]", mc.hostTrace()[j].addr & 7, mc.hostTrace()[j].value, mc.hostTrace()[j].pc);
 				std::printf("\n");
 			}
 		}
-		std::printf("G1_FINDTX: %u veces\n", found);
+		std::printf("G1_FINDTX: %u times\n", found);
 	}
-	// Tablas de punteros a los puertos HI08 que usa el OS (RAM)
-	std::printf("\npunteros en RAM:");
+	// Pointer tables to the HI08 ports used by the OS (RAM)
+	std::printf("\npointers in RAM:");
 	for(uint32_t a : {0x15bd60u, 0x15bd70u, 0x15bd80u, 0x15bd90u, 0x144640u})
 	{
 		std::printf("\n  $%06x:", a);
 		for(uint32_t i = 0; i < 16; i += 4)
 			std::printf(" %08x", (static_cast<uint32_t>(mc.read16(a + i)) << 16) | mc.read16(a + i + 2));
 	}
-	std::printf("\n  num DSP ($1ab91c) = %u\n", mc.read8(0x1ab91c));
+	std::printf("\n  DSP count ($1ab91c) = %u\n", mc.read8(0x1ab91c));
 
-	// Volcado de la memoria de programa de cada DSP (para desensamblar con dspdis)
+	// Dump of each DSP's program memory (to disassemble with dspdis)
 	for(uint32_t i = 0; i < g1::g_dspCount; ++i)
 	{
 		const auto path = "/tmp/g1_dsp" + std::to_string(i) + "_p.hex";
@@ -464,18 +464,18 @@ int main(int argc, char** argv)
 		}
 	}
 
-	std::printf("\nSalida ESSI (slot 0, TX0) por DSP:\n");
+	std::printf("\nESSI output (slot 0, TX0) per DSP:\n");
 	for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 		for(uint32_t e = 0; e < 2; ++e)
 		{
 			auto& t = taps[d][e];
-			std::printf("  DSP%u E%u: %llu tramas, min %d max %d, %zu valores distintos:", d, e, static_cast<unsigned long long>(t.n), t.mn, t.mx, t.values.size());
+			std::printf("  DSP%u E%u: %llu frames, min %d max %d, %zu distinct values:", d, e, static_cast<unsigned long long>(t.n), t.mn, t.mx, t.values.size());
 			int k = 0;
 			for(auto& [v, c] : t.values) { if(k++ >= 8) break; std::printf(" %06x(x%llu)", v & 0xffffff, static_cast<unsigned long long>(c)); }
 			std::printf("\n");
 		}
 
-	std::printf("\nDSP (palabras/HC/respuestas por HI08, picos de audio):\n");
+	std::printf("\nDSP (HI08 words/HC/replies, audio peaks):\n");
 	for(uint32_t i = 0; i < g1::g_dspCount; ++i)
 	{
 		auto& d = mc.getDsp(i);
@@ -487,9 +487,9 @@ int main(int argc, char** argv)
 				for(uint32_t l = 0; l < g1::Dsp::MeterLines; ++l)
 					if(m[e][sl][l])
 						std::printf(" [E%u s%u tx%u %06x]", e, sl, l, m[e][sl][l]);
-		std::printf("  slots E0=%u E1=%u  HOTX en cola=%zu  CPU acepta=%d  HSR=%06x HCR=%06x PC=$%06x\n", d.lastSlotCount(0), d.lastSlotCount(1),
+		std::printf("  slots E0=%u E1=%u  HOTX queued=%zu  CPU accepts=%d  HSR=%06x HCR=%06x PC=$%06x\n", d.lastSlotCount(0), d.lastSlotCount(1),
 			d.hdi08().txData().size(), mc.getHostPort(i).canReceiveData() ? 1 : 0, d.hdi08().readStatusRegister(), d.hdi08().readControlRegister(), d.dsp().getPC().toWord());
-		std::printf("        SR=%06x OMR=%06x pendientes=%d  HC $7a enmascarado=%d  HC $64=%d  IRQD=%d  IPRC=%06x IPRP=%06x  HCbusy=%d HCpend=%d\n",
+		std::printf("        SR=%06x OMR=%06x pending=%d  HC $7a masked=%d  HC $64=%d  IRQD=%d  IPRC=%06x IPRP=%06x  HCbusy=%d HCpend=%d\n",
 			d.dsp().getSR().toWord(), d.dsp().regs().omr.var, d.dsp().hasPendingInterrupts() ? 1 : 0,
 			d.dsp().isInterruptMasked(0x7a) ? 1 : 0, d.dsp().isInterruptMasked(0x64) ? 1 : 0, d.dsp().isInterruptMasked(0x16) ? 1 : 0,
 			d.periph().read(0xffffff, dsp56k::Instruction::Invalid), d.periph().read(0xfffffe, dsp56k::Instruction::Invalid),
@@ -504,17 +504,17 @@ int main(int argc, char** argv)
 		std::printf("        PCs:");
 		for(auto& [a, n] : d.pcWatch()) std::printf(" $%03x=%llu", a, static_cast<unsigned long long>(n));
 		std::printf("\n");
-		std::printf("        vectores atendidos (ultimo $%02x):", d.lastVector());
+		std::printf("        serviced vectors (last $%02x):", d.lastVector());
 		for(auto& [v, n] : d.servicedVectors()) std::printf(" $%02x=%llu", v, static_cast<unsigned long long>(n));
 		std::printf("\n");
-		std::printf("        modo=%d SP=%06x LA=%06x LC=%06x ext.pend=%d\n", static_cast<int>(d.dsp().getProcessingMode()),
+		std::printf("        mode=%d SP=%06x LA=%06x LC=%06x ext.pend=%d\n", static_cast<int>(d.dsp().getProcessingMode()),
 			d.dsp().regs().sp.var, d.dsp().regs().la.var, d.dsp().regs().lc.var, d.dsp().hasPendingExternalInterrupts() ? 1 : 0);
 		auto& mem = d.dsp().memory();
 		std::printf("        X:$6C0..$6CF:");
 		for(dsp56k::TWord a = 0x6c0; a < 0x6d0; ++a) std::printf(" %06x", mem.get(dsp56k::MemArea_X, a));
 		std::printf("\n        Y:$6C0..$6CF:");
 		for(dsp56k::TWord a = 0x6c0; a < 0x6d0; ++a) std::printf(" %06x", mem.get(dsp56k::MemArea_Y, a));
-		// cuantas palabras distintas de cero hay en X/Y internas (señal de que se calcula algo)
+		// how many non-zero words there are in internal X/Y (a sign that something is computed)
 		uint32_t nzX = 0, nzY = 0;
 		for(dsp56k::TWord a = 0; a < 0x800; ++a) { nzX += mem.get(dsp56k::MemArea_X, a) != 0; nzY += mem.get(dsp56k::MemArea_Y, a) != 0; }
 		std::printf("\n        X:$6E0..$6EF:");
@@ -524,12 +524,12 @@ int main(int argc, char** argv)
 		std::printf("\n        DMA DSTR=%06x", d.periph().getDMA().getDSTR());
 		for(dsp56k::TWord c = 0; c < 6; ++c)
 			std::printf("  c%u:DCR=%06x DSR=%06x DDR=%06x DCO=%06x", c, d.periph().getDMA().getDCR(c), d.periph().getDMA().getDSR(c), d.periph().getDMA().getDDR(c), d.periph().getDMA().getDCO(c));
-		std::printf("\n        X/Y internas no nulas: %u / %u   PC=$%06x SR=%06x  X:5F=%06x Y:5F=%06x (en el DSP 3: desplazamiento y volumen)\n", nzX, nzY, d.dsp().getPC().toWord(), d.dsp().getSR().toWord(), mem.get(dsp56k::MemArea_X, 0x5f), mem.get(dsp56k::MemArea_Y, 0x5f));
+		std::printf("\n        non-zero internal X/Y: %u / %u   PC=$%06x SR=%06x  X:5F=%06x Y:5F=%06x (on DSP 3: offset and volume)\n", nzX, nzY, d.dsp().getPC().toWord(), d.dsp().getSR().toWord(), mem.get(dsp56k::MemArea_X, 0x5f), mem.get(dsp56k::MemArea_Y, 0x5f));
 	}
 	for(uint32_t i = 0; i < g1::g_dspCount; ++i)
 	{
 		auto& d = mc.getDsp(i);
-		std::printf("  DSP%u  arrancado=%d veces=%u paradas=%llu tramas=%llu  PC=$%06x  ciclos=%llu  HCR=%06x HSR=%06x\n", i, d.booted(), d.bootCount(),
+		std::printf("  DSP%u  booted=%d times=%u stalls=%llu frames=%llu  PC=$%06x  cycles=%llu  HCR=%06x HSR=%06x\n", i, d.booted(), d.bootCount(),
 			static_cast<unsigned long long>(d.stalls()), static_cast<unsigned long long>(d.audioFrames()),
 			d.dsp().getPC().toWord(), static_cast<unsigned long long>(d.dsp().getCycles()),
 			d.hdi08().readControlRegister(), d.hdi08().readStatusRegister());
@@ -542,10 +542,10 @@ int main(int argc, char** argv)
 		std::printf("\n");
 	}
 
-	std::printf("codigos del multiplexor del ADC ($14420A):");
+	std::printf("ADC multiplexer codes ($14420A):");
 	for(uint32_t k = 0; k < 20; ++k) std::printf(" %02x", mc.read8(0x14420a + k));
 	std::printf("\n");
-	std::printf("listas de voces por DSP ($1A84A8 + n*$602): ");
+	std::printf("voice lists per DSP ($1A84A8 + n*$602): ");
 	for(uint32_t n = 0; n < 4; ++n)
 	{
 		const uint32_t b = 0x1a84a8 + n * 0x602;
@@ -554,29 +554,29 @@ int main(int argc, char** argv)
 		std::printf("]");
 	}
 	std::printf("\n");
-	std::printf("PIT: %llu interrupciones. Mascara IPL de la CPU (muestras):", static_cast<unsigned long long>(mc.pitIrqs()));
+	std::printf("PIT: %llu interrupts. CPU IPL mask (samples):", static_cast<unsigned long long>(mc.pitIrqs()));
 	for(int k = 0; k < 8; ++k) std::printf(" %d:%llu", k, static_cast<unsigned long long>(iplHist[k]));
 	std::printf("\n");
 	{
 		const uint32_t vbr = 0x1ab4e0;
 		auto vec = [&](uint32_t v) { return (static_cast<uint32_t>(mc.read16(vbr + v * 4)) << 16) | mc.read16(vbr + v * 4 + 2); };
-		std::printf("PIT pendiente al final: %d   SR=%04x\n", mc.hasPendingInterrupt(0x40, 1) ? 1 : 0, mc.getSR());
-		std::printf("vectores (VBR=$%06x): $40=$%06x $42=$%06x $55=$%06x $5A=$%06x  PICR=%04x PITR=%04x\n", vbr, vec(0x40), vec(0x42), vec(0x55), vec(0x5a),
+		std::printf("PIT pending at the end: %d   SR=%04x\n", mc.hasPendingInterrupt(0x40, 1) ? 1 : 0, mc.getSR());
+		std::printf("vectors (VBR=$%06x): $40=$%06x $42=$%06x $55=$%06x $5A=$%06x  PICR=%04x PITR=%04x\n", vbr, vec(0x40), vec(0x42), vec(0x55), vec(0x5a),
 			mc.read16(0xfffa22), mc.read16(0xfffa24));
 	}
 	std::printf("GPT: TCNT=%04x TOC1=%04x TOC2=%04x TMSK=%04x TFLG=%04x ICR=%04x MCR=%04x\n",
 		mc.read16(0xfff90a), mc.read16(0xfff914), mc.read16(0xfff916), mc.read16(0xfff920), mc.read16(0xfff922), mc.read16(0xfff904), mc.read16(0xfff900));
 
 	printChipSelects(mc);
-	std::printf("\nflash: %u bytes programados, %u sectores borrados\n", mc.getFlash().programmedBytes(), mc.getFlash().erasedSectors());
+	std::printf("\nflash: %u bytes programmed, %u sectors erased\n", mc.getFlash().programmedBytes(), mc.getFlash().erasedSectors());
 
-	std::printf("\naccesos a hardware desconocido (%zu direcciones, escrituras a ROM: %u):\n",
+	std::printf("\naccesses to unknown hardware (%zu addresses, ROM writes: %u):\n",
 		mc.unknownAccesses().size(), mc.romWrites());
 	int shown = 0;
 	for(auto& [addr, a] : mc.unknownAccesses())
 	{
 		if(shown++ >= 60) { std::printf("  ...\n"); break; }
-		std::printf("  $%06x  lect=%-8u escr=%-8u ultimo=%04x  primer PC=$%06x\n", addr, a.reads, a.writes, a.lastValue, a.firstPc);
+		std::printf("  $%06x  reads=%-8u writes=%-8u last=%04x  first PC=$%06x\n", addr, a.reads, a.writes, a.lastValue, a.firstPc);
 	}
 	return 0;
 }

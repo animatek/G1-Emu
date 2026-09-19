@@ -1,15 +1,15 @@
 #pragma once
 
-// Un DSP56303 del G1, emulado con dsp56kEmu, conectado al registro HI08 que ve la CPU.
+// One of the G1's DSP56303s, emulated with dsp56kEmu, attached to the HI08 register the CPU sees.
 //
-// El G1 arranca los DSP por el puerto host (HI08): la ROM de arranque del DSP recibe
-// longitud, direccion y palabras, y salta al programa. El DSP 3 recibe primero un
-// programa corto del cargador (PLL, puertos serie, codec) que acaba con `jmp $FF0000`,
-// es decir, vuelve a su ROM de arranque para recibir despues el programa de sonido.
-// Aqui se detecta ese salto y se rearma el arranque.
+// The G1 boots its DSPs through the host port (HI08): the DSP boot ROM receives length,
+// address and words, and jumps to the program. DSP 3 first gets a short loader program
+// (PLL, serial ports, codec) that ends with `jmp $FF0000`, i.e. it returns to its boot ROM
+// to receive the sound program afterwards. That jump is detected here and the boot re-armed.
 //
-// Sin hilos: la CPU manda y cada DSP se pone al dia (catchUp) cuando la CPU lo mira o
-// le escribe, y periodicamente desde el bucle principal.
+//
+// The CPU drives: each DSP catches up (catchUp) to the CPU's time, on its own thread or on
+// the CPU thread (see g1mc.h), and whenever the CPU reads or writes its port.
 
 #include "dsp56kEmu/dsp.h"
 #include "dsp56kEmu/dspBootCode.h"
@@ -44,53 +44,53 @@ namespace g1
 		uint64_t audioFrames() const { return m_audioFrames; }
 		uint64_t hostWords() const { return m_hostWords; }
 		uint64_t irqdCount() const { return m_irqdCount; }
-		uint64_t laChanges() const { return m_laChanges; }	// veces que se ha movido el fin de un bucle
+		uint64_t laChanges() const { return m_laChanges; }	// times a loop end has been moved
 		const std::map<uint32_t, uint64_t>& servicedVectors() const { return m_servicedVectors; }
 		uint32_t lastVector() const { return m_lastVector; }
 		std::map<uint32_t, uint64_t>& pcWatch() { return m_pcWatch; }
 		uint64_t hostCommands() const { return m_hostCommands; }
 		uint64_t wordsToHost() const { return m_wordsToHost; }
 
-		// Medidor: pico (valor absoluto, 24 bits con signo) por ESSI, slot y linea TX
-		// desde el ultimo reset. Sirve para averiguar por donde sale el audio.
+		// Meter: peak (absolute value, signed 24-bit) per ESSI, slot and TX line since the
+		// last reset. Useful to find out where the audio comes out.
 		static constexpr uint32_t MeterSlots = 4, MeterLines = 3;
 		using Meter = std::array<std::array<std::array<uint32_t, MeterLines>, MeterSlots>, 2>;
 		const Meter& meter() const { return m_meter; }
 		void resetMeter() { m_meter = {}; }
 		uint32_t lastSlotCount(uint32_t _essi) const { return m_slotCount[_essi]; }
 
-		// Recibe cada trama que sale por un ESSI: (essi, slot 0 de TX0, slot 1 de TX0),
-		// en 24 bits con signo. Sirve para grabar o reproducir la salida.
+		// Receives every frame leaving an ESSI: (essi, TX0 slot 0, TX0 slot 1), signed 24-bit.
+		// Useful to record or replay the output.
 		using AudioCallback = std::function<void(uint32_t, int32_t, int32_t)>;
 		void setAudioCallback(AudioCallback _cb) { m_audioCallback = std::move(_cb); }
 
-		// Cadena de audio: lo que sale por los ESSI de este DSP entra por los del siguiente.
+		// Audio chain: what leaves this DSP's ESSIs enters the next DSP's.
 		void setNext(Dsp* _next) { m_next = _next; if(_next) _next->m_hasUpstream = true; }
 		uint64_t chainedFrames() const { return m_chainedFrames; }
 
-		// Pico de cada canal que este DSP manda al siguiente (9 por ESSI0 y 9 por ESSI1), en
-		// 24 bits, desde el ultimo reset. Dice que DSP lleva la voz y por que canal.
+		// Peak of each channel this DSP sends to the next (9 on ESSI0 and 9 on ESSI1), 24-bit,
+		// since the last reset. Tells which DSP carries the voice and on which channel.
 		using LinkPeak = std::array<uint32_t, 18>;
 		const LinkPeak& linkPeak() const { return m_linkPeak; }
 		void resetLinkPeak() { m_linkPeak = {}; }
 
-		// Recibe la salida de cada bloque (una muestra a 96 kHz): salidas 1/2 (ESSI0) y 3/4
-		// (ESSI1), en 24 bits con signo. Con el programa de sonido del DSP 3, es lo que va al
-		// codec. Se entrega en flushAudio.
+		// Receives each block's output (one sample at 96 kHz): outputs 1/2 (ESSI0) and 3/4
+		// (ESSI1), signed 24-bit. With DSP 3's sound program, that is what goes to the codec.
+		// Delivered in flushAudio.
 		using BlockCallback = std::function<void(int32_t, int32_t, int32_t, int32_t)>;
 		void setBlockCallback(BlockCallback _cb) { m_blockCallback = std::move(_cb); }
 
-		// Entradas de audio (L, R) en 24 bits con signo: se piden una vez por bloque (96 kHz), en el
-		// hilo de este DSP. Solo las usa el primer DSP de la cadena, que es el que recibe el codec.
+		// Audio inputs (L, R), signed 24-bit: requested once per block (96 kHz), on this DSP's
+		// thread. Only the first DSP of the chain uses them: it is the one that receives the codec.
 		using InputProvider = std::function<void(int32_t&, int32_t&)>;
 		void setInputProvider(InputProvider _p) { m_inputProvider = std::move(_p); }
 
-		// Ejecuta el DSP hasta llegar a _cycles ciclos (o hasta un tope si esta esperando).
-		// Puede ir en su propio hilo: lo que sale por los ESSI se queda en una cola propia.
+		// Runs the DSP up to _cycles cycles (or up to a limit if it is waiting).
+		// It can run on its own thread: what leaves the ESSIs stays in its own queue.
 		void catchUp(uint64_t _cycles);
 
-		// Reparte lo que ha salido por los ESSI desde la ultima vez: a la entrada del DSP
-		// siguiente y al callback de audio. Solo desde el hilo de la CPU, con los DSP quietos.
+		// Hands on what left the ESSIs since the last time: to the next DSP's input and to the
+		// audio callback. Only from the CPU thread, with the DSPs stopped.
 		void flushAudio();
 
 	private:
@@ -130,23 +130,23 @@ namespace g1
 		uint64_t m_nextIrqd = 0, m_irqdCount = 0;
 		std::map<uint32_t, uint64_t> m_servicedVectors;
 		uint32_t m_lastVector = 0;
-		std::map<uint32_t, uint64_t> m_pcWatch;	// PCs a vigilar (solo diagnostico)
+		std::map<uint32_t, uint64_t> m_pcWatch;	// PCs to watch (diagnostics only)
 		Meter m_meter{};
 		AudioCallback m_audioCallback;
 		Dsp* m_next = nullptr;
 		bool m_hasUpstream = false;
 		struct LinkBlock { uint64_t index; std::array<dsp56k::TWord, 18> words; };
-		std::vector<LinkBlock> m_linkOut;	// bloques de este DSP, pendientes de flushAudio
-		std::deque<LinkBlock> m_linkIn;		// bloques del DSP anterior
+		std::vector<LinkBlock> m_linkOut;	// this DSP's blocks, pending flushAudio
+		std::deque<LinkBlock> m_linkIn;		// blocks from the previous DSP
 		LinkPeak m_linkPeak{};
 		std::array<dsp56k::TWord, 2> m_craSeen{};
 		BlockCallback m_blockCallback;
 		InputProvider m_inputProvider;
 		std::array<int32_t, 2> m_input{};
 		using BlockFrame = std::array<dsp56k::TWord, 4>;
-		std::vector<BlockFrame> m_blocks;	// pendiente de flushAudio
+		std::vector<BlockFrame> m_blocks;	// pending flushAudio
 		struct StagedFrame { uint32_t slots; std::array<dsp56k::TWord, 4> v; };
-		std::array<std::vector<StagedFrame>, 2> m_staged;	// por ESSI, pendiente de flushAudio
+		std::array<std::vector<StagedFrame>, 2> m_staged;	// per ESSI, pending flushAudio
 		uint64_t m_chainedFrames = 0;
 		std::array<uint32_t, 2> m_slotCount{};
 	};

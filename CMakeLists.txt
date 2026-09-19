@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.22)
 
-# G1-Emu: el Nord Modular G1 emulado sobre el nucleo de Gearmulator (68331 + DSP56303).
-# El nucleo NO se copia: se enlaza desde un clon de gearmulator-md-mm (GPLv3).
+# G1-Emu: the Nord Modular G1 emulated on the Gearmulator core (68331 + DSP56303).
+# The core is NOT copied: it is linked from a clone of gearmulator-md-mm (GPLv3).
 project(g1emu VERSION 0.0.1 LANGUAGES C CXX)
 
-set(GEARMULATOR_DIR "$ENV{HOME}/src/gearmulator-md-mm" CACHE PATH "Clon de joelanders/gearmulator-md-mm")
+set(GEARMULATOR_DIR "$ENV{HOME}/src/gearmulator-md-mm" CACHE PATH "Clone of joelanders/gearmulator-md-mm")
 if(NOT EXISTS "${GEARMULATOR_DIR}/source/mc68k")
-	message(FATAL_ERROR "No encuentro mc68k en GEARMULATOR_DIR=${GEARMULATOR_DIR}")
+	message(FATAL_ERROR "mc68k not found in GEARMULATOR_DIR=${GEARMULATOR_DIR}")
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
@@ -16,15 +16,15 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 include(${GEARMULATOR_DIR}/base.cmake)
 include(CTest)
 
-# Del arbol de Gearmulator solo hacen falta los nucleos (68k, DSP, hardwareLib).
+# From Gearmulator's tree only the cores are needed (68k, DSP, hardwareLib).
 foreach(synth OSIRUS OSTIRUS VAVRA XENIA NODALRED2X JE8086 ELEKTRON)
 	set(${CMAKE_PROJECT_NAME}_SYNTH_${synth} OFF CACHE BOOL "" FORCE)
 endforeach()
 set(${CMAKE_PROJECT_NAME}_BUILD_JUCEPLUGIN OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 
-# El CMake global de Gearmulator genera synthLib/buildconfig.h en su arbol
-# fuente. Incluimos solo los nucleos y el puente MIDI que necesita el G1.
+# Gearmulator's top-level CMake generates synthLib/buildconfig.h in its source tree.
+# Only the cores and the MIDI bridge the G1 needs are included.
 set(ASMJIT_NO_INSTALL TRUE)
 set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(${GEARMULATOR_DIR}/source/dsp56300/source gearmulator/dsp56300 EXCLUDE_FROM_ALL)
@@ -36,16 +36,16 @@ target_include_directories(g1Midi PUBLIC ${GEARMULATOR_DIR}/source)
 target_link_libraries(g1Midi PUBLIC 68kEmu)
 include(cmake/Dsp56300.cmake)
 
-# JUCE, para la ventana (app/gui) y el banco de pruebas (tools/patchtest). Por defecto, el de
-# Animatek NME al lado (../Nomad2026/JUCE); G1_JUCE_DIR para usar otro. Sin JUCE solo se
-# compilan la consola y las herramientas.
-set(G1_JUCE_DIR "${CMAKE_SOURCE_DIR}/../Nomad2026/JUCE" CACHE PATH "Arbol de JUCE")
+# JUCE, for the window (app/gui) and the test bench (tools/patchtest). By default the one in
+# Animatek NME next to this repo (../Nomad2026/JUCE); G1_JUCE_DIR to use another. Without JUCE
+# only the console and the tools are built.
+set(G1_JUCE_DIR "${CMAKE_SOURCE_DIR}/../Nomad2026/JUCE" CACHE PATH "JUCE tree")
 set(G1_HAVE_JUCE OFF)
 if(EXISTS "${G1_JUCE_DIR}/CMakeLists.txt")
 	add_subdirectory(${G1_JUCE_DIR} ${CMAKE_BINARY_DIR}/juce EXCLUDE_FROM_ALL)
 	set(G1_HAVE_JUCE ON)
 else()
-	message(STATUS "Sin JUCE en ${G1_JUCE_DIR}: ni ventana ni banco de pruebas")
+	message(STATUS "No JUCE in ${G1_JUCE_DIR}: no window and no test bench")
 endif()
 
 enable_testing()
