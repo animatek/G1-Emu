@@ -2,6 +2,12 @@
 
 ## 2026-09-19
 
+- `SIGUIENTES-PASOS.md`: el plan para la siguiente sesión (sacar el audio, rendimiento) y las ideas
+  de Javier (usar el G1 emulado para mejorar NME, recrear módulos a partir de su código DSP, un
+  patch como plugin). `AGENTS.md` para Codex/opencode.
+- `g1run` ya no graba el WAV siempre: solo con `G1_RECORD=segundos`. Una noche sin tope había
+  llegado a 35 GB (borrado).
+
 - **El OS ya carga el código de los patches en los DSP y el oscilador calcula.** Arreglados cinco
   fallos encadenados: el reloj del sistema (el PIT del SIM, que Gearmulator no emula), una espera
   excesiva en las consultas de estado HI08, el arbitraje de host commands (incompatible con las

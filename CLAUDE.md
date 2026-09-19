@@ -49,6 +49,8 @@ desde la ROM en `$C800`, así que la dirección de RAM X está en la ROM en `X -
 | `app/g1run.cpp`, `app/alsamidi.h`, `g1.sh` | El G1 en tiempo real con MIDI virtual (ALSA) y flash persistente. |
 | `tools/g1boot.cpp` | Arranque sin interfaz y desensamblador. |
 
+**El plan y las ideas pendientes están en `SIGUIENTES-PASOS.md`.**
+
 ## Reglas
 
 - **Las ROMs nunca entran en el repo** ni en un release. `Roms/` está fuera de Git:

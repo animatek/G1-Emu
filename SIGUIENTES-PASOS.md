@@ -1,0 +1,88 @@
+# G1-Emu — siguientes pasos
+
+Estado al cerrar la sesión del 2026-09-19. El detalle técnico de todo lo averiguado está en
+`NOTAS.md`; esto es el plan.
+
+## Dónde estamos
+
+- El OS 3.03 del rack arranca en el 68331 emulado, con su flash, su reloj del sistema (PIT) y
+  los 4 DSP56303 cargados con su programa.
+- `./g1.sh` lo corre en tiempo real (~88–95%) con dos puertos MIDI virtuales: **PC Port** (el
+  editor) y **MIDI**.
+- **Animatek NME se conecta y monta patches.** Al insertar un módulo, el OS para los DSP, carga
+  el código del módulo y los reanuda; el oscilador calcula (su fase avanza en el DSP 0).
+- **No suena todavía:** los búferes de salida llegan a cero y el DSP 3 solo transmite `$155`.
+
+## 1. Sacar el primer sonido (prioridad)
+
+1. **Seguir el código del módulo de salida.** Desde `$197` del DSP 0 (el código del patch va
+   detrás de la rutina de bloque `$175`), ver dónde escribe 2Output su muestra y si llega a
+   `Y:$6C0/$6E0`, de donde lee el DMA4 hacia TX0.
+2. **Topología de los ESSI entre DSP.** ¿Bus TDM compartido (todos los DSP y el códec en la
+   misma línea, cada uno en sus slots) o cadena DSP0→1→2→3? Pistas: el DSP 3 pone
+   `TSMA=$FFFFF9` y `RSMA=1`, copia lo que recibe hacia su salida y recibe su propio `$155`; los
+   DSP de voz no tocan sus máscaras. Ahora hay una cadena provisional (hipótesis) en
+   `g1mc.cpp` (`setNext`). Si alguien ha documentado la placa del G1 (esquemas, fotos, foros de
+   reparación), ahorra mucho tiempo.
+3. **Nota:** el G1 solo calcula voces con nota. En la sesión grabada la nota va por el PC Port
+   (`cc=$17`, `sc=$56`: `00 3C` pulsa, `01 3C` suelta). La prueba con la nota mantenida es
+   `replay_hold` (todos los mensajes menos el último).
+4. **Salida a la tarjeta de sonido** cuando haya muestras: ESSI0 del DSP 3 = salidas 1/2 y ESSI1 =
+   3/4 (probable), a 96 kHz, con remuestreo al dispositivo.
+
+Herramientas:
+- `g1boot ROM N replay FICHERO`: reproduce una sesión de NME espaciada, como NME.
+- `g1boot ROM N diff A.bin B.bin`: código del OS que ejecuta un mensaje concreto.
+- `G1_WATCH=dirs`: puntos de observación en el OS. `G1_MARK=1`: marca los búferes del DSP 0.
+- `g1run` graba en `~/.local/share/Animatek/G1-Emu/pcport-in.bin` todo lo que manda NME, para
+  reproducirlo. `G1_RECORD=10 ./g1.sh` graba 10 s de salida en WAV (sin la variable no graba
+  nada: una noche sin tope llegó a 35 GB).
+
+## 2. Rendimiento (para tocarlo en directo)
+
+- Ahora va al ~88–95% del tiempo real, en un solo hilo y sin patch pesado.
+- Repartir los 4 DSP entre hilos (como el Virus TI de Gearmulator) y compilar con PGO (como en
+  Elektron-Emu).
+
+## 3. Ideas de Javier para después (apuntadas el 2026-09-19)
+
+### 3a. Usar el G1 emulado para mejorar NME
+
+Con el OS real corriendo en el emulador tenemos un G1 "de laboratorio" sin encender el sinte:
+- **Banco de pruebas automático para NME:** conectar NME al emulador y probar subidas, ediciones,
+  bancos, morphs, etc. sin hardware y sin riesgo para los patches del G1 real.
+- **Ver lo que hace el OS por dentro al recibir cada mensaje** (con `diff` y `G1_WATCH`): qué
+  mensajes acepta, cuáles ignora, cuándo contesta con ACK y cuándo con NewPatchInSlot, qué
+  recargas dispara y cuánto tardan. Con eso se puede ajustar el ritmo y el orden de envío de NME
+  a lo que el OS realmente soporta, que es de donde salen muchos cuelgues.
+- **Tiempos exactos:** medir cuánto tarda el OS en procesar cada tipo de mensaje y cuándo
+  descarta palabras (la rutina de envío a los DSP descarta si el DSP no está listo en 10
+  consultas). Sirve para que NME no sature al sinte real.
+- **Reproducir cuelgues:** si NME se cuelga con el G1 real, grabar la sesión y reproducirla en
+  el emulador para ver qué le pasó al OS.
+
+### 3b. Recrear módulos a partir de su código DSP
+
+- El OS lleva el código DSP de cada módulo (tablas de recursos por tipo en `$1C3B0C`,
+  `$1C3B24`, `$1C3B28`, en pasos de `$30`; el cargador `$122F72` lo sube con `$B2/$B3/$B4`).
+  Leyendo ese código (osciladores, filtros, envolventes, el DrumSynth) se puede entender cada
+  algoritmo exacto.
+- Con eso se pueden hacer **recreaciones nativas** (C++, sin emulación) de módulos concretos:
+  osciladores, filtros o el DrumSynth en un VST o en un módulo de VCV.
+- **Ojo con la licencia:** el código DSP es de Clavia. No se puede copiar ni distribuir; hay
+  que reimplementar el algoritmo (estudiar cómo funciona y escribirlo de nuevo). Es lo mismo que
+  en Elektron-Emu: las ROMs nunca viajan.
+
+### 3c. Un patch del G1 como plugin
+
+- Convertir un `.pch` en un plugin que suene como ese patch, sin tener que montarlo.
+- Dos caminos: **(1)** con la emulación: el plugin arranca el G1 emulado con ese patch cargado y
+  solo expone sus knobs (necesita la ROM del usuario); **(2)** "compilar" el patch a C++ nativo
+  con los módulos recreados de 3b (sin ROM, pero solo con los módulos que estén recreados).
+
+## Para el agente de Codex
+
+Empieza por `CLAUDE.md` (compilar y usar), `NOTAS.md` (todo lo averiguado) y este fichero.
+La tarea abierta más útil es el punto 1: seguir en el DSP el código del patch (desde `$197`) y
+el cableado de los ESSI hasta que salga una muestra distinta de cero por la salida del DSP 3.
+No toques `~/src/gearmulator-md-mm` (clon de terceros) ni subas ROMs.

@@ -114,15 +114,24 @@ int main(int argc, char** argv)
 	std::ofstream pcLog(std::filesystem::path(flashPath).parent_path() / "pcport-in.bin", std::ios::binary | std::ios::app);
 	std::vector<uint64_t> lastFrames(g1::g_dspCount, 0);
 
-	// La salida del DSP 3 (ESSI0 = salidas 1/2, ESSI1 = 3/4) se graba en un WAV de 4 canales
-	// a 96 kHz y 24 bits, para escucharla mientras no hay audio en tiempo real.
+	// La salida del DSP 3 (ESSI0 = salidas 1/2, ESSI1 = 3/4) se puede grabar en un WAV de 4
+	// canales a 96 kHz y 24 bits: G1_RECORD=10 ./g1.sh graba los primeros 10 s.
 	const auto wavPath = std::filesystem::path(flashPath).parent_path() / "salida.wav";
-	std::ofstream wav(wavPath, std::ios::binary | std::ios::trunc);
-	wav.write(std::string(44, '\0').data(), 44);	// cabecera, se rellena al salir
+	std::ofstream wav;
+	if(std::getenv("G1_RECORD"))
+	{
+		wav.open(wavPath, std::ios::binary | std::ios::trunc);
+		wav.write(std::string(44, '\0').data(), 44);	// cabecera, se rellena al salir
+	}
 	uint64_t wavFrames = 0;
 	std::array<int32_t, 4> wavFrame{};
+	// Solo se graba si se pide con G1_RECORD=segundos (tope; por defecto no se graba nada).
+	const char* recordEnv = std::getenv("G1_RECORD");
+	const uint64_t wavMaxFrames = recordEnv ? static_cast<uint64_t>(std::atof(recordEnv) * 96000.0) : 0;
 	mc.getDsp(3).setAudioCallback([&](const uint32_t _essi, const int32_t _l, const int32_t _r)
 	{
+		if(wavFrames >= wavMaxFrames)
+			return;
 		wavFrame[_essi * 2] = _l;
 		wavFrame[_essi * 2 + 1] = _r;
 		if(_essi != 1)	// se escribe la trama al completar el ESSI1
@@ -233,6 +242,7 @@ int main(int argc, char** argv)
 	std::printf("\nflash guardada en %s\n", flashPath.c_str());
 
 	// Cabecera WAV: PCM, 4 canales, 96 kHz, 24 bits
+	if(wav.is_open())
 	{
 		const uint32_t rate = 96000, channels = 4, bytes = 3;
 		const uint32_t dataSize = static_cast<uint32_t>(wavFrames * channels * bytes);
