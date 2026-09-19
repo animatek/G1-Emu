@@ -2,13 +2,12 @@
 
 ## 2026-09-19
 
-- **El panel, emulado (Claude, cambio local, sin commit).** Pantalla LCD HD44780 (`$202006/7`),
+- **El panel, emulado (Claude, commit `f1e7573`).** Pantalla LCD HD44780 (`$202006/7`),
   32 LEDs en 4 filas y matriz de 24 botones (`$202004/5`, `$201800`), con API para una interfaz.
   Identificados A-D, Store, System y Assign/Morph. Verificación: `g1patchtest` enseña la pantalla
   del G1 (nombre del patch y voces por slot) y responde a los botones (menú System, Store, slots).
 
-- **Los módulos de control, las entradas y las cuatro salidas (Claude, cambio local, sin
-  commit).** El JIT de Gearmulator no seguía los cambios del registro LA, y el OS alarga así el
+- **Los módulos de control, las entradas y las cuatro salidas (Claude, commit `f1e7573`).** El JIT de Gearmulator no seguía los cambios del registro LA, y el OS alarga así el
   bucle principal al cargar módulos de control: envolventes, relojes, maestro/esclavo y el LFO del
   chorus y la cantidad del overdrive se quedaban quietos. Ahora se resincroniza (`onLaChanged`).
   Dos modos de DMA que faltaban (fija→fija y bloque por petición sin borrar DE) dan las entradas
@@ -17,7 +16,7 @@
   los 101 tipos de módulo, A/B del chorus (L≠R) y del overdrive (sigue al mando), AudioIn con senos
   distintos en L y R, 4Output con cuatro señales, `g1run` por JACK 16 s sin cortes, CTest.
 
-- **El nivel, explicado (Claude, cambio local, sin commit).** El OS del rack limita el volumen
+- **El nivel, explicado (Claude, commit `f1e7573`).** El OS del rack limita el volumen
   maestro a −36 dB: lo saca de una tabla de 128 valores (`$153CAC`) indexada con ADC ÷ 2, al
   encender y al mover el mando. Los −62 dBFS de un OscA → 2Output son lo que calcula el OS; el
   emulador no pierde nivel, y los +36 dB de `g1run` deshacen ese tope. Nuevos `G1_FINDTX` y
@@ -50,7 +49,7 @@
   replay de 60 M instrucciones y FFT de la salida de los 4 DSP. Pendiente: nivel muy bajo
   (−62 dBFS), escalonado y cortes sueltos; salida a la tarjeta de sonido.
 
-- **Primer audio del patch (Claude, cambio local, sin commit).** El replay de Codex no sonaba
+- **Primer audio del patch (Claude, commit `f1e7573`).** El replay de Codex no sonaba
   por un fallo del propio replay: en la sesión grabada NME se reconectó a un G1 reiniciado, así
   que la segunda subida de patch recibió otra vez pid 1; en el replay el OS da pid 2 y descarta
   los mensajes siguientes (los módulos y la nota). `g1boot ... replay` reescribe ahora el pid
