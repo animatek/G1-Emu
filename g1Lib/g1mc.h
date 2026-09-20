@@ -77,6 +77,7 @@ namespace g1
 	class Microcontroller final : public mc68k::Mc68k
 	{
 	public:
+		static constexpr uint32_t g_pcTrail = 256;
 		explicit Microcontroller(const std::vector<uint8_t>& _rom);
 		~Microcontroller() override;
 
@@ -186,8 +187,20 @@ namespace g1
 		std::mutex m_wakeMutex;
 		std::condition_variable m_wake;
 		uint64_t m_pitIrqs = 0;
+		std::array<std::atomic<uint32_t>, g_pcTrail> m_pcTrail{};
+		std::atomic<uint32_t> m_pcTrailPos{0};
 	public:
 		uint64_t pitIrqs() const { return m_pitIrqs; }
+		// A trail of the last PCs, sampled every ~1 000 cycles by the emulation thread. It is
+		// what tells, when the G1 stops answering, which loop the OS is stuck in.
+		std::array<uint32_t, g_pcTrail> pcTrail() const
+		{
+			std::array<uint32_t, g_pcTrail> out{};
+			const auto pos = m_pcTrailPos.load(std::memory_order_relaxed);
+			for(uint32_t i = 0; i < g_pcTrail; ++i)
+				out[i] = m_pcTrail[(pos + i) % g_pcTrail].load(std::memory_order_relaxed);
+			return out;	// oldest first
+		}
 		// Panel knobs: ADC value for each multiplexer code (what the OS writes to $202000)
 		void setAdc(uint8_t _value) { m_adc.fill(_value); }
 		void setAdc(uint8_t _select, uint8_t _value) { m_adc[_select] = _value; }

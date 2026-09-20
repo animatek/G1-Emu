@@ -198,10 +198,17 @@ int main(int argc, char** argv)
 
 	// Upload, like NME: a packet, its reply, the next one.
 	int pid = -1;
+	// How long to wait for each packet's reply. The OS takes much longer at some points of a
+	// big patch (it is loading code into the DSPs), so G1_ACKMS raises it.
+	const uint32_t ackMs = std::getenv("G1_ACKMS") ? static_cast<uint32_t>(std::atoi(std::getenv("G1_ACKMS"))) : 300;
 	for(size_t i = 0; i < packets.size(); ++i)
 	{
 		const auto msg = UploadPacketizer::frame(packets[i], i == 0, i + 1 == packets.size(), 0);
-		const auto reply = transact(mc, msg);
+		const auto before = mc.ucCycles();
+		const auto reply = transact(mc, msg, ackMs);
+		const auto ms = (mc.ucCycles() - before) / g_ms;
+		if(ms > 200 && std::getenv("G1_VERBOSE"))
+			std::printf("  packet %zu took %llu ms\n", i + 1, static_cast<unsigned long long>(ms));
 		if(std::getenv("G1_VERBOSE"))
 			std::printf("  packet %zu: %s -> %s\n", i + 1, hex(msg, 12).c_str(), hex(reply, 16).c_str());
 		// Slot 0 ACK: F0 33 58 06 xx 36 pid ...
@@ -337,9 +344,10 @@ int main(int argc, char** argv)
 	capture = false;
 	std::vector<uint8_t> rest;
 	mc.getPcPort().takeTx(rest);
-	for(size_t k = 0; k + 5 < rest.size(); ++k)
-		if(rest[k] == 0xf0 && rest[k + 5] == 0x7f)	// error from the OS
-			std::printf("the OS answered with an error: %s\n", hex({rest.begin() + static_cast<long>(k), rest.end()}).c_str());
+	// $7F is the plain ACK the OS sends for each packet (NME treats it as one), so it is not
+	// worth reporting; what matters is whether the patch ended up loaded and sounding.
+	if(std::getenv("G1_VERBOSE") && !rest.empty())
+		std::printf("the OS said after the note: %s\n", hex(rest, 40).c_str());
 
 	if(std::getenv("G1_VERBOSE"))
 		for(uint32_t d = 0; d < g1::g_dspCount; ++d)

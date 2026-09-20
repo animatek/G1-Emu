@@ -99,6 +99,12 @@ namespace g1
 		for(auto& port : m_hostPorts)
 			port.exec(cycles);
 		if((m_ucCycles & 0x3ff) < cycles)	// every ~1000 CPU cycles
+		{
+			const auto pos = m_pcTrailPos.load(std::memory_order_relaxed);
+			m_pcTrail[pos].store(getPC(), std::memory_order_relaxed);
+			m_pcTrailPos.store((pos + 1) % g_pcTrail, std::memory_order_relaxed);
+		}
+		if((m_ucCycles & 0x3ff) < cycles)
 			catchUpDsps();
 		execPcPort();
 		execPit(cycles);

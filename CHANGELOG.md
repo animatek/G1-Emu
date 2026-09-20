@@ -7,6 +7,46 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **Post-reboot recovery and build repair (Codex).** Moved the existing PC-trail size declaration
+  before the array that uses it, fixing compilation of the pending diagnostic changes without
+  removing them. Verification: full Release build, CTest (1/1), and `git diff --check` passed. A
+  12-second run with temporary factory flash and audio disabled exposed both ALSA ports, ran all
+  four DSPs at 99.9–100% speed, and exited cleanly. The current boot has no matching kernel oops and
+  the experimental driver is not loaded. Audio playback, NME and the single-endpoint Bitwig
+  requirement remain unverified in this session; no user flash or physical MIDI connections were
+  changed.
+
+- **Failed single-port kernel bridge experiment withdrawn (Codex).** A modified Linux virtual MIDI
+  bridge built successfully with Clang for 7.2.5-1-cachyos but faulted during insertion on the
+  maintainer's host: the kernel logged a null-pointer page fault in `dev_driver_string`, followed by
+  another insertion fault. No G1Emu card was registered. Build success was not a sufficient
+  validation; this should have been tested in an isolated VM first. Advised saving work and
+  rebooting, without forced unload or another insertion; no boot-time installation was made. Removed
+  the experimental driver/build from the repo and restored the helper to the previously tested stock
+  snd-virmidi bridge. A single named Raw MIDI endpoint remains unresolved. Verification: live ALSA
+  enumeration, kernel journal, helper syntax and `git diff --check`; recovery after reboot has not
+  yet been verified.
+
+- **Instance and VST3 hosting plan (Codex).** Javier confirmed the Bitwig bridge appears and plays,
+  then requested one named G1Emu performance port per instance and a shared standalone/VST3
+  direction. Added `docs/instance-hosting.md`, linked from the roadmap and bridge guide, covering
+  engine/host separation, independent state, optional editor endpoints, native plugin MIDI/audio and
+  acceptance gates. Verification: inspected EmuHost's shared default flash/temp/log paths and device
+  ownership; Linux driver source confirms hard-coded 16 input/output substreams and the Virtual Raw
+  MIDI name. This is a design proposal; endpoint reduction/renaming and VST3 are not implemented.
+  Documentation links and `git diff --check` verified; no runtime code changed.
+
+- **Bitwig Raw MIDI bridge for issue #1 (Codex).** Added `tools/bitwig-midi.py` and
+  `docs/bitwig-midi.md`: a dedicated `snd-virmidi` card exposes a Raw MIDI device to Bitwig and the
+  helper connects only its output to `G1-Emu:MIDI`. It discovers current client/card numbers,
+  accepts an existing connection and refuses missing or ambiguous clients. NME keeps its separate PC
+  Port. Corrected the ALSA header's claim that every DAW sees sequencer ports. Verification: Python
+  compilation and `git diff --check`; live ALSA test with the user's newly loaded G1Emu card
+  (hw:5,0), two helper runs creating one subscription, and Note On/Off sent through Raw MIDI: the
+  temporary-flash, audio-disabled emulator reported MIDI input increasing from 0 to 6 bytes while PC
+  Port input stayed 0. Missing-emulator refusal checked after stopping it. Bitwig's device picker
+  and audible playback are still awaiting user verification.
+
 - **A module battery worth the name: 80 of the 109 types give a signal (Claude).** New
   `tools/battery/battery.py`: it builds a patch per module type with what each one needs to show
   signs of life — an oscillator on its audio inputs, an LFO on its control ones, a running clock
