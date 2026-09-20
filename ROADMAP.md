@@ -17,6 +17,8 @@ far is in `NOTES.md`.
 - `g1gui` shows the panel: display, 18 knobs and master volume, the 18 buttons, the dial and the
   LEDs. Every button is identified and the dial works (it turns values on the G1's own screens).
 
+**The short list, in order, with the detail of each: [`docs/next-steps.md`](docs/next-steps.md).**
+
 ## Next
 
 **Product direction: standalone and VST3 share one engine.** Javier asked for one

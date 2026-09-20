@@ -7,6 +7,18 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **A handover for whoever picks this up next (Claude).** New `docs/next-steps.md`: the short list
+  in order, written so nobody has to reconstruct an evening of work before starting. The blocker
+  first — the DSP56300 JIT raising an illegal instruction on Apple Silicon — with what
+  `g1dspcheck` actually tests, the suspects (our own MOVEM and DO FOREVER extensions in
+  `g1Lib/dsp56300.cpp` and `cmake/Dsp56300.cmake`, written against the emitter's shared mnemonics
+  so they compile for both architectures), how to bisect it on CI without owning a Mac, and what
+  the interpreter fallback would cost. Then what only the real machines can say, the audio device
+  list in the settings window, the module defaults that belong in `../Nomad2026`, the 29 silent
+  modules, and signing. It ends with the two traps that cost time today: two emulators answering
+  to the same port name, and the real flash being one missing argument away. Linked from
+  `AGENTS.md` and `ROADMAP.md`.
+
 - **CI is green on Linux both ways and on Windows; macOS builds but its DSP raises an illegal
   instruction (Claude).** After the one-line fix, Windows compiles and passes, and so do both
   Linux jobs. macOS builds everything and then `g1dspcheck` dies with `ILLEGAL` on the Apple
