@@ -9,7 +9,9 @@ Older entries cite their commit by hand.
 
 - **Apple Silicon's DSP crash can now be pinned to one synthetic program (Codex).**
   `g1dspcheck` prints and flushes the name and JIT block size before each case, so a fatal signal
-  on the macOS ARM runner leaves the exact last case in the CI log instead of only `ILLEGAL`.
+  on the macOS ARM runner leaves the exact last case in the CI log instead of only `ILLEGAL`; on
+  GitHub Actions it also emits each case as a check annotation, which remains visible through the
+  public API even when anonymous access to the raw log is unavailable.
   Verification: the Release test still passes locally on x86-64; Apple Silicon diagnosis is the
   purpose of the branch CI run.
 

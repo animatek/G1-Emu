@@ -4,6 +4,7 @@
 #include "dsp56kEmu/peripherals.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <initializer_list>
 #include <stdexcept>
 
@@ -122,6 +123,8 @@ int main()
 			auto run = [blockSize](const char* name, const auto& test)
 			{
 				std::fprintf(stderr, "RUN: %s (block size %u)\n", name, blockSize);
+				if(std::getenv("GITHUB_ACTIONS"))
+					std::fprintf(stderr, "::notice title=DSP test case::%s (block size %u)\n", name, blockSize);
 				test();
 			};
 
