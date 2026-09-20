@@ -47,6 +47,15 @@ namespace
 		}
 	};
 
+	void basicJit(uint32_t blockSize)
+	{
+		Machine m(blockSize);
+		// nop; jmp $102
+		m.program(0x100, {0, 0x0c0102, 0x0c0102});
+		m.dsp.setPC(0x100);
+		m.until(0x102);
+	}
+
 	void shortProgramMove(uint32_t blockSize)
 	{
 		Machine m(blockSize);
@@ -128,6 +137,7 @@ int main()
 				test();
 			};
 
+			run("basic JIT", [=] { basicJit(blockSize); });
 			run("short MOVEM", [=] { shortProgramMove(blockSize); });
 			run("MOVEM JIT invalidation", [=] { invalidateProgramMove(blockSize); });
 			run("DO FOREVER with LC=0", [=] { foreverLoop(blockSize, 0); });
