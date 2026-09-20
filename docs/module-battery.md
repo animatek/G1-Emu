@@ -31,8 +31,23 @@ Run of 2026-09-20, 3 s per module: **61 sound**, **19 move** (a slow signal: LFO
 ## Followed up by hand
 
 - **Constant** is bipolar, so its default of 64 is zero. At 127 it gives a solid level.
-- **DrumSynth** with its levels opened (`MLevel`, `SLevel`, `Amount`) is the loudest module
-  measured so far, −51.7 dBFS against the −62 of an oscillator. Its defaults of 25 make no sound.
+- **DrumSynth is not broken: it is born inaudible, and the fault is in the module description.**
+  Its level law is an ordinary exponential one, measured on the emulator with `MLevel` and
+  `SLevel` together: 0 → −107 dBFS (the 24-bit floor: silence), 25 → −102, 40 → −89.6, 60 → −76.4,
+  80 → −66.3, 100 → −58.6, 127 → −50.9, about 0.45 dB per step over most of the range. An
+  oscillator measures −62, so at 100 the DrumSynth is already the loudest module in the machine
+  and at its default of 25 it sits 40 dB under an oscillator, which is nothing.
+  **And 25 is a placeholder, not a default Clavia chose:** in the whole of NME's `modules.xml` the
+  value 25 appears twelve times and all twelve are this module's, while `MTune` and `STune` have
+  no default at all and go up as 0. Every other module that defaults all its parameters to one
+  value uses one that means something — OscA 64 (centre), FilterBank 127 (open), Mixer (8) 100.
+  So a DrumSynth created in NME comes up silent, and the fix belongs in `Nomad2026/data/modules.xml`,
+  not here.
+- **The same trap catches six more modules.** A parameter with no default goes up as 0, and when
+  it is a level that means mute: `4-1Switch` (its four levels), `1-4Switch` (`level`), `Multi-Env`
+  (`level 4`), `OscC` (`pitch mod amount`), `EqShelving` (`gain`) and `RingMod` (`ringmod depth
+  mod`). The two switches are born completely silent. 255 of the 515 parameters in the file have
+  no default; these are the ones where it is audible.
 - **AudioIn** needed a signal in the G1's inputs, which the battery now sends (440 Hz).
 - **MasterOsc**'s only output is a master-slave one, which carries no signal of its own: it can
   only be judged through a slave module.

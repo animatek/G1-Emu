@@ -7,6 +7,35 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **The README says what a Nord Modular needs and does not come with, and any editor is welcome
+  (Claude).** Two things a newcomer has no way to guess. **It starts empty:** the ROM carries the
+  operating system and nothing else, so a fresh flash is built from the OS alone and every slot says
+  `Empty patch` — real hardware left the factory with a bank and G1-Emu cannot give you that one;
+  the patches are the user's to find among twenty-five years of community `.pch` files, or to make.
+  **And making one needs an editor**, because the G1's panel edits parameters and not patches: on
+  the real instrument the patch comes down the PC Port, and the emulator is no different. Said
+  plainly that **any editor speaking the G1's protocol works** and that nothing here prefers one:
+  Animatek NME is only the one tested first. Listed the original Clavia v3.03 — with [Stage
+  Engine](https://www.stage-engine.com/), which packages it for current macOS with the Wine parts
+  bundled, free with an optional donation, for the G1 and the Micro Modular (checked on the site) —
+  Nomad/NMEdit, and nordmodulareditor.com, with an invitation to add any that is missing and to
+  report it here when an editor speaks the protocol and G1-Emu answers badly. The status paragraph
+  now says **Linux only, and that macOS and Windows do not compile**, which is the truth:
+  `alsamidi.h`, `alsaaudio.h` and `jackaudio.h` are included unconditionally, `EmuHost` reads
+  `/proc`, and the CMake has no platform branch.
+
+- **Roadmap: what the three systems really cost, checked in JUCE instead of assumed (Claude).** Item
+  5 now separates the two halves. The audio is the easy one: every backend needed is already in the
+  JUCE 8.0.12 in `../Nomad2026/JUCE` (CoreAudio, WASAPI, ASIO, DirectSound, ALSA, JACK), with the
+  caveat that our own JACK client names its ports like the back panel and connects itself, which
+  JUCE's does not. The virtual MIDI ports are the hard one: macOS has them natively through CoreMIDI
+  with nothing to install, Linux has them through the ALSA sequencer, and **Windows only through
+  Windows MIDI Services** — `juce_Midi_windows.cpp` has three backends and only that one implements
+  a virtual output; the flag is off by default, needs a minimum Windows SDK, and JUCE's own comment
+  says it only worked on a Canary insider build when written, so it has to be tried on a real
+  Windows 11 before anything is promised. Noted that the raw-MIDI split that forced the USB gadget
+  here is Linux's alone, and that the plugin settles all three at once.
+
 - **The ROM stops being a hard-coded path: G1-Emu looks for one, says what is wrong with what it
   finds, and offers the folder (Claude).** Until now both front ends took the ROM as an argument and
   checked only its size, which is no way to hand the thing to anyone else: G1-Emu ships no ROM and
@@ -49,6 +78,21 @@ Older entries cite their commit by hand.
   the host side comes out of `amidi -p hw:5,0 -d` on the gadget side), then the emulator reporting
   `raw MIDI: MIDI <-> f_midi` and its MIDI input counter moving by 6 bytes for two notes sent the
   way Bitwig sends them. Release build and CTest 1/1.
+
+- **Why the DrumSynth does not sound: it is born inaudible, and the fault is not the emulator's
+  (Claude; documentation only).** Measured on the emulator by sweeping `MLevel` and `SLevel`
+  together: 0 → −107 dBFS (the 24-bit floor), 25 → −102, 40 → −89.6, 60 → −76.4, 80 → −66.3, 100 →
+  −58.6, 127 → −50.9 — an ordinary exponential level law of about 0.45 dB per step. An oscillator
+  measures −62, so at 100 the DrumSynth is the loudest module there is and at its default of 25 it
+  sits 40 dB below an oscillator: nothing. The default is the problem, and it is a placeholder: in
+  NME's whole `modules.xml` the value 25 appears twelve times and all twelve are this module's,
+  while `MTune` and `STune` have no default at all and go up as 0. Every other module that flattens
+  its defaults to one value picks one that means something (OscA 64, FilterBank 127, Mixer (8) 100).
+  Six more modules fall into the same trap — a level with no default goes up as 0, which is mute:
+  `4-1Switch` (all four levels), `1-4Switch`, `Multi-Env`, `OscC`, `EqShelving` and `RingMod`; the
+  two switches are born silent. The fix is in `Nomad2026/data/modules.xml`, not in this repo.
+  Verification: seven runs of `tools/battery/battery.py --only DrumSynth --param 4=v --param 5=v`,
+  plus a count of every `defaultValue` in the file (260 of 515 parameters have one).
 
 - **The notice stops stopping every startup: it moves into the settings window (Claude).** Javier
   asked for it. It is shown at startup **only on the first run** — when there is no settings file

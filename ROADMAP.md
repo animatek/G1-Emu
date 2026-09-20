@@ -19,6 +19,17 @@ far is in `NOTES.md`.
 
 ## Next
 
+**Product direction: standalone and VST3 share one engine.** Javier asked for one
+performance MIDI destination per standalone instance (`G1Emu`, `G1Emu 2`, ...), with
+MIDI and audio handed over by the DAW in VST3. The instance, state and host adapter
+plan is in [Instance hosting](docs/instance-hosting.md). The emulator now takes over
+its own `snd-virmidi` card and links both ports itself (`docs/bitwig-midi.md`), which
+removes the helper script but not the driver's names ("Virtual Raw MIDI") nor its 16
+subdevices: two endpoints called "PC Port" and "MIDI" need either a driver of the G1's
+own (the 2026-09-20 attempt faulted on insertion; any new one gets validated in a VM
+first) or the plugin, where no card is involved. Shared default flash files must be
+addressed before multi-instance use.
+
 1. **What the panel still owes: Assign/Morph.** It is the only key with no known effect; nothing
    changes in any screen reached so far, with or without Shift, before or after moving a knob.
    Shift, Find, Panel Split and the navigator are settled, and the Oct Shift keys belong to the
@@ -32,8 +43,42 @@ far is in `NOTES.md`.
    now is in the modules or the OS, not in the transport.
 4. **Compare the level with a real G1**: record the same OscA → 2Output at full master volume and
    see whether the hardware is louder (analog stage).
-5. **macOS and Windows:** move audio and MIDI from ALSA/JACK to JUCE, which is already used by the
-   window, and add CI builds for the three systems. Only then does a binary release make sense.
+5. **macOS and Windows.** Today the emulator is Linux-only, and not by accident: `alsamidi.h`,
+   `alsaaudio.h` and `jackaudio.h` are included unconditionally, `EmuHost` reads `/proc/asound` and
+   `/proc/self/stat`, and the CMake has no platform branch at all. It does not fail to run
+   elsewhere — it fails to compile. The move is to JUCE, which the window already links, plus CI
+   for the three systems. Only then does a binary release make sense.
+
+   **The audio is the easy half.** JUCE 8 carries every backend we need and we already have them
+   in the tree: `juce_CoreAudio_mac.cpp`, `juce_WASAPI_windows.cpp`, `juce_ASIO_windows.cpp`,
+   `juce_DirectSound_windows.cpp`, `juce_ALSA_linux.cpp` and `juce_JackAudio.cpp`. One
+   `AudioDeviceManager` and JUCE's device selector in the settings window. The one thing to keep
+   in mind is that our own JACK client names its ports `out_1..out_4` and `in_L`/`in_R` like the
+   back panel and connects itself: JUCE's JACK backend does not, so it is probably worth keeping
+   the native path on Linux and using JUCE for the other two.
+
+   **The virtual MIDI ports are the hard half**, and they are what makes an editor see a `G1-Emu`
+   that is not hardware. Checked against the JUCE 8.0.12 in `../Nomad2026/JUCE`:
+
+   | | Virtual ports | How |
+   | --- | --- | --- |
+   | macOS | **yes**, and nothing to install | CoreMIDI, `MIDISourceCreate` / `MIDIDestinationCreate` |
+   | Linux | **yes** | ALSA sequencer, what we do now |
+   | Windows | **only with Windows MIDI Services** | `MidiVirtualDeviceManager::CreateVirtualDevice` |
+
+   On Windows `juce_Midi_windows.cpp` has three backends and only the first can create a port:
+   `JUCE_USE_WINDOWS_MIDI_SERVICES`, then WinRT, then Win32 (WinMM). The flag is **off by
+   default**, it needs a minimum Windows SDK, JUCE's own comment says it only worked on the Canary
+   insider build of Windows 11 when it was written, and the code notes the virtual device needs a
+   client plugin installed to function. That comment may well be out of date, but **it has to be
+   tried on a real Windows 11 before anything is promised**. When it is not available,
+   `MidiOutput::createNewDevice` returns nothing: the standalone should then open ordinary MIDI
+   ports, say plainly that it could not make a virtual one, and point at loopMIDI — not fail.
+
+   The good news is that **the raw-MIDI problem is Linux's alone**: macOS and Windows have no
+   split between sequencer ports and raw devices, so the USB gadget of `docs/bitwig-midi.md` has
+   no equivalent to fight elsewhere. And the plugin settles all three at once, because inside a
+   VST3 the host hands over the MIDI and no virtual port is needed anywhere.
 6. **Performance:** real-time with ~45% headroom on a Ryzen 7 5700X. If more is needed: skip the
    idle loop of DSPs with no voices, drop the TX side of the links (read from memory already), PGO.
 
