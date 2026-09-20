@@ -1,8 +1,10 @@
 // g1run: the emulated Nord Modular G1, in real time, in the console.
 //
-//   g1run ROM [FLASH]
+//   g1run [ROM] [FLASH]
 //
-// ROM   = the 512 KB rack ROM (OS 3.03). Never goes into the repo.
+// ROM   = the 512 KB rack ROM (OS 3.03). Never goes into the repo. Without it, the ROM named in
+//         the settings file is used, and failing that the ROM folders are searched (romfinder.h);
+//         when none of them has one, the message says where to put it.
 // FLASH = where the 1 MB flash is saved (installed OS + stored patches). Default
 //         ~/.local/share/Animatek/G1-Emu/flash.bin. If missing, it is created with the
 //         factory OS from the ROM, like a freshly updated G1.
@@ -33,14 +35,9 @@ namespace
 
 int main(int argc, char** argv)
 {
-	if(argc < 2)
-	{
-		std::fprintf(stderr, "usage: g1run ROM [FLASH]\n");
-		return 2;
-	}
 	g1app::EmuHost host;
 	std::string log;
-	const bool ok = host.start(argv[1], argc > 2 ? argv[2] : "", log);
+	const bool ok = host.start(argc > 1 ? argv[1] : "", argc > 2 ? argv[2] : "", log);
 	std::printf("%s", log.c_str());
 	std::fflush(stdout);
 	if(!ok)

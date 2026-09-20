@@ -1,6 +1,7 @@
 #include "emuhost.h"
 
 #include "alsaaudio.h"
+#include "romfinder.h"
 #include "alsamidi.h"
 #ifdef G1_HAVE_JACK
 #include "jackaudio.h"
@@ -49,10 +50,34 @@ namespace g1app
 			return static_cast<double>(utime + stime) / static_cast<double>(sysconf(_SC_CLK_TCK));
 		}
 
+		// The snd-virmidi card reserved for the G1 (its ID is G1Emu unless G1_RAWMIDI names
+		// another one). Returns its card number, or -1 if it is not loaded.
+		int rawMidiCard(const std::string& _id)
+		{
+			if(_id.empty())
+				return -1;
+			const std::string& id = _id;
+			std::error_code ec;
+			for(const auto& entry : std::filesystem::directory_iterator("/proc/asound", ec))
+			{
+				const auto name = entry.path().filename().string();
+				if(name.rfind("card", 0) != 0)
+					continue;
+				std::ifstream f(entry.path() / "id");
+				std::string line;
+				if(!std::getline(f, line) || line != id)
+					continue;
+				try { return std::stoi(name.substr(4)); } catch(...) { return -1; }
+			}
+			return -1;
+		}
+
 		// The outputs carry DSP 3's X:$5F offset ($155, almost nothing); on the hardware the
 		// output capacitor removes it. It is subtracted so no DC reaches the sound card.
 		constexpr int32_t g_dc = 0x155;
 	}
+
+	const char* const EmuHost::Options::audioNames[3] = {"jack", "alsa", "no"};
 
 	EmuHost::EmuHost() = default;
 
@@ -67,14 +92,103 @@ namespace g1app
 		return std::string(home ? home : ".") + "/.local/share/Animatek/G1-Emu/flash.bin";
 	}
 
+	std::string EmuHost::defaultSettingsPath()
+	{
+		return (std::filesystem::path(defaultFlashPath()).parent_path() / "settings.conf").string();
+	}
+
+	bool EmuHost::Options::load(const std::string& _path)
+	{
+		std::ifstream f(_path);
+		if(!f)
+			return false;
+		std::string line;
+		while(std::getline(f, line))
+		{
+			const auto eq = line.find('=');
+			if(line.empty() || line[0] == '#' || eq == std::string::npos)
+				continue;
+			auto trim = [](std::string _s)
+			{
+				const auto a = _s.find_first_not_of(" \t\r");
+				const auto b = _s.find_last_not_of(" \t\r");
+				return a == std::string::npos ? std::string() : _s.substr(a, b - a + 1);
+			};
+			const auto key = trim(line.substr(0, eq));
+			const auto value = trim(line.substr(eq + 1));
+			if(key == "audio")				audio = value;
+			else if(key == "gainDb")		gainDb = static_cast<float>(std::atof(value.c_str()));
+			else if(key == "jackConnect")	jackConnect = value != "0";
+			else if(key == "rawMidiCard")	rawMidiCard = value;
+			else if(key == "rom")			rom = value;
+			else if(key == "showDisclaimer") showDisclaimer = value != "0";
+		}
+		return true;
+	}
+
+	bool EmuHost::Options::save(const std::string& _path) const
+	{
+		std::error_code ec;
+		std::filesystem::create_directories(std::filesystem::path(_path).parent_path(), ec);
+		std::ofstream f(_path, std::ios::trunc);
+		if(!f)
+			return false;
+		f << "# G1-Emu settings. The G1_* environment variables still win over this file.\n"
+		  << "audio = " << audio << "\n"
+		  << "gainDb = " << gainDb << "\n"
+		  << "jackConnect = " << (jackConnect ? 1 : 0) << "\n"
+		  << "rawMidiCard = " << rawMidiCard << "\n"
+		  << "rom = " << rom << "\n"
+		  << "showDisclaimer = " << (showDisclaimer ? 1 : 0) << "\n";
+		return f.good();
+	}
+
 	bool EmuHost::start(const std::string& _romPath, const std::string& _flashPath, std::string& _log)
 	{
+		m_options.load(defaultSettingsPath());
+
+		// The environment wins over whatever the window asked for: the scripts and the test bench
+		// are driven that way and must keep working with the settings file in place.
+		if(const char* v = std::getenv("G1_ROM"))
+			m_options.rom = v;
+		if(const char* v = std::getenv("G1_AUDIO"))
+			m_options.audio = v;
+		if(const char* v = std::getenv("G1_GAIN_DB"))
+			m_options.gainDb = static_cast<float>(std::atof(v));
+		if(const char* v = std::getenv("G1_JACK_CONNECT"))
+			m_options.jackConnect = std::string(v) != "0";
+		if(const char* v = std::getenv("G1_RAWMIDI"))
+			m_options.rawMidiCard = std::string(v) == "0" ? "" : v;
+
+		// The ROM. G1-Emu ships none, so not finding one is the normal first run, not a crash:
+		// the message has to say what to put where, and what was wrong with what is already there.
+		m_romProblem.clear();
+		const auto search = findRom(_romPath, m_options.rom);
 		std::vector<uint8_t> rom;
-		if(!loadFile(_romPath, rom) || rom.size() != g1::g_romSize)
+		if(!search.found() || !inspectRom(search.path, rom).ok())
 		{
-			_log += "the ROM must be 512 KB: " + _romPath + "\n";
+			std::string msg = "G1-Emu needs the 512 KB ROM of a Nord Modular rack, and it includes none.\n\n";
+			if(!search.rejected.empty())
+			{
+				msg += "What was looked at and why it does not serve:\n";
+				for(const auto& [file, why] : search.rejected)
+					msg += "  " + file + "\n      " + why + "\n";
+				msg += "\n";
+			}
+			msg += "Put a dump of your own unit's ROM in:\n  " + publicRomFolder() + "\n";
+			if(search.looked.size() > 1)
+			{
+				msg += "\nAlso looked in:\n";
+				for(size_t i = 1; i < search.looked.size(); ++i)
+					msg += "  " + search.looked[i] + "\n";
+			}
+			m_romProblem = msg;
+			_log += msg;
 			return false;
 		}
+		m_options.rom = search.path;
+		_log += "ROM: " + search.path + "\n";
+
 		m_flashPath = _flashPath.empty() ? defaultFlashPath() : _flashPath;
 		m_mc = std::make_unique<g1::Microcontroller>(rom);
 
@@ -100,19 +214,18 @@ namespace g1app
 		m_midiPort = m_midi->addPort("MIDI");
 		m_stats.midi = "G1-Emu:PC Port (editor) and G1-Emu:MIDI, client " + std::to_string(m_midi->clientId());
 		_log += "MIDI ports: " + m_stats.midi + "\n";
+		m_rawMidiBound = bindRawMidi(_log);
 
 		// Audio
-		const char* audioDev = std::getenv("G1_AUDIO");
-		if(!audioDev || std::string(audioDev) != "no")
+		if(m_options.audio != "no")
 		{
-			const char* gainEnv = std::getenv("G1_GAIN_DB");
-			const float gainDb = gainEnv ? static_cast<float>(std::atof(gainEnv)) : 36.0f;
+			const float gainDb = m_options.gainDb;
 			const float gain = std::pow(10.0f, gainDb / 20.0f);
 			char buf[160];
 #ifdef G1_HAVE_JACK
-			if(!audioDev || std::string(audioDev) == "jack")
+			if(m_options.audio == "jack")
 			{
-				m_jack = std::make_unique<JackAudio>("G1-Emu", gain);
+				m_jack = std::make_unique<JackAudio>("G1-Emu", gain, m_options.jackConnect);
 				if(m_jack->valid())
 				{
 					std::snprintf(buf, sizeof(buf), "JACK G1-Emu at %u Hz, %+.0f dB (out_1..4, in_L/R)", m_jack->rate(), gainDb);
@@ -124,7 +237,7 @@ namespace g1app
 			if(!m_jack)
 #endif
 			{
-				const char* dev = (!audioDev || std::string(audioDev) == "alsa" || std::string(audioDev) == "jack") ? "default" : audioDev;
+				const char* dev = (m_options.audio == "alsa" || m_options.audio == "jack") ? "default" : m_options.audio.c_str();
 				m_alsa = std::make_unique<AlsaAudio>(dev, gain);
 				if(m_alsa->valid())
 					std::snprintf(buf, sizeof(buf), "ALSA \"%s\" at 48 kHz, outputs 1/2, %+.0f dB", dev, gainDb);
@@ -137,7 +250,7 @@ namespace g1app
 			m_stats.audio = buf;
 		}
 		else
-			m_stats.audio = "no audio (G1_AUDIO=no)";
+			m_stats.audio = "no audio";
 		_log += "audio: " + m_stats.audio + "\n";
 
 		// 4-channel WAV at 96 kHz and 24 bits, only if asked for (G1_RECORD=seconds).
@@ -190,6 +303,67 @@ namespace g1app
 		m_alsa.reset();
 	}
 
+	// Links the emulator to the sound card kept for it, so raw-MIDI programs see the G1 as a
+	// MIDI device of their own: Bitwig on Linux reads raw MIDI devices and never looks at an ALSA
+	// sequencer port, and only the kernel can make a raw MIDI device.
+	//
+	// The card's first port carries the notes (the G1's MIDI IN/OUT), which is all a DAW wants;
+	// if the card has a second one it gets the PC Port as well. Which card is up to the user:
+	// what matters is that it offers as few ports as possible and with a name worth reading, so a
+	// one-port USB MIDI gadget (dummy_hcd + g_midi) beats snd-virmidi, which hard-codes sixteen
+	// subdevices per device and the name "Virtual Raw MIDI" and floods the DAW's list with them.
+	//
+	// It is tried again while it fails: the card can be loaded after the emulator.
+	bool EmuHost::bindRawMidi(std::string& _log)
+	{
+		const int card = rawMidiCard(m_options.rawMidiCard);
+		if(card < 0)
+			return false;
+		const auto ports = m_midi->findCardPorts(card);
+		if(ports.empty())
+			return false;
+		auto describe = [card](const AlsaMidi::Port& _p, const char* _ours)
+		{
+			return std::string(_ours) + " <-> " + (_p.name.empty() ? "card " + std::to_string(card) : _p.name);
+		};
+		std::string done;
+		if(m_midi->link(m_midiPort, ports[0].client, ports[0].port))
+			done = describe(ports[0], "MIDI");
+		if(ports.size() > 1 && m_midi->link(m_pcPort, ports[1].client, ports[1].port))
+			done += (done.empty() ? "" : ", ") + describe(ports[1], "PC Port");
+		if(done.empty())
+			return false;
+		// The warning goes to the log only: the status bar has one line and this would wrap it.
+		_log += "raw MIDI: " + done + (ports.size() > 2
+			? " (this card publishes " + std::to_string(ports.size()) + " ports; every one of them clutters "
+			  "the DAW's MIDI list, see docs/bitwig-midi.md)" : "") + "\n";
+		std::lock_guard<std::mutex> lock(m_statsMutex);
+		m_stats.rawMidi = done;
+		return true;
+	}
+
+	// The level can change while it plays: both backends read it from an atomic on their own thread.
+	void EmuHost::setGainDb(const float _gainDb)
+	{
+		m_options.gainDb = _gainDb;
+		const float gain = std::pow(10.0f, _gainDb / 20.0f);
+		if(m_alsa)
+			m_alsa->setGain(gain);
+#ifdef G1_HAVE_JACK
+		if(m_jack)
+			m_jack->setGain(gain);
+#endif
+		std::lock_guard<std::mutex> lock(m_statsMutex);
+		const auto at = m_stats.audio.rfind(" dB");
+		const auto from = at == std::string::npos ? std::string::npos : m_stats.audio.rfind(' ', at - 1);
+		if(from != std::string::npos)
+		{
+			char buf[16];
+			std::snprintf(buf, sizeof(buf), "%+.0f dB", static_cast<double>(_gainDb));
+			m_stats.audio.replace(from + 1, at + 3 - from - 1, buf);
+		}
+	}
+
 	void EmuHost::saveFlash()
 	{
 		if(!m_mc)
@@ -227,6 +401,7 @@ namespace g1app
 		const auto start = clock::now();
 		auto lastStats = start;
 		auto lastSave = start;
+		auto lastRawMidi = start;
 		uint64_t lastStatsCycles = 0;
 		double busy = 0;		// seconds the thread has worked since the last statistics
 		double lastCpu = processCpuSeconds();
@@ -281,6 +456,16 @@ namespace g1app
 			busy += std::chrono::duration<double>(t1 - t0).count();
 			if(mc.ucCycles() >= target)
 				std::this_thread::sleep_for(std::chrono::microseconds(500));
+
+			// The snd-virmidi card may be loaded after the emulator: keep trying to take it over.
+			if(!m_rawMidiBound && t1 - lastRawMidi >= std::chrono::seconds(2))
+			{
+				lastRawMidi = t1;
+				std::string log;
+				m_rawMidiBound = bindRawMidi(log);
+				if(m_rawMidiBound)
+					std::printf("%s", log.c_str());
+			}
 
 			// Save the flash if the G1 wrote to it (patches, settings), at most every 5 s
 			if(t1 - lastSave >= std::chrono::seconds(5))

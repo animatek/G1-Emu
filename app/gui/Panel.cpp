@@ -1,4 +1,6 @@
 #include "Panel.h"
+
+#include "Settings.h"
 #include "LcdFont.h"
 
 #include <cmath>
@@ -254,6 +256,12 @@ namespace g1gui
 		m_status.setColour(juce::Label::textColourId, juce::Colours::white);
 		addAndMakeVisible(m_status);
 
+		// Not on the hardware: the audio driver, the level and the raw MIDI card live here
+		// instead of only in the G1_* variables.
+		m_settings.setTooltip("Audio driver, output level and raw MIDI");
+		m_settings.onClick = [this] { SettingsView::show(m_host, this); };
+		addAndMakeVisible(m_settings);
+
 		setSize(1200, 440);
 		startTimerHz(30);
 	}
@@ -372,7 +380,8 @@ namespace g1gui
 		m_shift->setBounds(1128, 178, 40, 28);
 		m_dial.setBounds(1094, 232, 72, 72);
 
-		m_status.setBounds(14, 396, getWidth() - 28, 30);
+		m_status.setBounds(14, 396, getWidth() - 28 - 86, 30);
+		m_settings.setBounds(getWidth() - 14 - 80, 399, 80, 24);
 	}
 
 	void Panel::timerCallback()
@@ -399,6 +408,7 @@ namespace g1gui
 		m_status.setText(juce::String::formatted("speed %5.1f%%   load %3.0f%%   CPU %.1f cores   DSP %s   output 1/2 %s   dropouts %llu   |  ",
 			s.speed, s.load, s.cpuCores, dsp.toRawUTF8(),
 			m_peakHold > 1e-6 ? juce::String::formatted("%+.0f dB", 20.0 * std::log10(m_peakHold)).toRawUTF8() : "silence",
-			static_cast<unsigned long long>(s.xruns)) + juce::String(s.audio) + "   |  MIDI: G1-Emu:MIDI", juce::dontSendNotification);
+			static_cast<unsigned long long>(s.xruns)) + juce::String(s.audio)
+			+ "  |  MIDI: PC Port, MIDI" + (s.rawMidi.empty() ? juce::String() : "  |  raw: " + juce::String(s.rawMidi)), juce::dontSendNotification);
 	}
 }

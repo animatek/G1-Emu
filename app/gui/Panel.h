@@ -112,6 +112,7 @@ namespace g1gui
 		DialView m_dial;
 
 		juce::Label m_status;
+		juce::TextButton m_settings{"Settings"};
 		double m_peakHold = 0;
 		uint64_t m_lastMidiIn = 0;
 		int m_midiHold = 0;

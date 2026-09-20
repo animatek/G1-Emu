@@ -65,7 +65,7 @@ namespace g1app
 	public:
 		static constexpr double EmuRate = 96000.0;
 
-		JackAudio(const char* _name, const float _gain) : m_gain(_gain), m_out(1 << 15), m_in(1 << 15)
+		JackAudio(const char* _name, const float _gain, const bool _autoConnect) : m_gain(_gain), m_out(1 << 15), m_in(1 << 15)
 		{
 			m_client = jack_client_open(_name, JackNoStartServer, nullptr);
 			if(!m_client)
@@ -83,8 +83,7 @@ namespace g1app
 				m_client = nullptr;
 				return;
 			}
-			const char* connect = std::getenv("G1_JACK_CONNECT");
-			if(!connect || std::string(connect) != "0")
+			if(_autoConnect)
 				if(const char** ports = jack_get_ports(m_client, nullptr, JACK_DEFAULT_AUDIO_TYPE, JackPortIsPhysical | JackPortIsInput))
 				{
 					for(int i = 0; i < 2 && ports[i]; ++i)
@@ -102,6 +101,8 @@ namespace g1app
 			}
 		}
 
+		void setGain(const float _gain) { m_gain.store(_gain, std::memory_order_relaxed); }
+
 		bool valid() const { return m_client != nullptr; }
 		uint32_t rate() const { return m_rate; }
 		uint64_t xruns() const { return m_xruns; }
@@ -110,7 +111,7 @@ namespace g1app
 		// One sample of the four outputs at 96 kHz, signed 24-bit (emulator thread).
 		void push(const int32_t _o1, const int32_t _o2, const int32_t _o3, const int32_t _o4)
 		{
-			const float scale = m_gain / 8388608.0f;
+			const float scale = m_gain.load(std::memory_order_relaxed) / 8388608.0f;
 			const std::array<float, 4> cur{_o1 * scale, _o2 * scale, _o3 * scale, _o4 * scale};
 			const float a = std::max(std::fabs(cur[0]), std::fabs(cur[1]));
 			if(a > m_peak.load(std::memory_order_relaxed))
@@ -183,7 +184,7 @@ namespace g1app
 		uint32_t m_rate = 48000;
 		std::array<jack_port_t*, 4> m_outPorts{};
 		std::array<jack_port_t*, 2> m_inPorts{};
-		const float m_gain;
+		std::atomic<float> m_gain;
 		FrameRing<4> m_out;
 		FrameRing<2> m_in;
 		size_t m_prefill = 1440;

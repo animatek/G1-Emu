@@ -54,6 +54,8 @@ namespace g1app
 			}
 		}
 
+		void setGain(const float _gain) { m_gain.store(_gain, std::memory_order_relaxed); }
+
 		bool valid() const { return m_pcm != nullptr; }
 		uint64_t xruns() const { return m_xruns; }
 		float peak() { return m_peak.exchange(0.0f); }
@@ -65,7 +67,7 @@ namespace g1app
 			m_acc[1] += static_cast<float>(_r);
 			if(++m_accCount < 2)
 				return;
-			const float scale = m_gain / (2.0f * 8388608.0f);
+			const float scale = m_gain.load(std::memory_order_relaxed) / (2.0f * 8388608.0f);
 			const float l = m_acc[0] * scale, r = m_acc[1] * scale;
 			m_acc = {0.0f, 0.0f};
 			m_accCount = 0;
@@ -122,7 +124,7 @@ namespace g1app
 		}
 
 		snd_pcm_t* m_pcm = nullptr;
-		const float m_gain;
+		std::atomic<float> m_gain;
 		std::array<float, 2> m_acc{};
 		uint32_t m_accCount = 0;
 		std::mutex m_mutex;

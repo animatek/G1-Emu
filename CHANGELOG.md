@@ -7,6 +7,108 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **The ROM stops being a hard-coded path: G1-Emu looks for one, says what is wrong with what it
+  finds, and offers the folder (Claude).** Until now both front ends took the ROM as an argument and
+  checked only its size, which is no way to hand the thing to anyone else: G1-Emu ships no ROM and
+  never will, so a new user's first screen is this one. New `g1Lib/g1rom.h` decides whether a file
+  serves and, when it does not, why — not 512 KB (with the size it does have), 512 KB but no Nord
+  Modular OS inside, or a Nord Modular OS that is the keyboard model's and not the rack's, told
+  apart by the model byte at `$7FF` that the OS itself reads at boot (`NOTES.md`, "The panel"). New
+  `app/romfinder.*` looks, in order, at the path on the command line, `rom = ...` in the settings
+  file, `<Documents>/Animatek/G1-Emu/roms` (honouring the user's XDG document folder, which is not
+  called "Documents" in every language), `roms/` next to the flash, and `Roms/` in the current
+  directory and in the source tree, so a clone still works with no setup. A ROM named on the command
+  line is an order: if it does not serve the emulator stops and says so, instead of starting on a
+  different one, which would look like it worked. The one in the settings is a preference and falls
+  back to the search. The window offers **Open the folder** and **Choose a ROM file...**, starts as
+  soon as it has one, and the settings window gains a **ROM** section on top with the file in use, a
+  picker that refuses a file with the reason and a button to the folder; the console prints the
+  whole story and exits. `G1_ROM` overrides everything, and the ROM argument of `g1run` and `g1gui`
+  is now optional. Also: the window's startup log was never flushed, so it only appeared on exit.
+  Verification: found in the repo with no argument at all; and the four ways it goes wrong, each
+  giving its own line — a 100 KB file, a 512 KB file of noise, a copy with the model byte set to 0,
+  and a path that does not exist. The settings window was checked on screen with its ROM section,
+  and the picker opens on the ROM folder filtering `*.bin`. Release build and CTest 1/1. Two labels
+  left over from the snd-virmidi days reworded.
+
+- **One G1 in the DAW's MIDI list instead of thirty-two entries: the card is a USB MIDI gadget now
+  (Claude).** `snd-virmidi` was the wrong card: it hard-codes sixteen subdevices per device and the
+  name "Virtual Raw MIDI", and no module parameter changes either, so it filled Bitwig's list with
+  `Virtual Raw MIDI/1..16` — and `midi_devs=2`, suggested here earlier to get a second port, doubled
+  it to thirty-two. Replaced by `dummy_hcd` + `g_midi`, stock in-tree kernel modules that take the
+  port count and the name as parameters: `modprobe g_midi id=G1 iProduct=G1 in_ports=1 out_ports=1`
+  gives one port with a name of our own. The gadget is plugged into an emulated host, so ALSA gets
+  two cards, one per side of the virtual cable: `G1` (`f_midi`) is the emulator's and `G1_1` (`G1
+  MIDI 1`) is the DAW's. Two entries is the floor for stock modules; one would need a driver of the
+  G1's own. `AlsaMidi::findPorts` becomes `findCardPorts`, which matches **by sound card instead of
+  by client name** — the name was `snd-virmidi`'s and no other card has it — and returns each port's
+  name, so the log says what it linked. `bindRawMidi` now gives the card's first port to the MIDI,
+  which is all a DAW wants, and the second one, if there is one, to the PC Port. The default card ID
+  goes from `G1Emu` to `G1`. `docs/bitwig-midi.md` rewritten around the gadget, with the table of
+  which side is whose. Verification, live: the cable on its own (`amidi -p hw:6,0 -S "90 3C 64"` on
+  the host side comes out of `amidi -p hw:5,0 -d` on the gadget side), then the emulator reporting
+  `raw MIDI: MIDI <-> f_midi` and its MIDI input counter moving by 6 bytes for two notes sent the
+  way Bitwig sends them. Release build and CTest 1/1.
+
+- **The notice stops stopping every startup: it moves into the settings window (Claude).** Javier
+  asked for it. It is shown at startup **only on the first run** — when there is no settings file
+  yet — and answering it writes the file, so it does not come back; the "Don't show this again" tick
+  is gone, because closing it is the answer. In the settings window there is now a **Notice**
+  section with the text always readable and a "Show the notice below at startup" switch to put it
+  back. The flag lives in `settings.conf` as `showDisclaimer`, so the window no longer keeps a
+  second settings file of its own (`juce::ApplicationProperties`, which was writing to
+  `~/.config/.G1-Emu/` and is why ticking the old box never seemed to work): everything is in one
+  place. `Options::load` now says whether the file was there, which is what "first run" means.
+  Verification: a round-trip of `save`/`load` through a scratch build (every field back, a missing
+  file reports false and leaves the defaults standing); with `showDisclaimer = 0` the window opens
+  straight into the panel, with no settings file at all it shows the notice once. The settings
+  window was checked on screen and its layout fixed twice: the notice box was cut off and there was
+  dead space under it.
+
+- **Settings window, and the options stop being environment variables only (Claude).** New
+  `app/gui/Settings.*`, opened from a **Settings** button next to the status bar: audio driver
+  (JACK/PipeWire, ALSA, none), ALSA device, output level, whether outputs 1/2 connect themselves to
+  the sound card, and which `snd-virmidi` card is taken over for raw MIDI, plus a live read-out of
+  what is actually in use. `EmuHost::Options` holds them and is read from
+  `~/.local/share/Animatek/G1-Emu/settings.conf`, a plain `key = value` file that `g1run` reads too,
+  so the window and the console agree. Order: defaults, file, then the `G1_*` variables, which still
+  win — the scripts and `g1patchtest` keep working untouched. The level applies while it plays (both
+  backends read the gain from an atomic now, and `JackAudio` takes auto-connect as an argument
+  instead of reading the environment); the rest, on the next start, because the audio callback runs
+  on the DSP thread and swapping a driver under it is not worth the race. `G1_THREADS` and
+  `G1_INTERP` stay environment-only: they are core debugging knobs. Verification: Release build and
+  CTest 1/1; with `audio = no` in the file the console reports no audio, with `audio = alsa` it
+  opens ALSA "default", with `audio = hw:2,0` it reports the device is busy, and `G1_AUDIO=jack
+  G1_GAIN_DB=30` over the same file gives JACK at +30 dB. The window was seen running with the
+  Settings button in place; the panel's own layout has not been looked at on screen yet. Also
+  shortened the raw MIDI text in the status bar, which wrapped it onto two lines; the full hint
+  stays in the log.
+
+- **The emulator takes over its own raw MIDI card; the helper script is gone (Claude).** Bitwig on
+  Linux reads raw MIDI devices and never looks at ALSA sequencer ports (checked: its engine has
+  `PipeWireAudioHostApiPlugin.so` loaded for audio and `libasound` open on `/dev/snd/midiC5D0` for
+  MIDI), so `G1-Emu:PC Port` and `G1-Emu:MIDI` are invisible to it and a kernel-made device is
+  unavoidable. Instead of an external helper plus `aconnect`, `EmuHost` now finds the `snd-virmidi`
+  card whose ID is `G1Emu` itself and links its device 0 to the PC Port and device 1 to the MIDI, in
+  both directions, retrying every two seconds so the card may be loaded afterwards (`G1_RAWMIDI`
+  picks another card, `0` disables it). New `AlsaMidi::findPorts` and `AlsaMidi::link`; the status
+  bar and the log say which devices are linked. Removed `tools/bitwig-midi.py` and rewrote
+  `docs/bitwig-midi.md`. Verification: Release build; with the card as it is loaded now
+  (`midi_devs=1`) the emulator reports `raw MIDI: MIDI <-> hw:5,0`, `aconnect -l` shows `36:0`
+  subscribed both ways to `128:1` with no helper run, and `amidi -p hw:5,0 -S "90 3C 64"` reached
+  the emulator (its MIDI input counter moved). The two-device case needs the card reloaded with
+  `midi_devs=2`, which Bitwig was holding open: not verified yet.
+
+- **The emulator does sound: what went silent was the routing (Claude; no code change).** Javier
+  reported no sound since the MIDI work. Checked in three ways: `g1patchtest` with `SimpleOSC.pch`
+  gives 261.5 Hz at -61.8 dBFS on outputs 1 and 2 with the links between the four DSPs carrying
+  signal; a live `g1run` on a copy of the flash boots with all four DSPs on at 100% speed and
+  auto-connects `out_1`/`out_2` to the Komplete Audio 6; and replaying the captured PC Port session
+  (`pcport-in.bin`, NME's own traffic) into it brings the outputs to -25 dB. Two things did explain
+  silence: the `aconnect` subscription from the virtual card dies every time the emulator exits and
+  had to be re-run by hand (it was not there at the start of this session), and after boot with no
+  editor connected the active slot holds no patch, so a note plays nothing.
+
 - **Post-reboot recovery and build repair (Codex).** Moved the existing PC-trail size declaration
   before the array that uses it, fixing compilation of the pending diagnostic changes without
   removing them. Verification: full Release build, CTest (1/1), and `git diff --check` passed. A

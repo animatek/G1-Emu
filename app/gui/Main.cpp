@@ -2,44 +2,23 @@
 //
 //   g1gui [ROM] [FLASH]
 //
-// Without a ROM argument it looks in Roms/ of the current directory and of the G1-Emu tree. The
-// flash works like g1run (default ~/.local/share/Animatek/G1-Emu/flash.bin). Everything else
-// (MIDI, JACK audio, G1_* variables) is the same as in g1run: EmuHost does it.
+// Without a ROM argument it looks for one: the settings file first, then the ROM folders
+// (romfinder.h). With none anywhere it says what to put where and offers to open the folder or to
+// pick a file, and starts as soon as it has one. The flash works like g1run (default
+// ~/.local/share/Animatek/G1-Emu/flash.bin). Everything else (MIDI, JACK audio, G1_* variables) is
+// the same as in g1run: EmuHost does it. What the window lets the user choose is in the settings
+// window (Settings.h), the notice included.
 
 #include "Panel.h"
+
+#include "Settings.h"
+
+#include "romfinder.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace g1gui
 {
-	namespace
-	{
-		constexpr const char* g_romName = "NORD-MODULAR-RACK-VER-3.03.BIN";
-
-		// Shown at startup until the user ticks "Don't show this again". The same text is in the
-		// README ("Please read this first").
-		const char* const g_disclaimer =
-			"G1-Emu is an independent, open-source emulator of the Nord Modular G1.\n\n"
-			"- It is not affiliated with, endorsed by or connected to Clavia DMI in any way. "
-			"\"Nord\" and \"Nord Modular\" are trademarks of Clavia DMI.\n\n"
-			"- No ROMs or firmware are included, and none will ever be provided. Please do not ask "
-			"for them: you will not find them here.\n\n"
-			"- There is no support. This is a pre-alpha community project, made in spare time. Bug "
-			"reports and contributions are welcome on GitHub; requests for help, ROMs or builds are not.";
-
-		juce::File findRom(const juce::StringArray& _args)
-		{
-			if(!_args.isEmpty() && juce::File::isAbsolutePath(_args[0]))
-				return juce::File(_args[0]);
-			if(!_args.isEmpty())
-				return juce::File::getCurrentWorkingDirectory().getChildFile(_args[0]);
-			for(const auto& dir : {juce::File::getCurrentWorkingDirectory(), juce::File(G1_SOURCE_DIR)})
-				if(dir.getChildFile("Roms").getChildFile(g_romName).existsAsFile())
-					return dir.getChildFile("Roms").getChildFile(g_romName);
-			return {};
-		}
-	}
-
 	class MainWindow : public juce::DocumentWindow
 	{
 	public:
@@ -64,18 +43,13 @@ namespace g1gui
 		void initialise(const juce::String& _cmd) override
 		{
 			const auto args = juce::StringArray::fromTokens(_cmd, true);
-			const auto rom = findRom(args);
-			std::string log;
-			if(!rom.existsAsFile() || !m_host.start(rom.getFullPathName().toStdString(), args.size() > 1 ? args[1].toStdString() : "", log))
-			{
-				juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "G1-Emu",
-					"Cannot start the emulated G1.\n\n" + juce::String(log) + (rom.existsAsFile() ? "" : "\nThe ROM (" + juce::String(g_romName)
-					+ ") is missing in Roms/. G1-Emu does not include any ROM and none will be provided: you need a dump of your own."));
-				return;
-			}
-			std::printf("%s", log.c_str());
-			m_window = std::make_unique<MainWindow>(m_host);
-			showDisclaimer();
+			m_rom = args.isEmpty() ? juce::String() : args[0];
+			m_flash = args.size() > 1 ? args[1] : juce::String();
+			// No settings file means this is the first run on this machine: the notice is shown
+			// once, and answering it writes the file, so it does not come back unless it is
+			// turned on again in the settings window.
+			m_firstRun = !m_host.options().load(g1app::EmuHost::defaultSettingsPath());
+			tryStart();
 		}
 
 		void shutdown() override
@@ -85,38 +59,96 @@ namespace g1gui
 		}
 
 	private:
-		// The notice about Clavia, ROMs and support, until the user asks not to see it again. The
-		// choice is kept in the user settings (~/.config/G1-Emu.settings on Linux).
-		void showDisclaimer()
+		// Starts the G1, or explains why it cannot. Not finding a ROM is the normal first run of
+		// a fresh install, not an error: the user is offered the folder to put one in and a file
+		// picker, and this is called again as soon as there is something to try.
+		void tryStart()
 		{
-			juce::PropertiesFile::Options opts;
-			opts.applicationName = "G1-Emu";
-			opts.filenameSuffix = ".settings";
-			opts.osxLibrarySubFolder = "Application Support";
-			m_settings.setStorageParameters(opts);
-			if(m_settings.getUserSettings()->getBoolValue("hideDisclaimer", false))
-				return;
-
-			auto* w = new juce::AlertWindow("Please read this first", g_disclaimer, juce::MessageBoxIconType::InfoIcon, m_window.get());
-			m_dontShow = std::make_unique<juce::ToggleButton>("Don't show this again");
-			m_dontShow->setSize(260, 24);
-			m_dontShow->setName({});	// AlertWindow draws a custom component's name as a label
-			w->addCustomComponent(m_dontShow.get());
-			w->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey));
-			w->enterModalState(true, juce::ModalCallbackFunction::create([this](int)
+			std::string log;
+			if(!m_host.start(m_rom.toStdString(), m_flash.toStdString(), log))
 			{
-				if(m_dontShow && m_dontShow->getToggleState())
+				if(m_host.romProblem().empty())
+					juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "G1-Emu",
+						"Cannot start the emulated G1.\n\n" + juce::String(log));
+				else
+					askForRom();
+				return;
+			}
+			std::printf("%s", log.c_str());
+			std::fflush(stdout);	// the window has no console reading it as it goes
+			m_window = std::make_unique<MainWindow>(m_host);
+			if(m_firstRun || m_host.options().showDisclaimer)
+				showDisclaimer(m_firstRun);
+		}
+
+		// The ROM is the user's to provide and always will be, so this is the one screen a new
+		// user is sure to meet. It has to say what is needed, where it goes, and take them there.
+		void askForRom()
+		{
+			auto* w = new juce::AlertWindow("G1-Emu needs a ROM", m_host.romProblem(), juce::MessageBoxIconType::WarningIcon);
+			w->addButton("Open the folder", 1);
+			w->addButton("Choose a ROM file...", 2);
+			w->addButton("Quit", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+			w->enterModalState(true, juce::ModalCallbackFunction::create([this](const int _result)
+			{
+				if(_result == 1)
 				{
-					m_settings.getUserSettings()->setValue("hideDisclaimer", true);
-					m_settings.saveIfNeeded();
+					const juce::File folder(g1app::publicRomFolder());
+					(void)folder.createDirectory();
+					folder.revealToUser();
+					askForRom();		// it is still not started: ask again once they are back
 				}
+				else if(_result == 2)
+					chooseRom();
+				else
+					juce::JUCEApplication::getInstance()->systemRequestedQuit();
+			}), true);
+		}
+
+		void chooseRom()
+		{
+			m_chooser = std::make_unique<juce::FileChooser>("Choose the Nord Modular rack ROM",
+				juce::File(g1app::publicRomFolder()), "*.bin;*.BIN");
+			m_chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+				[this](const juce::FileChooser& _c)
+			{
+				const auto file = _c.getResult();
+				if(file == juce::File())
+				{
+					askForRom();
+					return;
+				}
+				// Remembered so the next run starts straight away, wherever the file lives.
+				m_host.options().rom = file.getFullPathName().toStdString();
+				m_host.options().save(g1app::EmuHost::defaultSettingsPath());
+				m_rom = {};		// the settings carry it now; a bad one must not stop the search
+				tryStart();
+			});
+		}
+
+		// The notice, shown on the first run and afterwards only if the settings window asks
+		// for it. It is always readable there, so there is no "don't show this again" to tick:
+		// closing it is enough, and the answer is written to the settings file.
+		void showDisclaimer(const bool _firstRun)
+		{
+			auto* w = new juce::AlertWindow("Please read this first",
+				juce::String(disclaimerText()) + "\n\nYou can read this again in Settings, which is also where "
+				"to turn it back on at startup.", juce::MessageBoxIconType::InfoIcon, m_window.get());
+			w->addButton("OK", 1, juce::KeyPress(juce::KeyPress::returnKey), juce::KeyPress(juce::KeyPress::escapeKey));
+			w->enterModalState(true, juce::ModalCallbackFunction::create([this, _firstRun](int)
+			{
+				if(!_firstRun)
+					return;
+				m_host.options().showDisclaimer = false;
+				m_host.options().save(g1app::EmuHost::defaultSettingsPath());
 			}), true);
 		}
 
 		g1app::EmuHost m_host;
 		std::unique_ptr<MainWindow> m_window;
-		juce::ApplicationProperties m_settings;
-		std::unique_ptr<juce::ToggleButton> m_dontShow;
+		std::unique_ptr<juce::FileChooser> m_chooser;
+		juce::String m_rom, m_flash;
+		bool m_firstRun = false;
 	};
 }
 

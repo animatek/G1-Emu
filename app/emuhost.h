@@ -4,8 +4,12 @@
 // MIDI ports (PC Port and MIDI), the audio (JACK or ALSA) and real-time pacing, on a thread
 // of its own. Used by the console (g1run) and the window (g1gui).
 //
-// Environment variables: G1_AUDIO (jack, alsa, an ALSA device or no), G1_GAIN_DB (+36 by
-// default), G1_JACK_CONNECT=0, G1_RECORD=seconds (4-channel WAV next to the flash).
+// What it uses is in Options: the window sets them from its settings panel and g1run leaves them
+// at their defaults. The G1_* environment variables still win over both, so scripts and the test
+// bench keep working: G1_AUDIO (jack, alsa, an ALSA device or no), G1_GAIN_DB (+36 by default),
+// G1_JACK_CONNECT=0, G1_RAWMIDI (the ID of the snd-virmidi card to take over, G1Emu by default;
+// 0 disables it), G1_RECORD=seconds (4-channel WAV next to the flash). G1_THREADS and G1_INTERP
+// are debugging knobs of the emulator core and stay environment-only.
 
 #include "g1Lib/g1mc.h"
 
@@ -27,6 +31,26 @@ namespace g1app
 	class EmuHost
 	{
 	public:
+		// What the user gets to choose. Set them before start(); the environment still wins.
+		struct Options
+		{
+			std::string audio = "jack";			// "jack", "alsa", "no", or the name of an ALSA device
+			float gainDb = 36.0f;				// undoes the -36 dB cap the OS puts on the master volume
+			bool jackConnect = true;			// out_1/out_2 connect themselves to the sound card
+			std::string rawMidiCard = "G1";		// the raw MIDI card to take over (empty: none)
+			std::string rom;					// the ROM to use; empty: look for one (romfinder.h)
+			bool showDisclaimer = false;		// the notice at startup; the window can turn it back on
+
+			// The names used in the settings file and in the panel.
+			static const char* const audioNames[3];	// "jack", "alsa", "no"
+
+			// A plain "key = value" file next to the flash, so the window and the console agree
+			// on what they use. Missing or unreadable, the defaults stand; load() says whether it
+			// was there, which is how the window knows it is a first run.
+			bool load(const std::string& _path);
+			bool save(const std::string& _path) const;
+		};
+
 		struct Stats
 		{
 			double seconds = 0;			// time since start
@@ -39,6 +63,7 @@ namespace g1app
 			uint64_t xruns = 0;
 			std::string audio;			// which audio output is in use
 			std::string midi;			// the MIDI ports
+			std::string rawMidi;		// the raw MIDI devices linked to them (empty: none)
 		};
 
 		EmuHost();
@@ -46,7 +71,21 @@ namespace g1app
 
 		// Loads the ROM and the flash (or installs the factory OS) and starts the thread. _log gets
 		// the startup messages.
+		// An empty _romPath means "look for one": the settings and then the ROM folders
+		// (romfinder.h). _log gets the startup messages, and when there is no ROM it gets the
+		// whole story — where it looked and what was wrong with what it found.
 		bool start(const std::string& _romPath, const std::string& _flashPath, std::string& _log);
+
+		// After a start() that failed for want of a ROM: what to tell the user, and where they
+		// have to put it. Empty when the failure was something else.
+		const std::string& romProblem() const { return m_romProblem; }
+
+		// Before start(): what to use. After it: what was asked for, environment included.
+		Options& options() { return m_options; }
+		const Options& options() const { return m_options; }
+
+		// The output level, the only setting that can change while it plays.
+		void setGainDb(float _gainDb);
 		void stop();
 		bool running() const { return m_thread.joinable(); }
 
@@ -59,9 +98,11 @@ namespace g1app
 		std::string report();
 
 		static std::string defaultFlashPath();
+		static std::string defaultSettingsPath();
 
 	private:
 		void run();
+		bool bindRawMidi(std::string& _log);
 		void saveFlash();
 		void finishWav();
 
@@ -70,6 +111,9 @@ namespace g1app
 		std::unique_ptr<AlsaAudio> m_alsa;
 		std::unique_ptr<JackAudio> m_jack;
 		int m_pcPort = -1, m_midiPort = -1;
+		bool m_rawMidiBound = false;
+		std::string m_romProblem;
+		Options m_options;
 		std::string m_flashPath;
 		std::thread m_thread;
 		std::atomic<bool> m_quit{false};
