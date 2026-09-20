@@ -7,6 +7,12 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **Apple Silicon's DSP crash can now be pinned to one synthetic program (Codex).**
+  `g1dspcheck` prints and flushes the name and JIT block size before each case, so a fatal signal
+  on the macOS ARM runner leaves the exact last case in the CI log instead of only `ILLEGAL`.
+  Verification: the Release test still passes locally on x86-64; Apple Silicon diagnosis is the
+  purpose of the branch CI run.
+
 - **A handover for whoever picks this up next (Claude).** New `docs/next-steps.md`: the short list
   in order, written so nobody has to reconstruct an evening of work before starting. The blocker
   first — the DSP56300 JIT raising an illegal instruction on Apple Silicon — with what

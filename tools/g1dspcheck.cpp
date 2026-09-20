@@ -119,11 +119,17 @@ int main()
 	{
 		for(const auto blockSize : {1u, 32u})
 		{
-			shortProgramMove(blockSize);
-			invalidateProgramMove(blockSize);
-			foreverLoop(blockSize, 0);
-			foreverLoop(blockSize, 7);
-			nestedLoop(blockSize);
+			auto run = [blockSize](const char* name, const auto& test)
+			{
+				std::fprintf(stderr, "RUN: %s (block size %u)\n", name, blockSize);
+				test();
+			};
+
+			run("short MOVEM", [=] { shortProgramMove(blockSize); });
+			run("MOVEM JIT invalidation", [=] { invalidateProgramMove(blockSize); });
+			run("DO FOREVER with LC=0", [=] { foreverLoop(blockSize, 0); });
+			run("DO FOREVER with LC=7", [=] { foreverLoop(blockSize, 7); });
+			run("nested DO", [=] { nestedLoop(blockSize); });
 		}
 		std::puts("OK: short MOVEM, JIT invalidation, DO FOREVER, IRQD and nested DO (blocks 1/32)");
 		return 0;
