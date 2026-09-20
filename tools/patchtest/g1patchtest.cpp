@@ -18,6 +18,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -254,6 +255,35 @@ int main(int argc, char** argv)
 	for(uint32_t d = 0; d < g1::g_dspCount; ++d)
 		for(const auto a : watch)
 			mc.getDsp(d).pcWatch()[a] = 0;
+	// The panel before the note. G1_HOLD=row.bit holds a button down (a modifier such as Shift)
+	// while the rest are pressed; G1_PREPRESS=row.bit,... presses them before playing, so that
+	// what they change can be heard (Oct down/up change the octave of the note).
+	const char* hold = std::getenv("G1_HOLD");
+	auto button = [&](const juce::String& _rowBit, const bool _down)
+	{
+		const auto g = juce::StringArray::fromTokens(_rowBit, ".", "");
+		mc.setButton(static_cast<uint32_t>(g[0].getIntValue()), static_cast<uint32_t>(g[1].getIntValue()), _down);
+	};
+	auto holdButton = [&](const bool _down) { if(hold) { button(hold, _down); run(mc, 50 * g_ms); } };
+	auto pressButtons = [&](const juce::StringArray& _list, const int _count)
+	{
+		for(int k = 0; k < _count; ++k)
+		{
+			button(_list[k], true);
+			run(mc, 150 * g_ms);
+			button(_list[k], false);
+			run(mc, 300 * g_ms);
+		}
+	};
+	if(const char* pp = std::getenv("G1_PREPRESS"))
+	{
+		const auto seq = juce::StringArray::fromTokens(pp, ",", "");
+		holdButton(true);
+		pressButtons(seq, seq.size());
+		holdButton(false);
+		std::printf("PREPRESS %s%s  display [%s|%s]\n", pp, hold ? (juce::String(" holding ") + hold).toRawUTF8() : "",
+			mc.getLcd().line(0, 16).c_str(), mc.getLcd().line(1, 16).c_str());
+	}
 	blocks.clear();
 	capture = true;
 	// Note through the PC Port, like NME: cc $17, 56 00 note (press) ... 56 01 note (release).
@@ -332,14 +362,8 @@ int main(int argc, char** argv)
 	{
 		// Several, comma-separated: they are pressed in order and the last one is reported.
 		const auto seq = juce::StringArray::fromTokens(pr, ",", "");
-		for(int k = 0; k + 1 < seq.size(); ++k)
-		{
-			const auto g = juce::StringArray::fromTokens(seq[k], ".", "");
-			mc.setButton(static_cast<uint32_t>(g[0].getIntValue()), static_cast<uint32_t>(g[1].getIntValue()), true);
-			run(mc, 150 * g_ms);
-			mc.setButton(static_cast<uint32_t>(g[0].getIntValue()), static_cast<uint32_t>(g[1].getIntValue()), false);
-			run(mc, 300 * g_ms);
-		}
+		holdButton(true);
+		pressButtons(seq, seq.size() - 1);
 		const auto f = juce::StringArray::fromTokens(seq[seq.size() - 1], ".", "");
 		const auto row = static_cast<uint32_t>(f[0].getIntValue()), bit = static_cast<uint32_t>(f[1].getIntValue());
 		auto screen = [&] { std::string a = mc.getLcd().line(0, 16), b = mc.getLcd().line(1, 16);
@@ -351,7 +375,18 @@ int main(int argc, char** argv)
 		run(mc, 150 * g_ms);
 		mc.setButton(row, bit, false);
 		run(mc, 300 * g_ms);
-		std::printf("PRESS %s  display %s -> %s  LEDs %s -> %s\n", pr, s0.c_str(), screen().c_str(), l0.c_str(), ledStates().c_str());
+		holdButton(false);
+		std::printf("PRESS %s%s  display %s -> %s  LEDs %s -> %s\n", pr, hold ? (juce::String(" holding ") + hold).toRawUTF8() : "",
+			s0.c_str(), screen().c_str(), l0.c_str(), ledStates().c_str());
+	}
+	// G1_DIAL=n: turns the dial n detents (negative the other way) and reports the display.
+	// With G1_PRESS it turns after the presses, so the screen can be set up first.
+	if(const char* dl = std::getenv("G1_DIAL"))
+	{
+		const auto detents = std::atoi(dl);
+		mc.turnDial(detents);
+		run(mc, static_cast<uint64_t>(std::abs(detents) * 10 + 300) * g_ms);
+		std::printf("DIAL %+d  display [%s|%s]\n", detents, mc.getLcd().line(0, 16).c_str(), mc.getLcd().line(1, 16).c_str());
 	}
 	// G1_ADCSWEEP=1: raises each ADC channel from 0 to 200 and reports what the OS sends on the PC
 	// Port (with knobs assigned, a Parameter with the module and value: that tells which knob it is).

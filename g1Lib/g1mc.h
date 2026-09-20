@@ -112,8 +112,9 @@ namespace g1
 		uint32_t sciDataWrites() const { return m_sciDataWrites; }
 		uint64_t ucCycles() const { return m_ucCycles; }
 
-		// The panel: display, 32 LEDs (4 rows of 8), 24 buttons (3 rows of 8) and the knobs,
-		// which are ADC channels (setAdc). All of it can be read and written from another thread.
+		// The panel: display, 32 LEDs (4 rows of 8), 18 buttons (3 rows of bits 2-7), the dial
+		// (bits 0 and 1 of the same input) and the knobs, which are ADC channels (setAdc).
+		// All of it can be read and written from another thread.
 		const Lcd& getLcd() const { return m_lcd; }
 		uint8_t ledRow(const uint32_t _row) const { return m_leds[_row & 3].load(std::memory_order_relaxed); }
 		void setButton(const uint32_t _row, const uint32_t _bit, const bool _pressed)
@@ -122,6 +123,10 @@ namespace g1
 			const auto mask = static_cast<uint8_t>(1u << (_bit & 7));
 			_pressed ? r.fetch_or(mask) : r.fetch_and(static_cast<uint8_t>(~mask));
 		}
+		// The dial, in detents: positive clockwise and negative anticlockwise. Each detent is
+		// four edges of the quadrature pair, handed out one by one as the
+		// OS reads the panel.
+		void turnDial(const int32_t _detents) { m_dialEdges.fetch_add(_detents * 4); }
 
 	private:
 		bool isInternalPeripheral(uint32_t _addr) const { return (_addr & 0xfff000) == 0xfff000; }
@@ -157,6 +162,14 @@ namespace g1
 		std::array<std::atomic<uint8_t>, 4> m_leds{};
 		std::array<std::atomic<uint8_t>, 3> m_buttons{};	// 1 = pressed
 		uint8_t buttonRow() const;
+		// The dial: a quadrature encoder on bits 0 and 1, decoded by the OS at $104DC6 (four
+		// edges per detent). One edge every g_dialEdgeCycles, well apart from each other: the
+		// OS reads the panel some 3 000 times a second and ignores any step of two edges.
+		static constexpr uint64_t g_dialEdgeCycles = 40000;	// ~2 ms at 20.97 MHz
+		mutable std::atomic<int32_t> m_dialEdges{0};	// pending edges, signed
+		mutable uint8_t m_dialPhase = 0;
+		mutable uint64_t m_nextDialEdge = 0;
+		uint8_t dialBits() const;
 		Lcd m_lcd;
 		uint64_t m_pitAccum = 0;
 

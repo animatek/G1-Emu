@@ -230,17 +230,48 @@ Applied to a build copy; the Gearmulator clone is never modified.
   selects the row with the low nibble of `$202005` (bit 3 = row 0 ... bit 0 = row 3). Active low.
   Identified: slots A–D = bit 7 of rows 0–3 (the active slot blinks); Store/System/Edit/Patch-Load =
   row 3 bits 3/4/5/6; knob *k* (1–18) = row (k−1) mod 3, bit 1 + (k−1)/3; Panel Split = 3.2
-  (probable). Left: 0.0, 1.0, 2.0, 3.0 and 3.1, the five Oct Shift LEDs, order unchecked.
-- **Buttons:** 3 rows of 8. Bits 4–6 of `$202005` select the row (active low) and `$201800`
-  returns its 8 buttons (pressed = 0). Identified (row.bit): A–D = 0.2–0.5, Store 0.6, System 0.7,
-  Edit 1.2, Patch/Load 1.3, Navigator up 1.4, left 1.5, down 1.6, right 1.7, Panel Split 2.2
-  (probable). Unidentified: Shift, Find, Oct Shift −/+, Assign/Morph and the dial (bits left: 0.0,
-  0.1, 1.0, 1.1, 2.0, 2.1, 2.3–2.7).
+  (it lights when 2.2 is pressed). Left: 0.0, 1.0, 2.0, 3.0 and 3.1, the five Oct Shift LEDs; the
+  factory test walks them in that order, which is probably the order on the panel, but which end is
+  −2 is unchecked.
+- **Buttons: 18, not 24.** 3 rows of 8, but the OS only reads **bits 2 to 7** of each row: bits 0
+  and 1 are the dial (below). Bits 4–6 of `$202005` select the row (active low) and `$201800`
+  returns it (pressed = 0). The scan (`$1040CE`) posts an event with the code
+  `$400 + row × 6 + (bit − 2)`, so the whole panel is `$400`–`$411`:
+
+  | row.bit | code | button | row.bit | code | button | row.bit | code | button |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 0.2 | `$400` | A | 1.2 | `$406` | Edit | 2.2 | `$40C` | Panel Split |
+  | 0.3 | `$401` | B | 1.3 | `$407` | Play (Patch/Load) | 2.3 | `$40D` | Find |
+  | 0.4 | `$402` | C | 1.4 | `$408` | Navigator up | 2.4 | `$40E` | Oct down |
+  | 0.5 | `$403` | D | 1.5 | `$409` | Navigator left | 2.5 | `$40F` | Oct up |
+  | 0.6 | `$404` | Store | 1.6 | `$40A` | Navigator down | 2.6 | `$410` | Assign/Morph |
+  | 0.7 | `$405` | System | 1.7 | `$40B` | Navigator right | 2.7 | `$411` | Shift |
+
+  **Where the names come from.** The flash keeps the factory test's tables, before the OS: the 18
+  key codes at `$9962`, their names at `$9986` (18 strings of 8 bytes: Split, Find, Oct down, Oct
+  up, Store, System, Edit, Play, A, B, C, D, Shift, Assign, Left, Up, Right, Down), the 32 LEDs as
+  (row, mask) at `$9A16` and the 20 ADC channels at `$9A56` with their names at `$9A7E`. Its codes
+  are the OS's plus 6, wrapping around `$411` → `$400`: the test scans the rows in the order 2, 0,
+  1. That is what the twelve buttons already known confirm (A–D, Store, System, Edit, Play and the
+  four navigator keys all land where pressing them had shown), and the six new ones are the row
+  left over. Two of them are confirmed directly on the emulator: 2.2 lights LED 3.2 (Panel Split)
+  and **holding 2.3 puts `Find` on the display**. Nothing is visible on the patch screen for Oct
+  down/up, Assign or Shift, as one would expect from an octave shift with no keyboard, a modifier
+  and a mode that needs its own screen.
+- **The dial:** a quadrature encoder on **bits 0 and 1 of `$201800`**, not multiplexed (the same
+  two bits whichever row is selected). The OS decodes it in its main loop (`$104DC6`, ~3 000 times
+  a second, against the 185 of the button scan): it XORs the two bits with the previous reading
+  (`$15EC1F`), ignores a step where both changed, and moves a counter at `$15EC72` that starts at 4
+  and sends an event (class `$500`, 1 = clockwise) when it reaches 8 or 0. It accelerates: turned
+  fast, one detent moves the value by more than one. `Microcontroller::turnDial(detents)` emulates
+  it by handing out one edge every ~2 ms of CPU time, well apart for the OS to catch each one.
 - **Knobs:** ADC channels. `$202000` selects, `$202800` reads. Knob *n* = entry *n* of the table at
   `$14420A`: `$31` = 1, `$37` = 2, `$2D`, `$32`, `$28`, `$2E`, `$33`, `$29`, `$2F`, `$34`, `$2A`,
-  `$1A`, `$35`, `$2B`, `$1B`, `$36`, `$2C`, `$1C` = 18; `$30` = master volume; `$18` unidentified
-  (pedal?). Checked by assigning a knob to each module and moving each channel: the OS tells the
-  editor which knob moved.
+  `$1A`, `$35`, `$2B`, `$1B`, `$36`, `$2C`, `$1C` = 18; `$30` = master volume; `$18` = **the
+  pedal**. Checked by assigning a knob to each module and moving each channel: the OS tells the
+  editor which knob moved; the factory test's table (`$9A56`) names the same twenty in the same
+  order, master volume first (`VR1 (Mstr)`, so knob *n* is `VR`*n*`+1` on the board) and `Pedal`
+  last.
 - **The ADC returns the previous conversion.** Each read of `$202800` returns the result of the
   previous conversion and starts a new one on the selected channel. At runtime the OS selects the
   next channel, reads, and stores the value in the previous one (`$1041BE`); at boot it selects and
@@ -272,7 +303,9 @@ Applied to a build copy; the Gearmulator clone is never modified.
   link. Needs `../Nomad2026`. Variables: `G1_VERBOSE`, `G1_DUMP=dir` (DSP P/X/Y memory),
   `G1_PCWATCH=addr,...`, `G1_INTERP=mask` (DSPs on the interpreter; unusable with the main loop,
   because the interpreter runs a whole `do forever` without returning), `G1_NO_LA_FIX`,
-  `G1_KNOBS=knob:module:param,...`, `G1_ADCSWEEP`, `G1_LEDSTATE`, `G1_PRESS=row.bit,...`.
+  `G1_KNOBS=knob:module:param,...`, `G1_ADCSWEEP`, `G1_LEDSTATE`, `G1_PRESS=row.bit,...`,
+  `G1_PREPRESS=row.bit,...` (pressed before the note, to hear what they change),
+  `G1_HOLD=row.bit` (held down meanwhile, for modifiers such as Shift) and `G1_DIAL=detents`.
 - **Connector indices:** in a `.pch`, connectors go by their `index` in `modules.xml`, which is not
   always the list order (in the Overdrive, `in` is input 0 and `overdrive mod` is 1).
 - **Module battery:** all 101 module types with default settings (OscA into the input if there is

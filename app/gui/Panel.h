@@ -48,6 +48,23 @@ namespace g1gui
 		bool m_down = false;
 	};
 
+	// The dial: the rotary encoder to the right of the display. Dragging it up and down or
+	// using the wheel turns it, and the emulator hands the OS its quadrature edges.
+	class DialView : public juce::Component, public juce::SettableTooltipClient
+	{
+	public:
+		explicit DialView(g1::Microcontroller& _mc) : m_mc(_mc) { setTooltip("Dial"); }
+		void paint(juce::Graphics& _g) override;
+		void mouseDown(const juce::MouseEvent& _e) override { m_lastY = _e.y; }
+		void mouseDrag(const juce::MouseEvent& _e) override;
+		void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& _w) override;
+	private:
+		void turn(int _detents);
+		g1::Microcontroller& m_mc;
+		int m_lastY = 0;
+		float m_angle = 0;
+	};
+
 	class KnobLook : public juce::LookAndFeel_V4
 	{
 	public:
@@ -92,7 +109,7 @@ namespace g1gui
 		PanelButton* m_assign = nullptr;
 		PanelButton* m_shift = nullptr;
 		std::array<PanelButton*, 4> m_nav{};			// up, left, right, down
-		juce::Rectangle<int> m_dial;
+		DialView m_dial;
 
 		juce::Label m_status;
 		double m_peakHold = 0;

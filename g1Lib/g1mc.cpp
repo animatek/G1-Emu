@@ -312,13 +312,31 @@ namespace g1
 	}
 
 	// The buttons of the row selected in $202005 (bits 4-6, active low). Pressed = 0.
+	// Bits 0 and 1 are not buttons: they are the dial, which is not multiplexed and so
+	// reads the same whichever row is selected.
 	uint8_t Microcontroller::buttonRow() const
 	{
 		uint8_t v = 0xff;
 		for(uint32_t row = 0; row < 3; ++row)
 			if(!(m_panelRows & (0x10u << row)))
 				v &= static_cast<uint8_t>(~m_buttons[row].load(std::memory_order_relaxed));
-		return v;
+		return static_cast<uint8_t>((v & 0xfc) | dialBits());
+	}
+
+	// The dial's two phases, one edge at a time: 00, 10, 11, 01 clockwise (which is how the
+	// OS counts up) and the other way round anticlockwise.
+	uint8_t Microcontroller::dialBits() const
+	{
+		constexpr uint8_t gray[4] = {0, 2, 3, 1};
+		const auto pending = m_dialEdges.load(std::memory_order_relaxed);
+		if(pending && m_ucCycles >= m_nextDialEdge)
+		{
+			const int32_t dir = pending > 0 ? 1 : -1;
+			m_dialPhase = static_cast<uint8_t>((m_dialPhase + 4 + dir) & 3);
+			m_dialEdges.fetch_sub(dir, std::memory_order_relaxed);
+			m_nextDialEdge = m_ucCycles + g_dialEdgeCycles;
+		}
+		return gray[m_dialPhase];
 	}
 
 	void Microcontroller::write8(const uint32_t _addr, const uint8_t _val)

@@ -16,8 +16,8 @@ namespace g1gui
 		constexpr MatrixBit g_btnA{0, 2}, g_btnB{0, 3}, g_btnC{0, 4}, g_btnD{0, 5};
 		constexpr MatrixBit g_btnStore{0, 6}, g_btnSystem{0, 7}, g_btnEdit{1, 2}, g_btnPatchLoad{1, 3};
 		constexpr MatrixBit g_btnUp{1, 4}, g_btnLeft{1, 5}, g_btnDown{1, 6}, g_btnRight{1, 7};
-		constexpr MatrixBit g_btnPanelSplit{2, 2};	// lights LED 3.2; still to be confirmed
-		constexpr MatrixBit g_unknown{};
+		constexpr MatrixBit g_btnPanelSplit{2, 2}, g_btnFind{2, 3}, g_btnOctDown{2, 4};
+		constexpr MatrixBit g_btnOctUp{2, 5}, g_btnAssign{2, 6}, g_btnShift{2, 7};
 
 		// LEDs (active low). Knob LEDs: knob k (0-17) in row k%3, bit 1+k/3.
 		constexpr std::array<MatrixBit, 4> g_slotLeds = {MatrixBit{0, 7}, MatrixBit{1, 7}, MatrixBit{2, 7}, MatrixBit{3, 7}};
@@ -125,6 +125,45 @@ namespace g1gui
 		_g.drawRoundedRectangle(r, 4.0f, 1.0f);
 	}
 
+	// One detent every 8 pixels of drag, or one per wheel click; the pointer turns with it so
+	// that the movement can be seen.
+	void DialView::turn(const int _detents)
+	{
+		if(!_detents)
+			return;
+		m_mc.turnDial(_detents);
+		m_angle += static_cast<float>(_detents) * 0.25f;
+		repaint();
+	}
+
+	void DialView::mouseDrag(const juce::MouseEvent& _e)
+	{
+		const int detents = (m_lastY - _e.y) / 8;
+		if(detents)
+		{
+			m_lastY -= detents * 8;
+			turn(detents);
+		}
+	}
+
+	void DialView::mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& _w)
+	{
+		turn(_w.deltaY > 0 ? 1 : (_w.deltaY < 0 ? -1 : 0));
+	}
+
+	void DialView::paint(juce::Graphics& _g)
+	{
+		const auto d = getLocalBounds().toFloat().reduced(2.0f);
+		_g.setColour(juce::Colours::black.withAlpha(0.4f));
+		_g.fillEllipse(d.translated(2.0f, 3.0f));
+		_g.setGradientFill(juce::ColourGradient(juce::Colour(0xff3a3a3e), d.getX(), d.getY(), juce::Colour(0xff0c0c0e), d.getRight(), d.getBottom(), false));
+		_g.fillEllipse(d);
+		const auto c = d.getCentre();
+		const float radius = d.getWidth() * 0.5f;
+		_g.setColour(juce::Colours::white.withAlpha(0.75f));
+		_g.drawLine({c.getPointOnCircumference(radius * 0.3f, m_angle), c.getPointOnCircumference(radius * 0.85f, m_angle)}, 2.5f);
+	}
+
 	void KnobLook::drawRotarySlider(juce::Graphics& _g, const int _x, const int _y, const int _w, const int _h, const float _pos, const float _start, const float _end, juce::Slider&)
 	{
 		const auto area = juce::Rectangle<float>(static_cast<float>(_x), static_cast<float>(_y), static_cast<float>(_w), static_cast<float>(_h)).reduced(3.0f);
@@ -151,9 +190,10 @@ namespace g1gui
 
 	// ________________________________________________________________________
 
-	Panel::Panel(g1app::EmuHost& _host) : m_host(_host), m_mc(_host.mc()), m_lcd(_host.mc().getLcd())
+	Panel::Panel(g1app::EmuHost& _host) : m_host(_host), m_mc(_host.mc()), m_lcd(_host.mc().getLcd()), m_dial(_host.mc())
 	{
 		addAndMakeVisible(m_lcd);
+		addAndMakeVisible(m_dial);
 
 		auto setupKnob = [this](juce::Slider& _s, const uint8_t _adc, const double _initial, const juce::String& _tip)
 		{
@@ -178,9 +218,9 @@ namespace g1gui
 		m_midiLed = &addLed({});
 		m_panelSplitLed = &addLed(g_panelSplitLed);
 		m_panelSplit = &addButton("Panel Split", g_btnPanelSplit);
-		m_find = &addButton("Find", g_unknown);
-		m_oct[0] = &addButton("Oct Shift -", g_unknown);
-		m_oct[1] = &addButton("Oct Shift +", g_unknown);
+		m_find = &addButton("Find", g_btnFind);
+		m_oct[0] = &addButton("Oct Shift -", g_btnOctDown);
+		m_oct[1] = &addButton("Oct Shift +", g_btnOctUp);
 		for(size_t i = 0; i < m_octLeds.size(); ++i)
 			m_octLeds[i] = &addLed(g_octLeds[i]);
 
@@ -198,8 +238,8 @@ namespace g1gui
 			m_slotButtons[i] = &addButton(slots[i], slotBits[i]);
 			m_slotLeds[i] = &addLed(g_slotLeds[i]);
 		}
-		m_assign = &addButton("Assign / Morph", g_unknown);
-		m_shift = &addButton("Shift", g_unknown);
+		m_assign = &addButton("Assign / Morph", g_btnAssign);
+		m_shift = &addButton("Shift", g_btnShift);
 		m_nav[0] = &addButton("Up", g_btnUp);
 		m_nav[1] = &addButton("Left", g_btnLeft);
 		m_nav[2] = &addButton("Right", g_btnRight);
@@ -283,13 +323,6 @@ namespace g1gui
 		label("Assign/Morph", m_assign->getBounds().translated(-14, -15).withWidth(m_assign->getWidth() + 28).withHeight(13), g_textDark, 10.0f);
 		label("Shift", m_shift->getBounds().translated(0, -15).withHeight(13), g_textDark);
 
-		// The dial (not connected yet)
-		const auto d = m_dial.toFloat();
-		_g.setColour(juce::Colours::black.withAlpha(0.4f));
-		_g.fillEllipse(d.translated(2.0f, 3.0f));
-		_g.setGradientFill(juce::ColourGradient(juce::Colour(0xff3a3a3e), d.getX(), d.getY(), juce::Colour(0xff0c0c0e), d.getRight(), d.getBottom(), false));
-		_g.fillEllipse(d);
-
 		label("V I R T U A L      M O D U L A R      S Y N T H E S I Z E R      -      G 1 - E M U", {140, 362, 1030, 16}, g_textLight, 10.0f);
 	}
 
@@ -332,7 +365,7 @@ namespace g1gui
 		m_nav[3]->setBounds(1105, 112, 26, 34);
 		m_assign->setBounds(1078, 178, 40, 28);
 		m_shift->setBounds(1128, 178, 40, 28);
-		m_dial = {1094, 232, 72, 72};
+		m_dial.setBounds(1094, 232, 72, 72);
 
 		m_status.setBounds(14, 396, getWidth() - 28, 30);
 	}

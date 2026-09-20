@@ -15,8 +15,8 @@ a patch and a note **it sounds, and sounds clean**: the DSPs run at their real c
 and the links between them carry 9 words per sample (see `NOTES.md`). The level is low because the
 OS itself caps the master volume at −36 dB; `g1run` compensates. Control-rate modules (envelopes,
 clocks, master oscillators, the chorus LFO) work since the JIT loop-end fix. Four outputs and two
-inputs over JACK. The panel window (`g1gui`) shows the display, knobs, buttons and LEDs; a few
-buttons are still unidentified (see `ROADMAP.md`).
+inputs over JACK. The panel window (`g1gui`) shows the display, knobs, buttons, LEDs and the
+dial; all 18 buttons are identified (see `NOTES.md`, "The panel").
 
 ## Language
 

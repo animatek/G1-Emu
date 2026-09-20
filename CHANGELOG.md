@@ -5,6 +5,22 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-09-20
+
+- **Every panel button identified, and the dial works (Claude).** The OS only reads **bits 2 to 7**
+  of each of the three matrix rows: 18 buttons, not 24. Bits 0 and 1 are the **dial**, a quadrature
+  encoder the OS decodes in its main loop (`$104DC6`) with four edges per step and its own
+  acceleration; `Microcontroller::turnDial()` emulates it and the window's dial turns it by dragging
+  or with the wheel. The six buttons that were left (matrix row 2) are Panel Split, Find, Oct down,
+  Oct up, Assign/Morph and Shift, in that order, and they are wired in `g1gui`. The names come from
+  the factory test's tables, which sit in the flash before the OS ($9962 the key codes, $9986 the
+  names, $9A16 the 32 LEDs, $9A56 the 20 ADC channels with their names): its codes are the OS's plus
+  six, which the twelve buttons already known confirm. `$18` is the **pedal** input, no longer a
+  guess. New probes in `g1patchtest`: `G1_PREPRESS`, `G1_HOLD` (a held modifier) and `G1_DIAL`.
+  Check: holding 2.3 puts `Find` on the display and 2.2 lights LED 3.2; turning the dial on the
+  Morph screen moves its value up and down, and faster turns move it further, as the OS intends;
+  audio, CTest and the rest of the panel behave as before.
+
 ## 2026-09-19
 
 - **An open invitation to collaborate (Claude).** New section at the top of the README ("You are

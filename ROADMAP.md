@@ -14,14 +14,15 @@ far is in `NOTES.md`.
 - Control-rate modules work (envelopes, clocks, master/slave oscillators, chorus, overdrive).
 - A 101-module battery with default settings: 56 sound clearly; most of the rest are control,
   logic, slow LFOs or sequencers without a clock, which that test cannot judge.
-- `g1gui` shows the panel: display, 18 knobs and master volume, buttons and LEDs.
+- `g1gui` shows the panel: display, 18 knobs and master volume, the 18 buttons, the dial and the
+  LEDs. Every button is identified and the dial works (it turns values on the G1's own screens).
 
 ## Next
 
-1. **The rest of the panel.** Still unidentified: Shift, Find, Oct Shift −/+, Assign/Morph and
-   the dial (candidates: matrix bits 0.0, 0.1, 1.0, 1.1, 2.0, 2.1, 2.3–2.7). Confirm Panel Split
-   (2.2) and the order of the five Oct Shift LEDs. Method: `G1_PRESS` in `g1patchtest`, from a
-   screen where the button does something (see `NOTES.md`, "The panel").
+1. **What the panel still owes.** The five Oct Shift LEDs (0.0, 1.0, 2.0, 3.0 and 3.1): the
+   factory test walks them in that order, but which end is −2 has not been checked, and nothing
+   has been seen to light them yet. Also worth watching on the hardware: what Shift, Assign/Morph
+   and Oct down/up do, which is only known by name so far (see `NOTES.md`, "The panel").
 2. **A test for every module** the battery cannot judge (slow LFOs, logic, sequencers with a
    clock, S&H, DrumSynth with a trigger...), with `g1patchtest`.
 3. **Bigger patches** (mixers, filters, clocks, sequencers, several voices and slots). What fails
