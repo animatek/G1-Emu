@@ -508,9 +508,29 @@ int main(int argc, char** argv)
 			peak = std::max(peak, std::fabs(v));
 		}
 		if(peak == 0)
+		{
 			std::printf("  output %u: silence\n", c + 1);
-		else
-			std::printf("  output %u: peak %6.1f dBFS (%+.1f with g1run's +36 dB), ~%.1f Hz\n", c + 1, db(peak), db(peak) + 36, zeroCrossHz(x, 96000));
+			continue;
+		}
+		// Slow signals (LFOs, envelopes, sequencers) barely move the peak, so the capture is
+		// cut into 20 slices: the mean says where the signal sits and the drift, how far the
+		// slice means travel, says whether it is moving at all.
+		double mean = 0;
+		for(const auto v : x) mean += v;
+		mean /= static_cast<double>(x.size());
+		double lo = 1e9, hi = -1e9;
+		constexpr size_t slices = 20;
+		for(size_t s2 = 0; s2 < slices; ++s2)
+		{
+			const auto from = x.size() * s2 / slices, to = x.size() * (s2 + 1) / slices;
+			double m = 0;
+			for(auto i = from; i < to; ++i) m += x[i];
+			m /= static_cast<double>(to - from ? to - from : 1);
+			lo = std::min(lo, m);
+			hi = std::max(hi, m);
+		}
+		std::printf("  output %u: peak %6.1f dBFS (%+.1f with g1run's +36 dB), ~%.1f Hz, mean %+.4f, drift %.4f\n",
+			c + 1, db(peak), db(peak) + 36, zeroCrossHz(x, 96000), mean, hi - lo);
 	}
 	std::printf("links (peak per channel, dBFS; '.' = zero):\n");
 	for(uint32_t d = 0; d + 1 < g1::g_dspCount; ++d)

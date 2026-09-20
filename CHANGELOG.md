@@ -7,6 +7,21 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **A module battery worth the name: 80 of the 109 types give a signal (Claude).** New
+  `tools/battery/battery.py`: it builds a patch per module type with what each one needs to show
+  signs of life — an oscillator on its audio inputs, an LFO on its control ones, a running clock
+  on its logic ones and a sine into the G1's inputs — and sends its first four outputs to the four
+  outputs, which `g1patchtest` measures. Two things it learned the hard way: a clock on a reset or
+  a sync input freezes the module (so those are left alone), and a parameter that `modules.xml`
+  leaves without a default is uploaded as 0, which mutes a level or an amount (so the battery
+  opens those up and says which). `g1patchtest` now reports the mean and the drift of each output,
+  which is what makes a slow signal visible at all: the OS caps the volume at −36 dB, so full
+  scale is around −62 dBFS. **61 sound, 19 move, 12 hold a level, 17 give nothing** (was 56 of 101
+  before), in `docs/module-battery.md`. Silence is a list to look into, not a verdict: of the
+  first ones looked at, Constant is bipolar and 64 is its zero, DrumSynth with its levels open is
+  the loudest module measured (−51.7 dBFS against the −62 of an oscillator), AudioIn only needed a
+  signal in the inputs and MasterOsc has nothing but a master-slave output.
+
 - **What each panel button does, and the System menu (Claude).** Watched on the emulator, each
   against a control run. The **navigator is row 1**: right and left walk a menu line, down goes
   into the item, and in the Edit pages they walk the morph groups and a module's parameters; row 2

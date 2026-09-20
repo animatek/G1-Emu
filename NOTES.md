@@ -369,9 +369,14 @@ Applied to a build copy; the Gearmulator clone is never modified.
   is printed. `G1_HOLD_END=1` keeps the held key down until every probe is over.
 - **Connector indices:** in a `.pch`, connectors go by their `index` in `modules.xml`, which is not
   always the list order (in the Overdrive, `in` is input 0 and `overdrive mod` is 1).
-- **Module battery:** all 101 module types with default settings (OscA into the input if there is
-  one, the keyboard gate if they need one): 56 sound clearly, 24 give a slow or fixed signal and 21
-  are silent; almost all of those are control, logic, slow LFOs or sequencers without a clock,
-  which that test cannot judge.
+- **Module battery** (`tools/battery/battery.py`, results in `docs/module-battery.md`): every
+  module type in a patch of its own, with an oscillator on its audio inputs, an LFO on its control
+  ones, a running clock on its logic ones and a sine into the G1's inputs; its first four outputs
+  go to the four outputs, which `g1patchtest` measures. Of the 109 types, **61 sound, 19 move**
+  (a control signal under 20 Hz), 12 hold a fixed level and 17 give nothing. Silence is a list to
+  look into, not a verdict: the first ones looked at were the test's fault, not the emulator's —
+  Constant is bipolar and 64 is its zero, DrumSynth with its levels open is the loudest module
+  measured (−51.7 dBFS), and MasterOsc only has a master-slave output, which carries no signal of
+  its own.
 - `g1run` records everything NME sends in `~/.local/share/Animatek/G1-Emu/pcport-in.bin`, to replay
   it. `G1_RECORD=10` records 10 s of output as a WAV (without the variable nothing is recorded).

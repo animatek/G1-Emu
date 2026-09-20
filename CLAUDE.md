@@ -78,6 +78,7 @@ the four outputs and the links between DSPs; it also has probes for the panel (s
 | `app/alsamidi.h`, `app/alsaaudio.h`, `app/jackaudio.h` | ALSA MIDI, ALSA audio and JACK audio (4 outputs, 2 inputs). |
 | `tools/g1boot.cpp` | Headless boot and disassembler. |
 | `tools/patchtest/` | `g1patchtest`: the test bench. |
+| `tools/battery/` | `battery.py`: one patch per module type, played and measured (`docs/module-battery.md`). |
 | `tools/dspdis.cpp` | DSP56300 disassembler (hex words on stdin). |
 
 **The plan and the pending ideas are in `ROADMAP.md`.**
