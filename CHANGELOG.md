@@ -7,6 +7,19 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **Oct Shift belongs to the keyboard, and how Panel Split shares out the knobs (Claude).** The OS
+  keeps an octave shift per slot (`$1C3AB8 + slot`, −2 to +2) which travels in the patch header,
+  and lights one of the five LEDs for it: 0.0 = −2, 1.0 = −1, 2.0 = 0, 3.0 = +1, 3.1 = +2. On the
+  rack it does none of that: the routine is gated on the model byte, read at boot from `$7FF` of
+  the ROM, which is `$01` in the rack's. Panel Split (flag `$18C0E4`, 0 = on) gives knobs 1–6 to
+  slot A, 7–12 to B, 13–15 to C and 16–18 to D, each renumbered from 1, through two tables at
+  `$145A94` and `$145AA6`. Two new probes in `g1patchtest`: `G1_MIDINOTE=channel` (the note through
+  MIDI IN, not the PC Port) and `G1_PEEK=addr,...`. Check: uploading a patch with `OctShift` 0, 2
+  or 4 leaves `$FE`, `$00` or `$02` in `$1C3AB8`, so the value arrives, but the note comes out at
+  262 Hz in all three, from the editor and from MIDI IN alike, and no code outside the front
+  panel's module reads the variable; with the split on, only knobs 1–6 still reach the patch in
+  slot A and 7–18 go silent.
+
 - **Every panel button identified, and the dial works (Claude).** The OS only reads **bits 2 to 7**
   of each of the three matrix rows: 18 buttons, not 24. Bits 0 and 1 are the **dial**, a quadrature
   encoder the OS decodes in its main loop (`$104DC6`) with four edges per step and its own

@@ -230,9 +230,9 @@ Applied to a build copy; the Gearmulator clone is never modified.
   selects the row with the low nibble of `$202005` (bit 3 = row 0 ... bit 0 = row 3). Active low.
   Identified: slots A–D = bit 7 of rows 0–3 (the active slot blinks); Store/System/Edit/Patch-Load =
   row 3 bits 3/4/5/6; knob *k* (1–18) = row (k−1) mod 3, bit 1 + (k−1)/3; Panel Split = 3.2
-  (it lights when 2.2 is pressed). Left: 0.0, 1.0, 2.0, 3.0 and 3.1, the five Oct Shift LEDs; the
-  factory test walks them in that order, which is probably the order on the panel, but which end is
-  −2 is unchecked.
+  (it lights when 2.2 is pressed). The five left are the Oct Shift ones, and the OS lights them in
+  order: **0.0 = −2, 1.0 = −1, 2.0 = 0, 3.0 = +1, 3.1 = +2** (`$100B74`, indexing on the octave of
+  the active slot). On the rack they never light, see below.
 - **Buttons: 18, not 24.** 3 rows of 8, but the OS only reads **bits 2 to 7** of each row: bits 0
   and 1 are the dial (below). Bits 4–6 of `$202005` select the row (active low) and `$201800`
   returns it (pressed = 0). The scan (`$1040CE`) posts an event with the code
@@ -265,6 +265,33 @@ Applied to a build copy; the Gearmulator clone is never modified.
   and sends an event (class `$500`, 1 = clockwise) when it reaches 8 or 0. It accelerates: turned
   fast, one detent moves the value by more than one. `Microcontroller::turnDial(detents)` emulates
   it by handing out one edge every ~2 ms of CPU time, well apart for the OS to catch each one.
+- **Oct Shift is the keyboard model's, not the rack's.** The OS keeps an octave shift per slot at
+  `$1C3AB8 + slot`, signed −2 to +2, with a setter (`$101E0E`, taking 0–4) and a getter
+  (`$101E28`). It travels **in the patch**: the deserializer writes it and the serializer reads it
+  (3 bits of the header, `octaveShift` in NME, which already has it in its patch settings).
+  Uploading a patch with `OctShift` 0, 2 or 4 leaves `$FE`, `$00` or `$02` in `$1C3AB8`, so the
+  value does arrive. But **nothing in the note path reads it**: all 25 references to the variable
+  are in the front panel's module, and a note plays at the same pitch whatever the value, whether
+  it comes from the editor or from MIDI IN. The LEDs are not refreshed either: the routine begins
+  with `cmpi.b #$1,$1C3AAC; beq` and `$1C3AAC` is the model byte, read at boot from **`$7FF` of
+  the ROM, which is `$01`** in the rack's, and sent to the editor in a SysEx. Which fits the
+  hardware: the octave shift moves the local keyboard, which the rack does not have. The buttons
+  (2.4 and 2.5) and the five LEDs are wired in `g1gui` because the panel there is drawn from a
+  photo of the keyboard model; on the rack they do nothing.
+- **Panel Split** (button 2.2, LED 3.2, flag `$18C0E4`, **0 = split on**) hands each group of knobs
+  to a different slot (`$115EA8`), with two tables in the OS: `$145A94` gives the slot of each
+  knob and `$145AA6` its number inside that slot.
+
+  | Panel knobs | Slot | They become |
+  | --- | --- | --- |
+  | 1–6 | A | knobs 1–6 |
+  | 7–12 | B | knobs 1–6 |
+  | 13–15 | C | knobs 1–3 |
+  | 16–18 | D | knobs 1–3 |
+
+  That is, the panel's four groups, one per slot, each renumbered from 1. Slots C and D only reach
+  their first three knobs. Checked on the emulator: with the split on, only knobs 1–6 still send
+  parameter changes for the patch in slot A, and 7–18 go silent (their slots are empty).
 - **Knobs:** ADC channels. `$202000` selects, `$202800` reads. Knob *n* = entry *n* of the table at
   `$14420A`: `$31` = 1, `$37` = 2, `$2D`, `$32`, `$28`, `$2E`, `$33`, `$29`, `$2F`, `$34`, `$2A`,
   `$1A`, `$35`, `$2B`, `$1B`, `$36`, `$2C`, `$1C` = 18; `$30` = master volume; `$18` = **the
@@ -305,7 +332,9 @@ Applied to a build copy; the Gearmulator clone is never modified.
   because the interpreter runs a whole `do forever` without returning), `G1_NO_LA_FIX`,
   `G1_KNOBS=knob:module:param,...`, `G1_ADCSWEEP`, `G1_LEDSTATE`, `G1_PRESS=row.bit,...`,
   `G1_PREPRESS=row.bit,...` (pressed before the note, to hear what they change),
-  `G1_HOLD=row.bit` (held down meanwhile, for modifiers such as Shift) and `G1_DIAL=detents`.
+  `G1_HOLD=row.bit` (held down meanwhile, for modifiers such as Shift), `G1_DIAL=detents`,
+  `G1_MIDINOTE=channel` (the note through MIDI IN instead of the PC Port) and `G1_PEEK=addr,...`
+  (bytes of the CPU's memory, to read the OS's own variables).
 - **Connector indices:** in a `.pch`, connectors go by their `index` in `modules.xml`, which is not
   always the list order (in the Overdrive, `in` is input 0 and `overdrive mod` is 1).
 - **Module battery:** all 101 module types with default settings (OscA into the input if there is

@@ -287,8 +287,19 @@ int main(int argc, char** argv)
 	blocks.clear();
 	capture = true;
 	// Note through the PC Port, like NME: cc $17, 56 00 note (press) ... 56 01 note (release).
-	const auto on = withChecksum({0xf0, 0x33, 0x5c, 0x06, static_cast<uint8_t>(pid), 0x56, 0x00, static_cast<uint8_t>(note)});
-	mc.getPcPort().receive(on);
+	// G1_MIDINOTE=channel (1-16) plays it through the MIDI IN port instead, which is not the
+	// same road: the editor's note goes straight to the slot, MIDI IN goes through the OS's
+	// keyboard handling (channels, octave shift, and so on).
+	if(const char* mn = std::getenv("G1_MIDINOTE"))
+	{
+		const auto ch = static_cast<uint8_t>((std::atoi(mn) - 1) & 0x0f);
+		mc.getSci().write({static_cast<uint8_t>(0x90 | ch), static_cast<uint8_t>(note), 100});
+	}
+	else
+	{
+		const auto on = withChecksum({0xf0, 0x33, 0x5c, 0x06, static_cast<uint8_t>(pid), 0x56, 0x00, static_cast<uint8_t>(note)});
+		mc.getPcPort().receive(on);
+	}
 	run(mc, static_cast<uint64_t>(seconds * 1000) * g_ms);
 	capture = false;
 	std::vector<uint8_t> rest;
@@ -425,6 +436,18 @@ int main(int argc, char** argv)
 					l1 != l0 ? ("display [" + l1 + "]") .c_str() : "", led1 != led0 ? (" LEDs " + led0 + "-> " + led1).c_str() : "",
 					(l1 == l0 && led1 == led0) ? "no change" : "", "");
 			}
+	// G1_PEEK=addr[,addr...]: bytes of the CPU's memory, to see the OS's own variables
+	// (for instance $1C3AB8 + slot, the octave shift of each slot).
+	if(const char* pk = std::getenv("G1_PEEK"))
+	{
+		std::printf("PEEK");
+		for(const auto& t : juce::StringArray::fromTokens(pk, ",", ""))
+		{
+			const auto a = static_cast<uint32_t>(t.getHexValue32());
+			std::printf("  $%06x=$%02x", a, mc.read8(a));
+		}
+		std::printf("\n");
+	}
 	// Report: the four outputs (without the $155 silence) and the links.
 	std::printf("\noutputs (%.2f s, %zu samples at 96 kHz):\n", blocks.size() / 96000.0, blocks.size());
 	for(uint32_t c = 0; c < 4; ++c)

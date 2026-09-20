@@ -23,8 +23,8 @@ namespace g1gui
 		constexpr std::array<MatrixBit, 4> g_slotLeds = {MatrixBit{0, 7}, MatrixBit{1, 7}, MatrixBit{2, 7}, MatrixBit{3, 7}};
 		constexpr std::array<MatrixBit, 4> g_modeLeds = {MatrixBit{3, 3}, MatrixBit{3, 4}, MatrixBit{3, 5}, MatrixBit{3, 6}};
 		constexpr MatrixBit g_panelSplitLed{3, 2};
-		// The five left (bit 0 of the four rows and 3.1) should be the Oct Shift ones;
-		// the order is unchecked.
+		// Oct Shift, from −2 to +2: the OS lights one of these five for the octave of the
+		// active slot ($1C3AB8 + slot). The rack never does, see below.
 		constexpr std::array<MatrixBit, 5> g_octLeds = {MatrixBit{0, 0}, MatrixBit{1, 0}, MatrixBit{2, 0}, MatrixBit{3, 0}, MatrixBit{3, 1}};
 
 		const juce::Colour g_chassis(0xffb21f2d), g_face(0xff2b2346), g_panel(0xffc9c9c6), g_groupLine(0xffe0a040);
@@ -221,6 +221,11 @@ namespace g1gui
 		m_find = &addButton("Find", g_btnFind);
 		m_oct[0] = &addButton("Oct Shift -", g_btnOctDown);
 		m_oct[1] = &addButton("Oct Shift +", g_btnOctUp);
+		// The octave shift moves the keyboard of the keyboard model, which the rack has not:
+		// its OS keeps the value per slot (it travels in the patch) but neither lights the
+		// LEDs nor transposes anything. See NOTES.md, "The panel".
+		for(auto* b : m_oct)
+			b->setTooltip(b->getName() + ": the keyboard model's; the rack OS keeps the value but does not use it");
 		for(size_t i = 0; i < m_octLeds.size(); ++i)
 			m_octLeds[i] = &addLed(g_octLeds[i]);
 
