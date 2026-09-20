@@ -73,6 +73,8 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      # The DSP core tests. They need no ROM, no sound card and no MIDI.
+      # Our own tests (label g1): the DSP core checks, which need no ROM, no sound card and no
+      # MIDI. Gearmulator registers its own from its tree, but their binaries are EXCLUDE_FROM_ALL
+      # here and never get built, so running everything would report them as failures.
       - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build -C Release -L g1 --output-on-failure

@@ -7,6 +7,18 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **The first CI run answers the question: macOS builds the whole thing, Windows needed one line
+  (Claude).** Four jobs, four failures, and all of them useful. **macOS compiled everything** —
+  68k core, DSP cores, the JUCE audio and MIDI backend, the window — which was the real unknown
+  and is now behind us. **Windows stopped at one of our own lines**: `g1mc.cpp` used
+  `__builtin_ia32_pause`, a GCC and Clang builtin, behind a guard that tested the architecture
+  (`_M_X64`) and not the compiler, and MSVC defines that too. Replaced by a `cpuPause()` that uses
+  `_mm_pause` where it exists and `yield` on ARM, which also covers the Apple Silicon runners.
+  And the three that did build failed their **test step for the same silly reason**: Gearmulator
+  registers its own tests from the tree we add with `EXCLUDE_FROM_ALL`, so their binaries are
+  never built and `ctest` reported nine "Not Run". Our test carries the label `g1` now and CI runs
+  `ctest -L g1`. Verification: local build and `ctest -L g1` pass; the rest is for the next run.
+
 - **A second backend on JUCE, so the other two systems stop being a leap in the dark, and CI for
   the three (Claude).** Audio and MIDI had gone straight to ALSA and JACK, which is why macOS and
   Windows did not compile. Now `-DG1_BACKEND=juce` puts both on JUCE — CoreAudio, WASAPI/ASIO,

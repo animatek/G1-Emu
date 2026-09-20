@@ -5,6 +5,29 @@
 #include <algorithm>
 #include <cstdlib>
 
+// The spin hint the worker threads use while they wait for the next block. __builtin_ia32_pause
+// is GCC and Clang's; MSVC has no such builtin, and _M_X64 is defined there too, so guarding by
+// architecture alone was enough to break the Windows build.
+#if defined(_MSC_VER)
+#include <intrin.h>
+#elif defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h>
+#endif
+
+namespace
+{
+	inline void cpuPause()
+	{
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+		_mm_pause();
+#elif defined(_M_ARM64)
+		__yield();
+#elif defined(__aarch64__) || defined(__arm__)
+		__asm__ __volatile__("yield");
+#endif
+	}
+}
+
 #define MC68K_CLASS g1::Microcontroller
 #include "mc68k/musashiEntry.h"
 
@@ -58,9 +81,7 @@ namespace g1
 			{
 				if(++spins < 20000)
 				{
-#if defined(__x86_64__) || defined(_M_X64)
-					__builtin_ia32_pause();
-#endif
+					cpuPause();
 					continue;
 				}
 				std::unique_lock lock(m_wakeMutex);
@@ -197,9 +218,7 @@ namespace g1
 			m_dsps[0]->catchUp(target);
 			while(m_pending.load() != 0)
 			{
-#if defined(__x86_64__) || defined(_M_X64)
-				__builtin_ia32_pause();
-#endif
+				cpuPause();
 			}
 		}
 		// With all DSPs stopped, the audio goes from each one to the next.
