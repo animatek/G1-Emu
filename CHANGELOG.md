@@ -7,6 +7,16 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **CI is green on Linux both ways and on Windows; macOS builds but its DSP raises an illegal
+  instruction (Claude).** After the one-line fix, Windows compiles and passes, and so do both
+  Linux jobs. macOS builds everything and then `g1dspcheck` dies with `ILLEGAL` on the Apple
+  Silicon runner. The core does have an aarch64 JIT and our own extensions to it are written
+  against the emitter's shared mnemonics, so they compile for both architectures and one of them
+  is wrong only at run time — whose fault it is, ours or the core's, is the next thing to find
+  out, with the interpreter as the fallback if the JIT cannot be fixed. Noted in `ROADMAP.md`.
+  The macOS test step is allowed to fail meanwhile, so a real regression on the other three still
+  turns the run red; the macOS **build** is not excused and still gates.
+
 - **The first CI run answers the question: macOS builds the whole thing, Windows needed one line
   (Claude).** Four jobs, four failures, and all of them useful. **macOS compiled everything** —
   68k core, DSP cores, the JUCE audio and MIDI backend, the window — which was the real unknown

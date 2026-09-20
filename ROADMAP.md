@@ -52,8 +52,16 @@ addressed before multi-instance use.
    `G1-Emu MIDI`, takes a patch over the PC Port, answers the editor and sounds. That is the whole
    path, so what remains for the other two is the parts only their own systems can tell us:
 
-   - **macOS:** that CoreAudio and CoreMIDI behave, and that the virtual ports appear in a DAW.
-     Everything says they will; nobody has looked.
+   - **macOS: the whole thing compiles, and then the DSP falls over.** The first CI run built
+     everything — 68k, DSPs, the JUCE backend, the window — and `g1dspcheck` died with an illegal
+     instruction on the Apple Silicon runner. The core does carry an aarch64 JIT
+     (`jitops_*_aarch64.cpp`), and our own extensions to it (MOVEM, DO FOREVER, in
+     `g1Lib/dsp56300.cpp` and `cmake/Dsp56300.cmake`) are written against the emitter's shared
+     mnemonics, so they compile for both and only one of them is wrong at run time. Which, and
+     whether the fault is ours or the core's, is the next thing to find out; the interpreter
+     (`G1_INTERP`) is the fallback if the JIT cannot be fixed, at a cost in speed nobody has
+     measured. Until then the macOS test step is allowed to fail so a real regression elsewhere
+     still shows. CoreAudio, CoreMIDI and the virtual ports in a DAW are still unlooked at.
    - **Windows:** the same, plus the one real unknown — whether `createNewDevice` makes a virtual
      port at all (see below). The standalone must not fail when it cannot: it should open ordinary
      MIDI ports, say so, and point at loopMIDI.
