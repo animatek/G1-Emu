@@ -19,10 +19,10 @@ far is in `NOTES.md`.
 
 ## Next
 
-1. **What the panel still owes.** What Shift and Assign/Morph do, which is known by name but not
-   by behaviour: neither changes anything on the patch screen. The Oct Shift keys and their five
-   LEDs are settled: they belong to the keyboard model and the rack's OS does not use them
-   (see `NOTES.md`, "The panel").
+1. **What the panel still owes: Assign/Morph.** It is the only key with no known effect; nothing
+   changes in any screen reached so far, with or without Shift, before or after moving a knob.
+   Shift, Find, Panel Split and the navigator are settled, and the Oct Shift keys belong to the
+   keyboard model, which the rack's OS does not use (see `NOTES.md`, "The panel").
 2. **A test for every module** the battery cannot judge (slow LFOs, logic, sequencers with a
    clock, S&H, DrumSynth with a trigger...), with `g1patchtest`.
 3. **Bigger patches** (mixers, filters, clocks, sequencers, several voices and slots). What fails

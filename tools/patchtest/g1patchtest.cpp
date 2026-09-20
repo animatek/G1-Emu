@@ -264,16 +264,49 @@ int main(int argc, char** argv)
 		const auto g = juce::StringArray::fromTokens(_rowBit, ".", "");
 		mc.setButton(static_cast<uint32_t>(g[0].getIntValue()), static_cast<uint32_t>(g[1].getIntValue()), _down);
 	};
+	// A step of a sequence can also be a knob or the dial, so that a whole panel gesture can be
+	// written down: "1.2,1.6,k1=200,d3,2.6" is Edit, down, knob 1 to 200, three detents, Assign.
+	auto gesture = [&](const juce::String& _step) -> bool
+	{
+		if(_step.startsWithChar('k'))
+		{
+			static constexpr std::array<uint8_t, 18> adc = {0x31, 0x37, 0x2d, 0x32, 0x28, 0x2e, 0x33, 0x29, 0x2f, 0x34, 0x2a, 0x1a, 0x35, 0x2b, 0x1b, 0x36, 0x2c, 0x1c};
+			const auto f = juce::StringArray::fromTokens(_step.substring(1), "=", "");
+			const auto knob = f[0].getIntValue();
+			if(knob >= 1 && knob <= 18)
+				mc.setAdc(adc[static_cast<size_t>(knob - 1)], static_cast<uint8_t>(f[1].getIntValue()));
+			return true;
+		}
+		if(_step.startsWithChar('d'))
+		{
+			mc.turnDial(_step.substring(1).getIntValue());
+			return true;
+		}
+		return false;
+	};
 	auto holdButton = [&](const bool _down) { if(hold) { button(hold, _down); run(mc, 50 * g_ms); } };
 	auto pressButtons = [&](const juce::StringArray& _list, const int _count)
 	{
 		for(int k = 0; k < _count; ++k)
 		{
+			if(gesture(_list[k]))
+			{
+				run(mc, 300 * g_ms);
+				continue;
+			}
 			button(_list[k], true);
 			run(mc, 150 * g_ms);
 			button(_list[k], false);
 			run(mc, 300 * g_ms);
 		}
+	};
+	// What the OS says to the editor during a gesture: it is what tells an assignment from a
+	// plain parameter change.
+	auto pcPortSince = [&]
+	{
+		std::vector<uint8_t> out;
+		mc.getPcPort().takeTx(out);
+		return out;
 	};
 	if(const char* pp = std::getenv("G1_PREPRESS"))
 	{
@@ -373,6 +406,7 @@ int main(int argc, char** argv)
 	{
 		// Several, comma-separated: they are pressed in order and the last one is reported.
 		const auto seq = juce::StringArray::fromTokens(pr, ",", "");
+		pcPortSince();		// drain what came before, so only the gesture's traffic is left
 		holdButton(true);
 		pressButtons(seq, seq.size() - 1);
 		const auto f = juce::StringArray::fromTokens(seq[seq.size() - 1], ".", "");
@@ -386,9 +420,15 @@ int main(int argc, char** argv)
 		run(mc, 150 * g_ms);
 		mc.setButton(row, bit, false);
 		run(mc, 300 * g_ms);
-		holdButton(false);
-		std::printf("PRESS %s%s  display %s -> %s  LEDs %s -> %s\n", pr, hold ? (juce::String(" holding ") + hold).toRawUTF8() : "",
-			s0.c_str(), screen().c_str(), l0.c_str(), ledStates().c_str());
+		const auto s1 = screen();		// still holding, if anything is held
+		const auto said = pcPortSince();
+		if(!said.empty())
+			std::printf("the OS said: %s\n", hex(said, 40).c_str());
+		if(!std::getenv("G1_HOLD_END"))	// with it, the hold lasts until the probes are over
+			holdButton(false);
+		run(mc, 300 * g_ms);
+		std::printf("PRESS %s%s  display %s -> %s -> %s  LEDs %s -> %s\n", pr, hold ? (juce::String(" holding ") + hold).toRawUTF8() : "",
+			s0.c_str(), s1.c_str(), screen().c_str(), l0.c_str(), ledStates().c_str());
 	}
 	// G1_DIAL=n: turns the dial n detents (negative the other way) and reports the display.
 	// With G1_PRESS it turns after the presses, so the screen can be set up first.
@@ -447,6 +487,12 @@ int main(int argc, char** argv)
 			std::printf("  $%06x=$%02x", a, mc.read8(a));
 		}
 		std::printf("\n");
+	}
+	if(std::getenv("G1_HOLD_END"))
+	{
+		holdButton(false);
+		run(mc, 300 * g_ms);
+		std::printf("released  display [%s|%s]\n", mc.getLcd().line(0, 16).c_str(), mc.getLcd().line(1, 16).c_str());
 	}
 	// Report: the four outputs (without the $155 silence) and the links.
 	std::printf("\noutputs (%.2f s, %zu samples at 96 kHz):\n", blocks.size() / 96000.0, blocks.size());

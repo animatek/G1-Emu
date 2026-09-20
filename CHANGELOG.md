@@ -7,6 +7,20 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **What each panel button does, and the System menu (Claude).** Watched on the emulator, each
+  against a control run. The **navigator is row 1**: right and left walk a menu line, down goes
+  into the item, and in the Edit pages they walk the morph groups and a module's parameters; row 2
+  does none of that. **Shift** is the second function of another key: Shift + Store opens
+  `Store settings` (the panel's "Save Synth. Settings") and Shift + a slot shows and changes that
+  slot's voices. **Find**, held, puts `Find` on the display. **Assign/Morph is the only key with
+  no known effect**: alone or with Shift, on the patch screen, the Morph page, a parameter page or
+  the System menu, before or after moving a knob or the dial, nothing changes on the display, the
+  LEDs or the traffic to the editor, though the OS does take the key. Also written down: the whole
+  System menu, from the OS's table at `$1442EE`. `g1patchtest` grew a gesture language — a step of
+  `G1_PRESS` can now be a knob (`k5=200`) or the dial (`d3`), and what the OS says to the editor
+  during the gesture is printed — plus `G1_HOLD_END`. Check: `1.2,1.6,k5=200,2.6` and its control
+  without the key give identical output; audio and CTest as before.
+
 - **Oct Shift belongs to the keyboard, and how Panel Split shares out the knobs (Claude).** The OS
   keeps an octave shift per slot (`$1C3AB8 + slot`, −2 to +2) which travels in the patch header,
   and lights one of the five LEDs for it: 0.0 = −2, 1.0 = −1, 2.0 = 0, 3.0 = +1, 3.1 = +2. On the

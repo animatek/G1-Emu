@@ -265,6 +265,35 @@ Applied to a build copy; the Gearmulator clone is never modified.
   and sends an event (class `$500`, 1 = clockwise) when it reaches 8 or 0. It accelerates: turned
   fast, one detent moves the value by more than one. `Microcontroller::turnDial(detents)` emulates
   it by handing out one edge every ~2 ms of CPU time, well apart for the OS to catch each one.
+- **What each button does**, watched on the emulator (display, LEDs and what the OS sends to the
+  editor). Slots A–D pick the slot, Store asks `Store?`, System opens the `SYSTEM MENU`, Edit opens
+  the patch's pages and Play goes back to the patch screen.
+  - **The navigator is row 1**: right and left walk along a menu line (`<SYNTH>  PATCH` →
+    ` SYNTH <PATCH>`), down goes into the item (`MASTER TUNE`), and in the Edit pages left and
+    right walk the four morph groups and, one level down, the parameters of a module
+    (`Freq coarse` → `Freq fine`). Row 2 does none of that, which settles the two rows.
+  - **Shift is the second function of another key**: **Shift + Store** opens `Store settings`
+    (the panel's "Save Synth. Settings", a different screen from Store's `Store?`), and **Shift +
+    a slot** shows and changes that slot's voices (`( 1) --  --  --` → `( 1)  1  --  --`). The OS
+    keeps the modifier in a block at `$1C39D4` and each shifted action branches on it.
+  - **Find**, held down, puts `Find` on the display and goes back when released. Its second
+    function, printed in red on the panel, is Panic.
+  - **Assign/Morph: nothing found yet.** Pressed or held, alone or with Shift, on the patch
+    screen, on the Morph page, on a parameter page and in the System menu, before and after
+    moving a knob or the dial: display, LEDs and the traffic to the editor come out the same as
+    without it (checked against a control run each time). The OS does take the key: the jump
+    table at `$1255F4` sends it to `$106168` along with Shift and the two Oct keys, numbered
+    Oct up = 0, Shift = 1, Oct down = 2, Assign = 3. So either it needs a screen not reached yet,
+    or it is another thing the rack does not use.
+  - Moving a knob that the patch has on a morph group jumps the display to the Morph page with
+    that group's value, and the OS sends the editor a `$2F` message.
+- **The System menu**, from the OS's table at `$1442EE` (the letter closing each line is the
+  section shown in the display's corner; the Edit pages use `T`):
+  - **S**: MIDI CHANNELS, MIDI VEL SCALE, MIDI CLOCK, LEDS ACTIVE, MASTER TUNE, KEYBOARD MODE,
+    GLOBAL SYNC, PEDAL POLARITY, LOCAL, PROGRAM CHANGE, MEMORY PROTECT, KNOB MODE, SYNTH NAME.
+  - **P**: VOICES, PORTAMENTO, PEDAL MODE, BEND RANGE, KEYB RANGE, VEL RANGE, PATCH NAME,
+    VOICE RETRIG, CTRL SNAP SHOT.
+  - **D**: DUMP ALL, DUMP ACTIVE, RECIEVE ALL (the OS's own spelling).
 - **Oct Shift is the keyboard model's, not the rack's.** The OS keeps an octave shift per slot at
   `$1C3AB8 + slot`, signed −2 to +2, with a setter (`$101E0E`, taking 0–4) and a getter
   (`$101E28`). It travels **in the patch**: the deserializer writes it and the serializer reads it
@@ -334,7 +363,10 @@ Applied to a build copy; the Gearmulator clone is never modified.
   `G1_PREPRESS=row.bit,...` (pressed before the note, to hear what they change),
   `G1_HOLD=row.bit` (held down meanwhile, for modifiers such as Shift), `G1_DIAL=detents`,
   `G1_MIDINOTE=channel` (the note through MIDI IN instead of the PC Port) and `G1_PEEK=addr,...`
-  (bytes of the CPU's memory, to read the OS's own variables).
+  (bytes of the CPU's memory, to read the OS's own variables). A step of `G1_PRESS` /
+  `G1_PREPRESS` can be a knob (`k5=200`) or the dial (`d3`) instead of a button, so a whole panel
+  gesture fits in one line (`1.2,1.6,k5=200,2.6`), and what the OS sends to the editor during it
+  is printed. `G1_HOLD_END=1` keeps the held key down until every probe is over.
 - **Connector indices:** in a `.pch`, connectors go by their `index` in `modules.xml`, which is not
   always the list order (in the Overdrive, `in` is input 0 and `overdrive mod` is 1).
 - **Module battery:** all 101 module types with default settings (OscA into the input if there is
