@@ -1,0 +1,78 @@
+# Builds G1-Emu on the three systems it is meant to run on.
+#
+# No ROM is needed and none is ever fetched: the emulator only reads one when it runs, and this
+# workflow never runs it. What it proves is that the code compiles and that the DSP tests pass,
+# which is the part nobody can check by hand on three machines.
+#
+# The two dependencies are clones, not copies (see the README): Gearmulator for the DSP and 68k
+# cores, and JUCE for the window and — off Linux — for audio and MIDI.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux (native ALSA/JACK)
+            os: ubuntu-latest
+            backend: native
+          - name: Linux (JUCE backend)
+            os: ubuntu-latest
+            backend: juce
+          - name: macOS
+            os: macos-latest
+            backend: juce
+          - name: Windows
+            os: windows-latest
+            backend: juce
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: G1-Emu
+
+      - name: Gearmulator (the DSP and 68k cores)
+        uses: actions/checkout@v4
+        with:
+          repository: joelanders/gearmulator-md-mm
+          path: gearmulator-md-mm
+          submodules: recursive
+
+      - name: JUCE
+        uses: actions/checkout@v4
+        with:
+          repository: juce-framework/JUCE
+          ref: 8.0.12
+          path: JUCE
+
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev \
+            libfreetype-dev libfontconfig1-dev libx11-dev libxext-dev libxinerama-dev \
+            libxrandr-dev libxcursor-dev libxcomposite-dev libgl1-mesa-dev
+
+      - name: Configure
+        run: >
+          cmake -B build -S G1-Emu -DCMAKE_BUILD_TYPE=Release
+          -DGEARMULATOR_DIR=${{ github.workspace }}/gearmulator-md-mm
+          -DG1_JUCE_DIR=${{ github.workspace }}/JUCE
+          -DG1_BACKEND=${{ matrix.backend }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      # The DSP core tests. They need no ROM, no sound card and no MIDI.
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure

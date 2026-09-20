@@ -43,11 +43,21 @@ addressed before multi-instance use.
    now is in the modules or the OS, not in the transport.
 4. **Compare the level with a real G1**: record the same OscA → 2Output at full master volume and
    see whether the hardware is louder (analog stage).
-5. **macOS and Windows.** Today the emulator is Linux-only, and not by accident: `alsamidi.h`,
-   `alsaaudio.h` and `jackaudio.h` are included unconditionally, `EmuHost` reads `/proc/asound` and
-   `/proc/self/stat`, and the CMake has no platform branch at all. It does not fail to run
-   elsewhere — it fails to compile. The move is to JUCE, which the window already links, plus CI
-   for the three systems. Only then does a binary release make sense.
+5. **macOS and Windows.** **The backend is done and the CI is up**; what is left is running it on
+   the two machines nobody here has. `-DG1_BACKEND=juce` builds audio and MIDI on JUCE and is the
+   default off Linux, `audiobridge.h` is shared with the native path, and
+   `.github/workflows/build.yml` builds Linux both ways, macOS and Windows on every push. The JUCE
+   backend was checked **on Linux**, where JUCE uses ALSA and can create virtual ports just as
+   macOS and Windows do: it opens the card with four outputs, publishes `G1-Emu PC Port` and
+   `G1-Emu MIDI`, takes a patch over the PC Port, answers the editor and sounds. That is the whole
+   path, so what remains for the other two is the parts only their own systems can tell us:
+
+   - **macOS:** that CoreAudio and CoreMIDI behave, and that the virtual ports appear in a DAW.
+     Everything says they will; nobody has looked.
+   - **Windows:** the same, plus the one real unknown — whether `createNewDevice` makes a virtual
+     port at all (see below). The standalone must not fail when it cannot: it should open ordinary
+     MIDI ports, say so, and point at loopMIDI.
+   - Both: a signed/notarised bundle, which is its own job and not this one.
 
    **The audio is the easy half.** JUCE 8 carries every backend we need and we already have them
    in the tree: `juce_CoreAudio_mac.cpp`, `juce_WASAPI_windows.cpp`, `juce_ASIO_windows.cpp`,

@@ -24,9 +24,16 @@
 
 namespace g1app
 {
+#ifdef G1_BACKEND_JUCE
+	class JuceMidi;
+	class JuceAudio;
+	using Midi = JuceMidi;
+#else
 	class AlsaMidi;
 	class AlsaAudio;
 	class JackAudio;
+	using Midi = AlsaMidi;
+#endif
 
 	class EmuHost
 	{
@@ -107,9 +114,13 @@ namespace g1app
 		void finishWav();
 
 		std::unique_ptr<g1::Microcontroller> m_mc;
-		std::unique_ptr<AlsaMidi> m_midi;
+		std::unique_ptr<Midi> m_midi;
+#ifdef G1_BACKEND_JUCE
+		std::unique_ptr<JuceAudio> m_juceAudio;
+#else
 		std::unique_ptr<AlsaAudio> m_alsa;
 		std::unique_ptr<JackAudio> m_jack;
+#endif
 		int m_pcPort = -1, m_midiPort = -1;
 		bool m_rawMidiBound = false;
 		std::string m_romProblem;

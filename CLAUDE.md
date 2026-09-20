@@ -58,6 +58,17 @@ the OS puts on the master volume); `G1_THREADS=0` runs the DSPs serially; `G1_RE
 records a 4-channel WAV. The memory map, the loader and the findings are in `NOTES.md`. The
 template is Gearmulator's Nord Lead 2X emulation (`source/nord/n2x`).
 
+## Two backends for audio and MIDI
+
+`-DG1_BACKEND=native` (the default on Linux) is ALSA sequencer ports and the JACK graph with the
+back panel's port names. `-DG1_BACKEND=juce` (the default and the only choice everywhere else) is
+JUCE: CoreAudio, WASAPI/ASIO, CoreMIDI, and virtual MIDI ports through
+`MidiOutput::createNewDevice`. **The JUCE one can be forced on Linux**, which is how it gets
+tested without a Mac — and it is: it opens the card, creates the two virtual ports, takes a patch
+on the PC Port and sounds. The rate conversion and the queues between threads are `audiobridge.h`,
+shared by both, so they sound alike by construction. `.github/workflows/build.yml` builds Linux
+both ways, macOS and Windows on every push.
+
 ## Building and testing
 
 ```bash
@@ -88,7 +99,9 @@ the four outputs and the links between DSPs; it also has probes for the panel (s
 | `app/gui/`, `g1gui.sh` | `g1gui`: the window with the panel. |
 | `app/gui/Settings.*` | The settings window: ROM, audio driver and device, level, raw MIDI card. |
 | `app/romfinder.*`, `g1Lib/g1rom.h` | Where the ROM comes from, and whether a file is the right one. |
-| `app/alsamidi.h`, `app/alsaaudio.h`, `app/jackaudio.h` | ALSA MIDI, ALSA audio and JACK audio (4 outputs, 2 inputs). |
+| `app/audiobridge.h` | Rate conversion and the lock-free queues between the emulator and the card. |
+| `app/alsamidi.h`, `app/alsaaudio.h`, `app/jackaudio.h` | The native Linux backend: ALSA MIDI, ALSA audio, JACK audio. |
+| `app/juceaudio.h`, `app/jucemidi.h` | The JUCE backend: every system, and the only one off Linux. |
 | `tools/g1boot.cpp` | Headless boot and disassembler. |
 | `tools/patchtest/` | `g1patchtest`: the test bench. |
 | `tools/battery/` | `battery.py`: one patch per module type, played and measured (`docs/module-battery.md`). |

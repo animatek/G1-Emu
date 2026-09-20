@@ -1,12 +1,18 @@
 #include "emuhost.h"
 
-#include "alsaaudio.h"
 #include "romfinder.h"
+
+#ifdef G1_BACKEND_JUCE
+#include "juceaudio.h"
+#include "jucemidi.h"
+#else
+#include "alsaaudio.h"
 #include "alsamidi.h"
 #ifdef G1_HAVE_JACK
 #include "jackaudio.h"
 #else
 namespace g1app { class JackAudio {}; }
+#endif
 #endif
 
 #include <chrono>
@@ -16,7 +22,9 @@ namespace g1app { class JackAudio {}; }
 #include <filesystem>
 #include <iterator>
 #include <sstream>
+#ifdef __linux__
 #include <unistd.h>
+#endif
 
 namespace g1app
 {
@@ -31,9 +39,13 @@ namespace g1app
 			return true;
 		}
 
-		// CPU seconds (user + system) of the whole process.
+		// CPU seconds (user + system) of the whole process. Only Linux has /proc; elsewhere the
+		// load figure in the status line is simply not shown.
 		double processCpuSeconds()
 		{
+#ifndef __linux__
+			return 0;
+#else
 			std::ifstream f("/proc/self/stat");
 			std::string s((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 			const auto close = s.rfind(')');
@@ -48,12 +60,17 @@ namespace g1app
 				if(i == 15) stime = std::stoull(field);
 			}
 			return static_cast<double>(utime + stime) / static_cast<double>(sysconf(_SC_CLK_TCK));
+#endif
 		}
 
 		// The snd-virmidi card reserved for the G1 (its ID is G1Emu unless G1_RAWMIDI names
 		// another one). Returns its card number, or -1 if it is not loaded.
 		int rawMidiCard(const std::string& _id)
 		{
+#ifndef __linux__
+			(void)_id;		// only Linux hides application ports from raw MIDI programs
+			return -1;
+#else
 			if(_id.empty())
 				return -1;
 			const std::string& id = _id;
@@ -70,6 +87,7 @@ namespace g1app
 				try { return std::stoi(name.substr(4)); } catch(...) { return -1; }
 			}
 			return -1;
+#endif
 		}
 
 		// The outputs carry DSP 3's X:$5F offset ($155, almost nothing); on the hardware the
@@ -204,7 +222,7 @@ namespace g1app
 			_log += "new flash with the factory OS (will be saved in " + m_flashPath + ")\n";
 		}
 
-		m_midi = std::make_unique<AlsaMidi>("G1-Emu");
+		m_midi = std::make_unique<Midi>("G1-Emu");
 		if(!m_midi->valid())
 		{
 			_log += "cannot open the ALSA sequencer\n";
@@ -212,7 +230,13 @@ namespace g1app
 		}
 		m_pcPort = m_midi->addPort("PC Port");
 		m_midiPort = m_midi->addPort("MIDI");
+#ifdef G1_BACKEND_JUCE
+		m_stats.midi = m_midi->virtualPorts()
+			? "G1-Emu PC Port (editor) and G1-Emu MIDI"
+			: "no virtual MIDI ports on this system: only real MIDI devices (see docs/bitwig-midi.md)";
+#else
 		m_stats.midi = "G1-Emu:PC Port (editor) and G1-Emu:MIDI, client " + std::to_string(m_midi->clientId());
+#endif
 		_log += "MIDI ports: " + m_stats.midi + "\n";
 		m_rawMidiBound = bindRawMidi(_log);
 
@@ -221,14 +245,28 @@ namespace g1app
 		{
 			const float gainDb = m_options.gainDb;
 			const float gain = std::pow(10.0f, gainDb / 20.0f);
-			char buf[160];
+			char buf[200];
+#ifdef G1_BACKEND_JUCE
+			const auto device = (m_options.audio == "jack" || m_options.audio == "alsa") ? std::string() : m_options.audio;
+			m_juceAudio = std::make_unique<JuceAudio>(device, gain);
+			if(m_juceAudio->valid())
+				std::snprintf(buf, sizeof(buf), "%s at %u Hz, %zu outputs, %+.0f dB",
+					m_juceAudio->deviceName().c_str(), m_juceAudio->rate(), m_juceAudio->outputs(), static_cast<double>(gainDb));
+			else
+			{
+				std::snprintf(buf, sizeof(buf), "no sound: %s", m_juceAudio->error().c_str());
+				m_juceAudio.reset();
+			}
+			if(m_juceAudio)
+				m_mc->getDsp(0).setInputProvider([this](int32_t& _l, int32_t& _r) { m_juceAudio->pullInput(_l, _r); });
+#else
 #ifdef G1_HAVE_JACK
 			if(m_options.audio == "jack")
 			{
 				m_jack = std::make_unique<JackAudio>("G1-Emu", gain, m_options.jackConnect);
 				if(m_jack->valid())
 				{
-					std::snprintf(buf, sizeof(buf), "JACK G1-Emu at %u Hz, %+.0f dB (out_1..4, in_L/R)", m_jack->rate(), gainDb);
+					std::snprintf(buf, sizeof(buf), "JACK G1-Emu at %u Hz, %+.0f dB (out_1..4, in_L/R)", m_jack->rate(), static_cast<double>(gainDb));
 					m_mc->getDsp(0).setInputProvider([this](int32_t& _l, int32_t& _r) { m_jack->pullInput(_l, _r); });
 				}
 				else
@@ -240,13 +278,14 @@ namespace g1app
 				const char* dev = (m_options.audio == "alsa" || m_options.audio == "jack") ? "default" : m_options.audio.c_str();
 				m_alsa = std::make_unique<AlsaAudio>(dev, gain);
 				if(m_alsa->valid())
-					std::snprintf(buf, sizeof(buf), "ALSA \"%s\" at 48 kHz, outputs 1/2, %+.0f dB", dev, gainDb);
+					std::snprintf(buf, sizeof(buf), "ALSA \"%s\" at 48 kHz, outputs 1/2, %+.0f dB", dev, static_cast<double>(gainDb));
 				else
 				{
 					std::snprintf(buf, sizeof(buf), "cannot open \"%s\": no sound", dev);
 					m_alsa.reset();
 				}
 			}
+#endif
 			m_stats.audio = buf;
 		}
 		else
@@ -265,11 +304,16 @@ namespace g1app
 		// One sample per DSP 3 block (96 kHz): the four outputs.
 		m_mc->getDsp(3).setBlockCallback([this](const int32_t _o1, const int32_t _o2, const int32_t _o3, const int32_t _o4)
 		{
+#ifdef G1_BACKEND_JUCE
+			if(m_juceAudio)
+				m_juceAudio->push(_o1 - g_dc, _o2 - g_dc, _o3 - g_dc, _o4 - g_dc);
+#else
 			if(m_alsa)
 				m_alsa->push(_o1 - g_dc, _o2 - g_dc);
 #ifdef G1_HAVE_JACK
 			if(m_jack)
 				m_jack->push(_o1 - g_dc, _o2 - g_dc, _o3 - g_dc, _o4 - g_dc);
+#endif
 #endif
 			if(m_wav && m_wavFrames < m_wavMaxFrames)
 			{
@@ -299,8 +343,12 @@ namespace g1app
 		m_thread.join();
 		saveFlash();
 		finishWav();
+#ifdef G1_BACKEND_JUCE
+		m_juceAudio.reset();
+#else
 		m_jack.reset();
 		m_alsa.reset();
+#endif
 	}
 
 	// Links the emulator to the sound card kept for it, so raw-MIDI programs see the G1 as a
@@ -316,6 +364,13 @@ namespace g1app
 	// It is tried again while it fails: the card can be loaded after the emulator.
 	bool EmuHost::bindRawMidi(std::string& _log)
 	{
+#ifdef G1_BACKEND_JUCE
+		// Nothing to do: the split between "application ports" and "raw MIDI devices" that makes
+		// this necessary is the ALSA sequencer's, and the JUCE backend does not use it. On macOS
+		// and Windows a virtual port is a MIDI device like any other.
+		(void)_log;
+		return false;
+#else
 		const int card = rawMidiCard(m_options.rawMidiCard);
 		if(card < 0)
 			return false;
@@ -340,6 +395,7 @@ namespace g1app
 		std::lock_guard<std::mutex> lock(m_statsMutex);
 		m_stats.rawMidi = done;
 		return true;
+#endif
 	}
 
 	// The level can change while it plays: both backends read it from an atomic on their own thread.
@@ -347,11 +403,16 @@ namespace g1app
 	{
 		m_options.gainDb = _gainDb;
 		const float gain = std::pow(10.0f, _gainDb / 20.0f);
+#ifdef G1_BACKEND_JUCE
+		if(m_juceAudio)
+			m_juceAudio->setGain(gain);
+#else
 		if(m_alsa)
 			m_alsa->setGain(gain);
 #ifdef G1_HAVE_JACK
 		if(m_jack)
 			m_jack->setGain(gain);
+#endif
 #endif
 		std::lock_guard<std::mutex> lock(m_statsMutex);
 		const auto at = m_stats.audio.rfind(" dB");
@@ -507,9 +568,13 @@ namespace g1app
 		std::lock_guard lock(m_statsMutex);
 		auto s = m_stats;
 		s.pcIn = m_pcIn; s.pcOut = m_pcOut; s.midiIn = m_midiIn; s.midiOut = m_midiOut;
+#ifdef G1_BACKEND_JUCE
+		if(m_juceAudio) { s.peak = m_juceAudio->peak(); s.xruns = m_juceAudio->xruns(); }
+#else
 		if(m_alsa) { s.peak = m_alsa->peak(); s.xruns = m_alsa->xruns(); }
 #ifdef G1_HAVE_JACK
 		if(m_jack) { s.peak = m_jack->peak(); s.xruns = m_jack->xruns(); }
+#endif
 #endif
 		return s;
 	}

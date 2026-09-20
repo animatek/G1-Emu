@@ -7,6 +7,28 @@ Older entries cite their commit by hand.
 
 ## 2026-09-20
 
+- **A second backend on JUCE, so the other two systems stop being a leap in the dark, and CI for
+  the three (Claude).** Audio and MIDI had gone straight to ALSA and JACK, which is why macOS and
+  Windows did not compile. Now `-DG1_BACKEND=juce` puts both on JUCE — CoreAudio, WASAPI/ASIO,
+  CoreMIDI, and virtual ports through `MidiOutput::createNewDevice` — and it is the default off
+  Linux, where `native` stays the default because the JACK graph with the back panel's port names
+  is worth keeping. New `app/audiobridge.h` holds the rate conversion between the G1's 96 kHz and
+  the card's, the two lock-free queues and the dropout cushion, taken out of `jackaudio.h` and now
+  shared by both backends, so they sound alike by construction. New `app/juceaudio.h` and
+  `app/jucemidi.h`. `EmuHost` picks one at compile time, and the two things that only Linux has —
+  the `/proc` figures and the raw MIDI card, which exists because the ALSA sequencer hides
+  application ports from raw MIDI programs — are gated out. New
+  `.github/workflows/build.yml`: Linux both ways, macOS and Windows, building and running CTest on
+  every push, with no ROM anywhere near it. **Verification, and this is the point: the JUCE
+  backend was tested here, on Linux**, where JUCE uses ALSA and creates virtual ports exactly as
+  the other two systems do. It opens the card with four outputs, publishes `G1-Emu PC Port` and
+  `G1-Emu MIDI`, takes the 326 KB of a captured editor session on the PC Port, answers with 10 KB
+  and reaches -16 dB on outputs 1 and 2. One bug found and fixed on the way: JUCE gives every
+  virtual port the same identifier on Linux, so a map keyed by it sent every message to whichever
+  port was created last — the PC Port's traffic was arriving on the MIDI port. It is keyed by the
+  device now. The native backend was checked to be unchanged by the refactor: `g1patchtest` still
+  gives 261.5 Hz at -61.8 dBFS, and a live run still sounds. Both trees build and CTest passes.
+
 - **The README says what a Nord Modular needs and does not come with, and any editor is welcome
   (Claude).** Two things a newcomer has no way to guess. **It starts empty:** the ROM carries the
   operating system and nothing else, so a fresh flash is built from the OS alone and every slot says
