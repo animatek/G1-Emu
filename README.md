@@ -12,8 +12,9 @@ sounds clean in real time: oscillators, filters, envelopes, clocks, effects (cho
 four outputs and two inputs. It has a window with the panel (display, knobs, buttons and LEDs).
 **Runs on Linux**; macOS and Windows build in CI through a JUCE audio and MIDI backend, and the
 DSP tests pass on all of them, Apple Silicon and Linux arm64 included. What nobody has done yet is
-run either on a real machine — the sound card, the MIDI ports and a signed bundle — and that is
-what a binary release waits on ([`docs/next-steps.md`](docs/next-steps.md)). Also missing:
+run either on a real machine, which is what the test builds in
+[Releases](https://github.com/animatek/G1-Emu/releases) are for: unsigned, no ROM inside, and we
+want to hear what happens ([`docs/release-notes.md`](docs/release-notes.md)). Also missing:
 module-by-module testing, and the one panel key whose job is still unknown. The technical details are in [`NOTES.md`](NOTES.md), the plan in
 [`ROADMAP.md`](ROADMAP.md) and what changes in [`CHANGELOG.md`](CHANGELOG.md). Contributions are
 welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md).

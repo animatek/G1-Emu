@@ -7,6 +7,17 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **First public pre-release: `v0.1.0-alpha.1` (Claude, asked for by Javier).** The tag on
+  `53ffad9` ran the five builds and published them:
+  [the release](https://github.com/animatek/G1-Emu/releases/tag/v0.1.0-alpha.1) carries macOS
+  (Apple Silicon), Windows x86-64, and Linux x86-64 both backends and arm64, with
+  `docs/release-notes.md` as its text. Verification: the run is green on all five jobs and the
+  release job attached the same packages the tests ran against
+  ([35575952609](https://github.com/animatek/G1-Emu/actions/runs/35575952609)); the Windows asset
+  was downloaded **with no authentication at all** and holds `G1-Emu.exe`, `g1run.exe`, the README
+  and the licence, which is the point — an artifact needs a GitHub account and a release does not.
+  README now points at Releases.
+
 - **A tag now publishes a pre-release with the five packages, and Windows stops lying about its
   MIDI (Claude).** Pushing a `v*` tag runs the same matrix and a final job attaches what it built,
   so what people download is the binary the tests ran against, never a separate build. It is
