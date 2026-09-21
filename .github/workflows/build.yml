@@ -45,6 +45,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: joelanders/gearmulator-md-mm
+          ref: mdmm-v0.1.0-alpha.13
           path: gearmulator-md-mm
           submodules: recursive
 

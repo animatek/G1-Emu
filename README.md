@@ -48,8 +48,9 @@ is always readable in **Settings**, which is also where to put it back at startu
 Linux (tested on Arch/CachyOS with PipeWire). You need:
 
 - A clone of [gearmulator-md-mm](https://github.com/joelanders/gearmulator-md-mm) in
-  `~/src/gearmulator-md-mm` (or `-DGEARMULATOR_DIR=...`). It is not modified: the core fixes the G1
-  needs are applied to a copy at build time (`cmake/Dsp56300.cmake`).
+  `~/src/gearmulator-md-mm` (or `-DGEARMULATOR_DIR=...`). The version tested in CI is
+  **`mdmm-v0.1.0-alpha.13`**. The clone is not modified: the core fixes the G1 needs are applied to
+  a copy at build time (`cmake/Dsp56300.cmake`).
 - ALSA, and JACK (pipewire-jack) for the four outputs and the inputs.
 - JUCE for the window and the test bench: by default the one inside Animatek NME next to this repo
   (`../Nomad2026/JUCE`), or `-DG1_JUCE_DIR=...`. Without JUCE only the console version is built.

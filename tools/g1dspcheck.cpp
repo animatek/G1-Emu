@@ -110,6 +110,28 @@ namespace
 		require(m.dsp.getPC().toWord() >= 0x102 && m.dsp.getPC().toWord() <= 0x104, "RTI does not return to DO FOREVER");
 	}
 
+	void finiteLoop(uint32_t blockSize)
+	{
+		Machine m(blockSize);
+		// do #2,$102; inc a; jmp $105
+		m.program(0x100, {0x060280, 0x102, 0x000008, 0x0c0105, 0, 0x0c0105});
+		m.dsp.setPC(0x100);
+		m.until(0x105);
+		require(m.dsp.regs().a.var > 1, "finite DO does not repeat the body");
+		require(m.dsp.regs().sp.var == 0, "finite DO does not restore the stack");
+	}
+
+	void nestedFiniteLoop(uint32_t blockSize)
+	{
+		Machine m(blockSize);
+		// Outer DO #2, inner DO #2; both must restore their loop context.
+		m.program(0x100, {0x060280, 0x106, 0x060280, 0x104, 0x000008, 0x000009, 0, 0x0c0109, 0, 0x0c0109});
+		m.dsp.setPC(0x100);
+		m.until(0x109);
+		require(m.dsp.regs().a.var > 3 && m.dsp.regs().b.var > 1, "nested finite DO does not finish");
+		require(m.dsp.regs().sp.var == 0, "nested finite DO does not restore the stack");
+	}
+
 	void nestedLoop(uint32_t blockSize)
 	{
 		Machine m(blockSize);
@@ -142,7 +164,9 @@ int main()
 			run("MOVEM JIT invalidation", [=] { invalidateProgramMove(blockSize); });
 			run("DO FOREVER with LC=0", [=] { foreverLoop(blockSize, 0); });
 			run("DO FOREVER with LC=7", [=] { foreverLoop(blockSize, 7); });
-			run("nested DO", [=] { nestedLoop(blockSize); });
+			run("finite DO", [=] { finiteLoop(blockSize); });
+			run("nested finite DO", [=] { nestedFiniteLoop(blockSize); });
+			run("DO FOREVER with nested DO", [=] { nestedLoop(blockSize); });
 		}
 		std::puts("OK: short MOVEM, JIT invalidation, DO FOREVER, IRQD and nested DO (blocks 1/32)");
 		return 0;

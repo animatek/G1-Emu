@@ -7,14 +7,23 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **Gearmulator is updated and pinned to `mdmm-v0.1.0-alpha.13` in CI (Codex).** The workflow had
+  already picked up alpha.13 implicitly from the dependency repository's default branch; it now
+  names the release tag so later upstream changes cannot silently alter a G1-Emu build. The README
+  records the tested version. The external clone is untouched. Verification: alpha.12 → alpha.13
+  was reviewed (12 upstream commits; its DSP-core change is the ESSI/DMA pin already exercised by
+  current CI), and the pinned build will run on Linux, macOS and Windows with the final ARM fix.
+
 - **The Apple Silicon DSP failure is isolated and the nested-loop restore no longer relies on
   cross-boundary ARM bit masks (Codex).** CI annotations prove that short MOVEM, JIT invalidation
   and both DO FOREVER cases pass on the arm64 macOS runner; the illegal instruction is raised by
   `nested DO` with a one-instruction JIT block. That case uniquely restores the outer loop's `LF`
   and `FV` together when the inner loop ends. The build overlay now clears, tests and restores the
   two bits separately, avoiding the combined immediate masks that the aarch64 emitter turns into
-  the bad instruction. Verification so far: the Release DSP test passes locally on x86-64; the
-  fix is going to the macOS ARM CI runner next.
+  the bad instruction. The synthetic test now separates a finite DO, nested finite DO and a DO
+  FOREVER with a nested DO, so the next ARM run can distinguish saving `FV` from closing any inner
+  loop. Verification so far: the expanded Release DSP test passes locally on x86-64; the fix is
+  going to the macOS ARM CI runner next.
 
 ## 2026-09-20
 
