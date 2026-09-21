@@ -7,6 +7,17 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **`v0.1.0-alpha.3` published with the fixes proven on the first real Mac run (Codex, asked for
+  by Javier).** [The pre-release](https://github.com/animatek/G1-Emu/releases/tag/v0.1.0-alpha.3)
+  carries all five packages built from the tag: macOS universal, Windows x86-64, Linux x86-64
+  with both backends and Linux arm64. The tag's
+  [CI run](https://github.com/animatek/G1-Emu/actions/runs/35609561152) is green in all five build
+  jobs and in the release job. Verification after publication: downloaded
+  `G1-Emu-macos-universal.tar.gz`, its SHA-256 matches GitHub
+  (`03df3cee739eeb726e0ed243238f5702cc7a1862c4da9d7734559dd91f7403eb`), the archive contains
+  `G1-Emu.app`, `g1run`, README and licence, and both executables are Mach-O universal binaries
+  with x86-64 and arm64 slices.
+
 - **Release notes prepared for `v0.1.0-alpha.3` (Codex, asked for by Javier).** They now describe
   the three fixes found on the first real Mac run -- the CoreAudio split-device hang, the `.app`
   launcher path and truncated PC Port SysEx replies -- instead of claiming that nobody has run the
