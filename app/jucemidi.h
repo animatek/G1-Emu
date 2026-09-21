@@ -68,42 +68,58 @@ namespace g1app
 		{
 			if(_bytes.empty() || _index < 0 || static_cast<size_t>(_index) >= m_ports.size())
 				return;
-			auto& out = m_ports[static_cast<size_t>(_index)].out;
-			if(!out)
+			auto& port = m_ports[static_cast<size_t>(_index)];
+			if(!port.out)
 				return;
+			// A message can arrive split across two calls: the run loop drains the DUART's
+			// transmit buffer every 2 ms of emulated time (EmuHost::run), and the PC Port's
+			// SysEx replies (12 bytes for the NME handshake, far more for a patch) can take the
+			// OS longer than that to finish writing -- more so under real-machine CPU load, not
+			// something a Linux dev box ever sees running faster than real time. What was left
+			// unfinished last time is picked up first, so a message is never sent until whole.
+			auto& pending = port.pending;
+			pending.insert(pending.end(), _bytes.begin(), _bytes.end());
 			// The G1 speaks in whole messages, SysEx included; JUCE wants them one at a time.
 			size_t i = 0;
-			while(i < _bytes.size())
+			while(i < pending.size())
 			{
-				const auto used = messageLength(_bytes, i);
+				const auto used = messageLength(pending, i);
 				if(used == 0)
-					break;
-				out->sendMessageNow(juce::MidiMessage(_bytes.data() + i, static_cast<int>(used)));
+					break;		// incomplete: the rest is due on a later call
+				port.out->sendMessageNow(juce::MidiMessage(pending.data() + i, static_cast<int>(used)));
 				i += used;
 			}
+			pending.erase(pending.begin(), pending.begin() + static_cast<std::ptrdiff_t>(i));
+			// A message that never completes (corrupt stream, not a real G1) would otherwise
+			// block this port forever behind it and grow without bound; the whole flash is 1 MB,
+			// so no real SysEx from the G1 ever approaches that.
+			if(pending.size() > 1024 * 1024)
+				pending.clear();
 		}
 
 	private:
-		// How many bytes the message starting at _at occupies. Running status does not appear on
-		// the G1's ports: the OS always sends a status byte.
+		// How many bytes the message starting at _at occupies, or 0 if _b does not yet hold all
+		// of it -- the caller then waits for the rest instead of sending a truncated message.
+		// Running status does not appear on the G1's ports: the OS always sends a status byte.
 		static size_t messageLength(const std::vector<uint8_t>& _b, const size_t _at)
 		{
 			const auto s = _b[_at];
+			const auto avail = _b.size() - _at;
 			if(s == 0xf0)
 			{
 				for(size_t i = _at + 1; i < _b.size(); ++i)
 					if(_b[i] == 0xf7)
 						return i - _at + 1;
-				return _b.size() - _at;		// unterminated: send what there is
+				return 0;		// no terminator yet
 			}
 			if(s >= 0xf8)
 				return 1;
 			switch(s & 0xf0)
 			{
-			case 0xc0: case 0xd0:	return std::min<size_t>(2, _b.size() - _at);
-			case 0xf0:				return s == 0xf1 || s == 0xf3 ? std::min<size_t>(2, _b.size() - _at)
-													  : (s == 0xf2 ? std::min<size_t>(3, _b.size() - _at) : 1);
-			default:				return std::min<size_t>(3, _b.size() - _at);
+			case 0xc0: case 0xd0:	return avail >= 2 ? 2 : 0;
+			case 0xf0:				return s == 0xf1 || s == 0xf3 ? (avail >= 2 ? 2 : 0)
+													  : (s == 0xf2 ? (avail >= 3 ? 3 : 0) : 1);
+			default:				return avail >= 3 ? 3 : 0;
 			}
 		}
 
@@ -157,6 +173,7 @@ namespace g1app
 			juce::String name;
 			std::unique_ptr<juce::MidiOutput> out;
 			std::unique_ptr<juce::MidiInput> in;
+			std::vector<uint8_t> pending;	// a message send() has not seen the end of yet
 		};
 
 		std::string m_clientName;

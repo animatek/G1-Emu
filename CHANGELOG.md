@@ -7,6 +7,35 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **The JUCE MIDI backend dropped bytes out of the PC Port's own replies, breaking NME's
+  handshake (Claude, found live with NME on the same first Mac run).** With the two fixes above
+  in place, NME could see and open `G1-Emu PC Port`, but "Connect" still ended in "No response
+  from synth (timeout)" every time. An independent CoreMIDI probe (not NME, not the emulator's
+  own report) sending the exact bytes NME's *IAm* uses, `F0 33 00 06 00 03 03 F7`, showed why:
+  `g1run` answered with `F0 33 00 06 01 03 F7` (7 bytes) on the first try and
+  `F0 33 00 06 01 F7` (6 bytes) on a retry ten seconds later -- both short of the 12-byte reply
+  `NOTES.md` already documents (`F0 33 00 06 01 03 03 3F 7F 7F 01 F7`: sender, version, serial,
+  device ID), and shorter each time, worse under the heavier CPU load a second attempt landed
+  under. `EmuHost::run` drains the emulated DUART's transmit buffer every 2 ms of real time
+  (`app/emuhost.cpp`); a 12-byte SysEx reply can take the OS longer than that to finish writing,
+  so `JuceMidi::send` (`app/jucemidi.h`) could receive it in more than one call, mid-message. Its
+  `messageLength` had no way to say "not done yet": short of a real terminator it invented one --
+  returning what bytes had arrived as if they were the whole message ("unterminated: send what
+  there is") -- so a partial SysEx went out as a short, wrongly-terminated one, and the bytes
+  after it were misread as new messages starting on a stray data byte, which is not a valid
+  status byte and got silently dropped. The native ALSA backend never had this: `alsamidi.h` feeds
+  bytes one at a time through `snd_midi_event_encode_byte`, a decoder that already holds an
+  incomplete message across calls, which is exactly what was missing here. `JuceMidi` now keeps a
+  `pending` buffer per port and only calls `sendMessageNow` once `messageLength` reports a
+  complete message (0 means wait for the rest); an unfinished message can still arrive at CoreMIDI
+  split across more than one packet, which is ordinary SysEx transport and not this bug -- what
+  changes is that every byte the OS wrote is now in it, and in order, once whole. A message that
+  somehow never completes clears itself past 1 MB (the entire flash) rather than blocking a port
+  forever. Verification: the DSP test still passes; the same probe sending
+  `F0 33 00 06 00 03 03 F7` to a rebuilt `g1run` now gets back exactly
+  `F0 33 00 06 01 03 03 3F 7F 7F 01 F7`, split as `F0 33 00 06 01 03 03` then `3F 7F 7F 01 F7`
+  across two CoreMIDI packets but byte-for-byte and in order.
+
 - **`g1gui.sh` did not start the window on macOS (Claude, same first Mac run).** It execs the
   binary at a fixed path next to the JUCE bundle, which is what Linux and Windows produce; on
   macOS `g1gui` is a `.app` bundle instead, so that path is a directory and the script failed
