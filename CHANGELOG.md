@@ -7,6 +7,22 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **The Apple Silicon illegal instruction was a mask of zero, and not the G1's loop flag
+  (Claude).** With the core's log now reaching the CI log, macOS printed the reason in one line:
+  `Error: 50 - InvalidImmediate: tst w5, 0, block at PC 000102`. `jitblock.cpp` closes a loop body
+  with `test_(lc, Imm(maxDoIterations - 1))`, and G1-Emu runs one iteration per block
+  (`maxDoIterations = 1`, in `g1dsp.cpp` and in the test), so the mask is zero — which AArch64
+  cannot encode as a logical immediate. asmjit refused the instruction, and in Release
+  `AsmJitErrorHandler` only logs, so the block was left unfinished and the DSP ran into it. On x86
+  `test r32, 0` encodes fine, which is why it only ever happened on ARM, and why the three earlier
+  attempts, all of them rewriting the `FV` extension's encodings, could not have helped.
+  `cmake/Dsp56300.cmake` now emits an unconditional jump for that mask, which is what the test
+  means when it can never be false. Verification on x86-64: `g1dspcheck` passes, and the audio is
+  unchanged — `g1patchtest` with `SimpleOSC.pch` still gives 261.5 Hz at −61.8 dBFS on outputs 1
+  and 2 with the DSP links carrying two channels, the same figures as before the change. The macOS
+  and `Linux arm64` jobs are what confirm it, and until both are green with the test gating this
+  is not closed.
+
 - **Task 1 is not done: the Apple Silicon crash is reopened, and the encoding theory is wrong
   (Claude).** The entries below that closed it cite CI run 35566113403, which is green only
   because the macOS `Test` step still had `continue-on-error`; its log ends in

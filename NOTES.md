@@ -222,29 +222,39 @@ Applied to a build copy; the Gearmulator clone is never modified.
 
 ### The DSP JIT on ARM
 
-**Open:** `g1dspcheck` raises an illegal instruction on the Apple Silicon CI runner, always in the
-same case — `finite DO`, the first one that runs both the DO entry and `do_end`, which are the two
-places the G1 extension touches. Everything before it passes, including both `DO FOREVER` cases.
+**Cause found, and it was never the G1's `FV` extension.** `g1dspcheck` raised an illegal
+instruction on the Apple Silicon runner, always in the `finite DO` case. Routing the core's log to
+stderr, flushed, printed the one line that settles it:
 
-It is **not** an immediate that AArch64 cannot encode, which is what the first three attempts
-(a complemented mask, `BFC`, then `BFI` with the zero register) assumed. asmjit builds its arm64
-backend on any host, so the sequences can be assembled on this x86 machine and looked at without a
-Mac: every form encodes without error, including the complemented masks on both `w` and `x`
-registers.
+```
+handleError@14: Error: 50 - InvalidImmediate: tst w5, 0, block at PC 000102, P mem size 1
+```
+
+`jitblock.cpp` closes a loop body with `test_(lc, Imm(maxDoIterations - 1))` + `jz`. G1-Emu runs
+**one iteration per block** (`g1dsp.cpp` and `g1dspcheck` both set `maxDoIterations = 1`), so that
+mask is **zero**, and zero is not an encodable AArch64 logical immediate — TST is `ANDS WZR, Wn,
+#imm`, and the immediate encoding has no way to say "no bits". asmjit refuses the instruction
+(error 50). In Release `AsmJitErrorHandler` only logs — its `assert` is compiled out — so the rest
+of the block is never emitted and the DSP runs into whatever is there: `ILLEGAL`. On x86 the same
+`test r32, 0` encodes perfectly, which is why it never showed here.
+
+With that mask the test is always true, so the overlay emits an unconditional jump instead
+(`cmake/Dsp56300.cmake`). The `#ifdef HAVE_ARM64` paths written for the `FV` flag were removed:
+they were treating a symptom, and every form they tried — a complemented mask, `BFC`, `BFI` with
+the zero register — encodes without error anyway. That last point is worth keeping as a method:
+**asmjit builds its arm64 backend on any host**, so a suspect sequence can be assembled on this
+x86 machine and checked without a Mac.
 
 ```
 bfi(w0, wzr, SRB_FV, 1)              err=0 (Ok)   0x331003e0
 and_(w0, w0, Imm(~SR_FV))            err=0 (Ok)   0x120f7800
 and_(x0, x0, Imm(~SR_FV))            err=0 (Ok)   0x926ff800
 and_(w0, w0, Imm(~(SR_LF | SR_FV)))  err=0 (Ok)   0x120f7400
+tst(w5, Imm(0))                      err=50 (InvalidImmediate)
 ```
 
-So the ARM-only paths were removed: the portable form is what runs everywhere. What the macOS log
-does show is the core's asmjit error handler printing a block right before the crash, which in
-Release only logs (its `assert` is compiled out) and then runs the broken block. `g1dspcheck` now
-routes the core's log to stderr, flushed, so that message survives in a CI log, and CI has an
-`ubuntu-24.04-arm` job: the same AArch64 JIT on a machine that is not Apple's, which separates the
-code generated from what macOS does with it (W^X, `MAP_JIT`, icache invalidation).
+CI also gained a `Linux arm64` job (`ubuntu-24.04-arm`): the same AArch64 JIT on a machine that is
+not Apple's, so a fault in the code generated is told apart from one in what macOS does with it.
 
 ## The panel
 

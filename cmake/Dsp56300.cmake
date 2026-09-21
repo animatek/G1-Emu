@@ -36,6 +36,14 @@ g1_dsp_replace(jitblock.cpp
 	"\t\t\tm_asm.cmp(lc, asmjit::Imm(1));\n\t\t\tm_asm.jle(enddo);\n\t\t\tm_asm.dec(lc);"
 	"\t\t\tconst auto repeatForever = m_asm.newLabel();\n\t\t\tm_asm.bitTest(sr, SRB_FV);\n\t\t\tm_asm.jnz(repeatForever);\n\t\t\tm_asm.cmp(lc, asmjit::Imm(1));\n\t\t\tm_asm.jle(enddo);\n\t\t\tm_asm.dec(lc);\n\t\t\tm_asm.bind(repeatForever);")
 
+# One iteration per block (what the G1 uses) made the mask of that test zero. AArch64 cannot
+# encode an immediate of zero for TST: asmjit refused the instruction, the rest of the block
+# was never emitted and the DSP ran into it, which is the illegal instruction on Apple
+# Silicon. The test is always true with that mask, so the jump is unconditional.
+g1_dsp_replace(jitblock.cpp
+	"\t\t\tif(m_config.maxDoIterations)\n\t\t\t{\n\t\t\t\tassert(asmjit::Support::isPowerOf2(m_config.maxDoIterations));\n\t\t\t\tm_asm.test_(_regLC, asmjit::Imm(m_config.maxDoIterations-1));\n\t\t\t\tm_asm.jz(skip);\n\t\t\t}"
+	"\t\t\tif(m_config.maxDoIterations > 1)\n\t\t\t{\n\t\t\t\tassert(asmjit::Support::isPowerOf2(m_config.maxDoIterations));\n\t\t\t\tm_asm.test_(_regLC, asmjit::Imm(m_config.maxDoIterations-1));\n\t\t\t\tm_asm.jz(skip);\n\t\t\t}\n\t\t\telse if(m_config.maxDoIterations)\n\t\t\t{\n\t\t\t\tm_asm.jmp(skip);\n\t\t\t}")
+
 # Nested DO and ENDDO also save/restore FV, not only LF. One form for both architectures: every
 # immediate here encodes as an AArch64 logical immediate, checked by cross-assembling the
 # sequences with asmjit's arm64 backend on an x86 host (see NOTES.md, "The DSP JIT on ARM").
