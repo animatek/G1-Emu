@@ -7,6 +7,22 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **A tag now publishes a pre-release with the five packages, and Windows stops lying about its
+  MIDI (Claude).** Pushing a `v*` tag runs the same matrix and a final job attaches what it built,
+  so what people download is the binary the tests ran against, never a separate build. It is
+  created as a **pre-release** on purpose: this is a test build and must not look like a finished
+  one. The notes people will read are `docs/release-notes.md`, kept in the repo: no ROM is
+  included and none ever will be, the flash starts empty so an editor is needed, nothing is signed
+  (with the Gatekeeper and SmartScreen steps written out), and a table of what is expected to work
+  on each system with the Windows virtual-port question marked as the real unknown — saying plainly
+  that "it did not work" is as useful a report as a success. Fixed along the way: when
+  `createNewDevice` returns nothing, the status line claimed "only real MIDI devices", which the
+  program never opens, and pointed at `docs/bitwig-midi.md`, a Linux document about a USB gadget.
+  It now says no editor can reach the G1, and on Windows names Windows MIDI Services and loopMIDI.
+  Verification: both backends build and `g1dspcheck` passes on x86-64; `g1run` on the JUCE backend
+  still reports `G1-Emu PC Port (editor) and G1-Emu MIDI` where the ports do get created; the
+  workflow parses and its release job is gated on a tag, so it stays dormant until one is pushed.
+
 - **Every CI run now leaves the binaries to download (Claude).** The workflow built macOS and
   Windows and threw the result away, so nobody with those machines could try anything without
   building it first. It now packages `g1run` and the `G1-Emu` window per platform and uploads them

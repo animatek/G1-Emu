@@ -231,9 +231,17 @@ namespace g1app
 		m_pcPort = m_midi->addPort("PC Port");
 		m_midiPort = m_midi->addPort("MIDI");
 #ifdef G1_BACKEND_JUCE
-		m_stats.midi = m_midi->virtualPorts()
-			? "G1-Emu PC Port (editor) and G1-Emu MIDI"
-			: "no virtual MIDI ports on this system: only real MIDI devices (see docs/bitwig-midi.md)";
+		if(m_midi->virtualPorts())
+			m_stats.midi = "G1-Emu PC Port (editor) and G1-Emu MIDI";
+		else
+			// Nothing was created, and nothing real was opened either: no editor can reach the G1.
+			// Saying which system refused, and what the way round it is, saves the user the hunt.
+#ifdef _WIN32
+			m_stats.midi = "no virtual MIDI ports: Windows only makes them through Windows MIDI "
+				"Services, so no editor can reach the G1 yet (loopMIDI is the usual way round it)";
+#else
+			m_stats.midi = "no virtual MIDI ports on this system: no editor can reach the G1";
+#endif
 #else
 		m_stats.midi = "G1-Emu:PC Port (editor) and G1-Emu:MIDI, client " + std::to_string(m_midi->clientId());
 #endif

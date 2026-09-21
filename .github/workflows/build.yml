@@ -12,6 +12,9 @@ name: build
 on:
   push:
     branches: [main]
+    # A tag is what publishes a release: the same matrix builds, and the job at the end
+    # collects the five packages and attaches them (see the release job).
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -122,3 +125,39 @@ jobs:
           path: ${{ runner.os == 'Windows' && 'package/*' || format('G1-Emu-{0}.tar.gz', matrix.artifact) }}
           if-no-files-found: error
           retention-days: 30
+
+  # Only on a tag. It does not build anything: it takes what the matrix already produced,
+  # so what people download is the very same binary the tests ran against.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: G1-Emu
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect the packages
+        run: |
+          mkdir -p release
+          find artifacts -name '*.tar.gz' -exec cp {} release/ \;
+          (cd artifacts/G1-Emu-windows-x86_64 && zip -r "$GITHUB_WORKSPACE/release/G1-Emu-windows-x86_64.zip" .)
+          ls -l release
+
+      # Pre-release on purpose: it is a test build, and it must not look like a finished one.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease \
+            --title "G1-Emu $GITHUB_REF_NAME" \
+            --notes-file G1-Emu/docs/release-notes.md
