@@ -29,6 +29,10 @@ Signing and notarisation are a job of their own and are not done yet.
 | macOS | CoreAudio | CoreMIDI, nothing to install | should work, never run |
 | Windows | WASAPI/ASIO | **only with Windows MIDI Services** | the real unknown |
 
+**The macOS build is a universal binary (Apple Silicon and Intel) and needs macOS 11 Big Sur or
+newer.** The Apple Silicon half is what CI compiles and tests; the Intel half is built from the
+same source and has never been run, so a report from an Intel Mac is especially welcome.
+
 On Windows, JUCE can only create a virtual port through Windows MIDI Services; with the older
 WinRT or WinMM backends it cannot, and the status line will say so plainly. If that happens the
 emulator still runs and makes sound, but no editor can reach it. Tell us what the status line

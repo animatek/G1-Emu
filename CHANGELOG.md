@@ -7,6 +7,19 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **The macOS build is universal and runs on macOS 11 and up; it said macOS 26 (Claude, reported
+  by Javier).** The first release's macOS binary would not start on Ventura, and not because of
+  the architecture: with no `CMAKE_OSX_DEPLOYMENT_TARGET` set, CMake inherits the runner's own
+  system, so `LC_BUILD_VERSION` said `minos 26.0.0` and macOS refused to launch it on anything
+  older — on Apple Silicon too. It was also `arm64` alone, so no Intel Mac could run it either.
+  The macOS job now builds `arm64;x86_64` with a deployment target of 11.0 (the floor for arm64),
+  which the core takes without changes because it picks its JIT by preprocessor and not by CMake
+  (`dsp56kBase/buildconfig.h`). CI checks what it is about to ship rather than assuming it:
+  `lipo -archs` must list both slices and `vtool -show-build` must say `minos 11`, and the job
+  fails if not. Release notes say the Intel half is built but never run. Verification: the run for
+  this commit is what proves the flags; the broken binary was diagnosed by reading
+  `LC_BUILD_VERSION` out of the published asset.
+
 - **First public pre-release: `v0.1.0-alpha.1` (Claude, asked for by Javier).** The tag on
   `53ffad9` ran the five builds and published them:
   [the release](https://github.com/animatek/G1-Emu/releases/tag/v0.1.0-alpha.1) carries macOS

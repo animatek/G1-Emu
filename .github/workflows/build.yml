@@ -41,10 +41,15 @@ jobs:
             os: ubuntu-24.04-arm
             backend: native
             artifact: linux-arm64-native
+          # Universal, and with a deployment target set by hand: CMake otherwise inherits the
+          # runner's own macOS (26 today), and the binary then refuses to start on anything
+          # older — Ventura included, Apple Silicon or not. 11.0 is the floor for arm64.
           - name: macOS
             os: macos-latest
             backend: juce
-            artifact: macos-arm64
+            artifact: macos-universal
+            # Quoted: the semicolon would otherwise end the command in the shell.
+            extra_cmake: '"-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0'
           - name: Windows
             os: windows-latest
             backend: juce
@@ -84,6 +89,7 @@ jobs:
           -DGEARMULATOR_DIR=${{ github.workspace }}/gearmulator-md-mm
           -DG1_JUCE_DIR=${{ github.workspace }}/JUCE
           -DG1_BACKEND=${{ matrix.backend }}
+          ${{ matrix.extra_cmake }}
 
       - name: Build
         run: cmake --build build --config Release --parallel
@@ -101,6 +107,21 @@ jobs:
       #
       # An artifact is a zip and a zip loses the executable bit, so everything but Windows is
       # tarred first.
+      # What the binary claims about itself is the whole point of the flags above, so it is
+      # checked rather than assumed: both slices present, and a minimum macOS that is not the
+      # runner's.
+      - name: Check the macOS binary
+        if: runner.os == 'macOS'
+        run: |
+          for bin in build/app/g1run build/app/gui/g1gui_artefacts/Release/G1-Emu.app/Contents/MacOS/G1-Emu; do
+            echo "== $bin"
+            lipo -archs "$bin"
+            vtool -show-build "$bin" | grep -E 'minos|platform'
+            lipo -archs "$bin" | grep -q arm64 || { echo "no arm64 slice"; exit 1; }
+            lipo -archs "$bin" | grep -q x86_64 || { echo "no x86_64 slice"; exit 1; }
+            vtool -show-build "$bin" | grep -q 'minos 11' || { echo "wrong deployment target"; exit 1; }
+          done
+
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
