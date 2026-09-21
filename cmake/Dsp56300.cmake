@@ -39,10 +39,10 @@ g1_dsp_replace(jitblock.cpp
 # Nested DO and ENDDO also save/restore FV, not only LF.
 g1_dsp_replace(jitops.cpp
 	"m_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));"
-	"m_asm.and_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(~SR_FV));\n\t\t\tm_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));")
+	"#ifdef HAVE_ARM64\n\t\t\tm_asm.bfc(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(SRB_FV), asmjit::Imm(1));\n#else\n\t\t\tm_asm.and_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(~SR_FV));\n#endif\n\t\t\tm_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));")
 g1_dsp_replace(jitops.cpp
 	"m_dspRegs.getSS(r64(r.get()));\n\t\t\tm_asm.and_(r32(r), asmjit::Imm(SR_LF));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_LF));\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), r32(r.get()));"
-	"m_dspRegs.getSS(r64(r.get()));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_LF));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_FV));\n\n\t\t\tconst auto noLf = m_asm.newLabel();\n\t\t\tm_asm.bitTest(r32(r), SRB_LF);\n\t\t\tm_asm.jz(noLf);\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(SR_LF));\n\t\t\tm_asm.bind(noLf);\n\n\t\t\tconst auto noFv = m_asm.newLabel();\n\t\t\tm_asm.bitTest(r32(r), SRB_FV);\n\t\t\tm_asm.jz(noFv);\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(SR_FV));\n\t\t\tm_asm.bind(noFv);")
+	"m_dspRegs.getSS(r64(r.get()));\n#ifdef HAVE_ARM64\n\t\t\t// LF and the G1's adjacent FV extension are copied without logical immediates.\n\t\t\tm_asm.bfi(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), r32(r), asmjit::Imm(SRB_LF), asmjit::Imm(2));\n#else\n\t\t\tm_asm.and_(r32(r), asmjit::Imm(SR_LF | SR_FV));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~(SR_LF | SR_FV)));\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), r32(r.get()));\n#endif")
 
 # DMA with dual counters on source and destination at once (DAM = 011 011 in the G1's DMA0:
 # copies X:$6C0 -> Y:output buffer on every block). Gearmulator does not implement it and in

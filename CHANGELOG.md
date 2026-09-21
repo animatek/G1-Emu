@@ -7,6 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **Apple Silicon now uses AArch64 bit-field instructions for the G1 loop flag (Codex).** The
+  split regression test showed that the crash happens in the first finite `DO`, not only in a
+  nested loop: the G1 extension cleared `FV` with a sign-extended complemented immediate that
+  AsmJit cannot encode as an AArch64 logical instruction. The ARM overlay now clears `FV` with
+  `BFC` and restores the adjacent `LF`/`FV` pair with `BFI`; x86 keeps its existing mask path.
+  Verification: the Release DSP test passes locally on x86-64; the AArch64 fix is going to the
+  pinned alpha.13 macOS runner next.
+
 - **Gearmulator is updated and pinned to `mdmm-v0.1.0-alpha.13` in CI (Codex).** The workflow had
   already picked up alpha.13 implicitly from the dependency repository's default branch; it now
   names the release tag so later upstream changes cannot silently alter a G1-Emu build. The README
@@ -14,13 +22,12 @@ Older entries cite their commit by hand.
   was reviewed (12 upstream commits; its DSP-core change is the ESSI/DMA pin already exercised by
   current CI), and the pinned build will run on Linux, macOS and Windows with the final ARM fix.
 
-- **The Apple Silicon DSP failure is isolated and the nested-loop restore no longer relies on
-  cross-boundary ARM bit masks (Codex).** CI annotations prove that short MOVEM, JIT invalidation
+- **The Apple Silicon DSP failure is isolated and the nested-loop restore was split for diagnosis
+  (Codex).** CI annotations prove that short MOVEM, JIT invalidation
   and both DO FOREVER cases pass on the arm64 macOS runner; the illegal instruction is raised by
   `nested DO` with a one-instruction JIT block. That case uniquely restores the outer loop's `LF`
-  and `FV` together when the inner loop ends. The build overlay now clears, tests and restores the
-  two bits separately, avoiding the combined immediate masks that the aarch64 emitter turns into
-  the bad instruction. The synthetic test now separates a finite DO, nested finite DO and a DO
+  and `FV` together when the inner loop ends. A first experiment cleared, tested and restored the
+  two bits separately. The synthetic test now separates a finite DO, nested finite DO and a DO
   FOREVER with a nested DO, so the next ARM run can distinguish saving `FV` from closing any inner
   loop. Verification so far: the expanded Release DSP test passes locally on x86-64; the fix is
   going to the macOS ARM CI runner next.
