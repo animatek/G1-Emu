@@ -7,6 +7,17 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **Every CI run now leaves the binaries to download (Claude).** The workflow built macOS and
+  Windows and threw the result away, so nobody with those machines could try anything without
+  building it first. It now packages `g1run` and the `G1-Emu` window per platform and uploads them
+  as run artifacts (`G1-Emu-macos-arm64`, `G1-Emu-windows-x86_64`, `G1-Emu-linux-x86_64-native`,
+  `G1-Emu-linux-x86_64-juce`, `G1-Emu-linux-arm64-native`), with the README and the licence
+  alongside, kept for 30 days. No ROM is included, here or anywhere else. Everything but Windows
+  is tarred first because an artifact is a zip and a zip loses the executable bit, and the
+  packaging step fails the run if a binary is missing rather than uploading an empty archive.
+  Nothing is signed or notarised yet, so both systems will warn about an unidentified developer.
+  Verification: the workflow parses, and the run this commit triggers is what proves the paths.
+
 - **The five CI jobs are green with the DSP test gating every one (Claude).** [CI run 35570337853](https://github.com/animatek/G1-Emu/actions/runs/35570337853) builds
   and tests Linux both ways, Linux arm64, macOS and Windows after the zero-mask fix, with no
   `continue-on-error` anywhere: the Apple Silicon blocker is closed, this time with a run that

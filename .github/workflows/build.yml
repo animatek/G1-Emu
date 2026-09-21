@@ -26,21 +26,26 @@ jobs:
           - name: Linux (native ALSA/JACK)
             os: ubuntu-latest
             backend: native
+            artifact: linux-x86_64-native
           - name: Linux (JUCE backend)
             os: ubuntu-latest
             backend: juce
+            artifact: linux-x86_64-juce
           # The only other AArch64 machine available here. It runs the same JIT as Apple Silicon,
           # so it says whether a failure there is in the code we generate or in what macOS does
           # with it (W^X, icache). Free for public repositories.
           - name: Linux arm64 (native ALSA/JACK)
             os: ubuntu-24.04-arm
             backend: native
+            artifact: linux-arm64-native
           - name: macOS
             os: macos-latest
             backend: juce
+            artifact: macos-arm64
           - name: Windows
             os: windows-latest
             backend: juce
+            artifact: windows-x86_64
 
     steps:
       - uses: actions/checkout@v4
@@ -85,3 +90,35 @@ jobs:
       # here and never get built, so running everything would report them as failures.
       - name: Test
         run: ctest --test-dir build -C Release -L g1 --output-on-failure
+
+      # The binaries, so somebody with a Mac or a Windows machine can try them without building
+      # anything. No ROM is included, here or anywhere else: the emulator looks for one when it
+      # runs and says where to put it (see the README). Nothing is signed or notarised, so macOS
+      # and Windows will warn about an unidentified developer.
+      #
+      # An artifact is a zip and a zip loses the executable bit, so everything but Windows is
+      # tarred first.
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p package
+          cp build/app/g1run package/
+          cp -R build/app/gui/g1gui_artefacts/Release/G1-Emu* package/
+          cp G1-Emu/README.md G1-Emu/LICENSE package/
+          tar -czf G1-Emu-${{ matrix.artifact }}.tar.gz -C package .
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item build/app/Release/g1run.exe package/
+          Copy-Item build/app/gui/g1gui_artefacts/Release/G1-Emu.exe package/
+          Copy-Item G1-Emu/README.md, G1-Emu/LICENSE package/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: G1-Emu-${{ matrix.artifact }}
+          path: ${{ runner.os == 'Windows' && 'package/*' || format('G1-Emu-{0}.tar.gz', matrix.artifact) }}
+          if-no-files-found: error
+          retention-days: 30
