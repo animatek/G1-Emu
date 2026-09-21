@@ -7,6 +7,13 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **The ARM flag clear now uses the JIT's proven `BFI` form throughout (Codex).** The first gating
+  run exposed that replacing the complemented immediate with AsmJit's `BFC` alias still left the
+  finite-DO block illegal. Clearing `FV` now inserts the zero register with `BFI`, the same
+  instruction form already used throughout Gearmulator's AArch64 JIT; restoring `LF`/`FV` also
+  uses `BFI`. Verification: local Release `g1dspcheck` passes on x86-64; the corrected ARM form is
+  going to the pinned alpha.13 runner next.
+
 - **Task 1 is complete and the macOS DSP test is a gate again (Codex).** Removed the temporary
   `continue-on-error`, marked the Apple Silicon blocker done in `docs/next-steps.md`, and updated
   the roadmap and technical notes with the AArch64 cause and fix. Gearmulator remains external
@@ -19,7 +26,7 @@ Older entries cite their commit by hand.
   split regression test showed that the crash happens in the first finite `DO`, not only in a
   nested loop: the G1 extension cleared `FV` with a sign-extended complemented immediate that
   AsmJit cannot encode as an AArch64 logical instruction. The ARM overlay now clears `FV` with
-  `BFC` and restores the adjacent `LF`/`FV` pair with `BFI`; x86 keeps its existing mask path.
+  `BFI` and the zero register, and restores the adjacent `LF`/`FV` pair with `BFI`; x86 keeps its existing mask path.
   Verification: the Release DSP test passes locally on x86-64 and in the pinned alpha.13
   Apple Silicon CI job ([run 35566113403](https://github.com/animatek/G1-Emu/actions/runs/35566113403)).
 

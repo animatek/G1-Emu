@@ -56,7 +56,7 @@ addressed before multi-instance use.
 
    - **macOS: the build and DSP JIT pass on Apple Silicon.** The illegal instruction was in the
      G1-specific `FV` loop-flag extension: an immediate used to clear it could not be encoded by
-     the AArch64 emitter. Its ARM path now uses `BFC`/`BFI`, and `g1dspcheck` covers finite,
+     the AArch64 emitter. Its ARM path now uses the emitter's proven `BFI` form, and `g1dspcheck` covers finite,
      forever and nested loops with one- and 32-instruction blocks. The test gates macOS like the
      other three jobs. What remains is trying CoreAudio, CoreMIDI and the virtual ports in an
      editor and a DAW on a real Mac.

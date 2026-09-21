@@ -39,7 +39,7 @@ g1_dsp_replace(jitblock.cpp
 # Nested DO and ENDDO also save/restore FV, not only LF.
 g1_dsp_replace(jitops.cpp
 	"m_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));"
-	"#ifdef HAVE_ARM64\n\t\t\tm_asm.bfc(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(SRB_FV), asmjit::Imm(1));\n#else\n\t\t\tm_asm.and_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(~SR_FV));\n#endif\n\t\t\tm_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));")
+	"#ifdef HAVE_ARM64\n\t\t\t// BFI with WZR is the proven AArch64 form used elsewhere in this JIT.\n\t\t\tm_asm.bfi(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::a64::regs::wzr, asmjit::Imm(SRB_FV), asmjit::Imm(1));\n#else\n\t\t\tm_asm.and_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(~SR_FV));\n#endif\n\t\t\tm_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));")
 g1_dsp_replace(jitops.cpp
 	"m_dspRegs.getSS(r64(r.get()));\n\t\t\tm_asm.and_(r32(r), asmjit::Imm(SR_LF));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_LF));\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), r32(r.get()));"
 	"m_dspRegs.getSS(r64(r.get()));\n#ifdef HAVE_ARM64\n\t\t\t// LF and the G1's adjacent FV extension are copied without logical immediates.\n\t\t\tm_asm.bfi(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), r32(r), asmjit::Imm(SRB_LF), asmjit::Imm(2));\n#else\n\t\t\tm_asm.and_(r32(r), asmjit::Imm(SR_LF | SR_FV));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~(SR_LF | SR_FV)));\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), r32(r.get()));\n#endif")

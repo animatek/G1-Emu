@@ -209,7 +209,8 @@ At boot the emulated G1 announces itself on the PC PORT (`F0 33 50 06 00 07 08 0
 Applied to a build copy; the Gearmulator clone is never modified.
 
 - JIT: short `MOVEM`, `DO FOREVER` (FV flag), nested DO/ENDDO saving FV. On AArch64 the custom
-  flag is cleared and restored with `BFC`/`BFI`; complemented logical immediates left an illegal
+  flag is cleared and restored with `BFI` (using the zero register to clear it); complemented
+  logical immediates left an illegal
   instruction in the generated finite-DO block. `g1dspcheck` exercises finite, forever and nested
   forms with JIT block sizes 1 and 32 on every CI platform.
 - DMA with dual counters on source and destination at once (DAM `011 011`): not implemented, and

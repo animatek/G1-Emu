@@ -19,7 +19,8 @@ ports, and **builds on Linux, macOS and Windows** with CI proving it on every pu
 The failure was in G1-Emu's `FV` extension, not in MOVEM or the generic aarch64 JIT. A finite `DO`
 cleared `FV` with a sign-extended complemented immediate. AsmJit could not encode that value as an
 AArch64 logical instruction, leaving an illegal instruction in the generated block. The ARM path
-in `cmake/Dsp56300.cmake` now uses `BFC` to clear `FV` and `BFI` to restore the adjacent `LF`/`FV`
+in `cmake/Dsp56300.cmake` now uses `BFI` with the AArch64 zero register to clear `FV`, and `BFI`
+to restore the adjacent `LF`/`FV`
 pair. The x86 path is unchanged.
 
 `g1dspcheck` now names every case and also covers a plain finite `DO`, nested finite loops and a
