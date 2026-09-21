@@ -58,9 +58,10 @@ addressed before multi-instance use.
      G1's `FV` extension: the core closes a loop body with `tst lc, maxDoIterations - 1`, G1-Emu
      runs one iteration per block, and a mask of zero is not an encodable AArch64 logical
      immediate, so asmjit refused the instruction and the block was left unfinished (`NOTES.md`,
-     "The DSP JIT on ARM"). The overlay now emits an unconditional jump there. Pending the CI
-     confirmation on macOS and on the new `Linux arm64` job; after that, CoreAudio, CoreMIDI and
-     the virtual ports still have to be tried in an editor and a DAW on a real Mac.
+     "The DSP JIT on ARM"). The overlay emits an unconditional jump there, and [CI run 35570337853](https://github.com/animatek/G1-Emu/actions/runs/35570337853) is
+     green on all five jobs with the test gating each one, the new `Linux arm64` included. What
+     remains is trying CoreAudio, CoreMIDI and the virtual ports in an editor and a DAW on a real
+     Mac.
    - **Windows:** the same, plus the one real unknown — whether `createNewDevice` makes a virtual
      port at all (see below). The standalone must not fail when it cannot: it should open ordinary
      MIDI ports, say so, and point at loopMIDI.

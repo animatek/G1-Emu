@@ -14,7 +14,7 @@ ports, and **builds on Linux, macOS and Windows** with CI proving it on every pu
 
 ---
 
-## 1. The Apple Silicon crash: cause found, fix in CI
+## 1. Done — the Apple Silicon crash was a mask of zero (2026-09-21)
 
 The DSP56300 JIT raised an illegal instruction on the Apple Silicon runner, always in the
 `finite DO` case. It was **not** the G1's `FV` loop-flag extension, and **not** an immediate that
@@ -34,9 +34,10 @@ Release the error handler only logs: the block is left unfinished and the DSP ru
 unconditional jump for that mask, which is what the test means anyway.
 
 Verified on x86-64: `g1dspcheck` passes, and `g1patchtest` still gives 261.5 Hz at −61.8 dBFS on
-outputs 1 and 2 with the links carrying two channels, the same numbers as before. **Still to
-confirm: the macOS and `Linux arm64` CI jobs.** Do not call this closed until both are green with
-the test gating — that is exactly how it was wrongly closed the first time.
+outputs 1 and 2 with the links carrying two channels, the same numbers as before. And verified
+where it matters: [CI run 35570337853](https://github.com/animatek/G1-Emu/actions/runs/35570337853) is green on all five jobs — Linux both ways, **Linux arm64**,
+**macOS** and Windows — with the DSP test gating every one of them, no `continue-on-error`
+anywhere.
 
 ## 2. What only the real machines can say
 

@@ -7,6 +7,12 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **The five CI jobs are green with the DSP test gating every one (Claude).** [CI run 35570337853](https://github.com/animatek/G1-Emu/actions/runs/35570337853) builds
+  and tests Linux both ways, Linux arm64, macOS and Windows after the zero-mask fix, with no
+  `continue-on-error` anywhere: the Apple Silicon blocker is closed, this time with a run that
+  actually proves it. `README.md`, `ROADMAP.md`, `NOTES.md` and `docs/next-steps.md` updated to
+  say so.
+
 - **The Apple Silicon illegal instruction was a mask of zero, and not the G1's loop flag
   (Claude).** With the core's log now reaching the CI log, macOS printed the reason in one line:
   `Error: 50 - InvalidImmediate: tst w5, 0, block at PC 000102`. `jitblock.cpp` closes a loop body

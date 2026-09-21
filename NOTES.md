@@ -255,6 +255,7 @@ tst(w5, Imm(0))                      err=50 (InvalidImmediate)
 
 CI also gained a `Linux arm64` job (`ubuntu-24.04-arm`): the same AArch64 JIT on a machine that is
 not Apple's, so a fault in the code generated is told apart from one in what macOS does with it.
+Both pass since the fix ([CI run 35570337853](https://github.com/animatek/G1-Emu/actions/runs/35570337853)), with the DSP test gating all five jobs.
 
 ## The panel
 
