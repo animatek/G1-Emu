@@ -7,6 +7,33 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **`g1gui.sh` did not start the window on macOS (Claude, same first Mac run).** It execs the
+  binary at a fixed path next to the JUCE bundle, which is what Linux and Windows produce; on
+  macOS `g1gui` is a `.app` bundle instead, so that path is a directory and the script failed
+  with "No such file or directory". It now tries the bundle's own binary first
+  (`G1-Emu.app/Contents/MacOS/G1-Emu`) and falls back to the bare path, so the same script starts
+  the window on all three. Verification: ran on macOS 13.7.8 (Intel), where it now opens the
+  panel; the bare-path branch is unchanged, so Linux and Windows keep working as before.
+
+- **The default-device combiner deadlocked on an Intel Mac; `JuceAudio` no longer risks it
+  (Claude, first source build and run on a real Mac).** Built from source and run for the first
+  time on real hardware (a 2013-era Intel MacBook Pro, macOS 13.7.8): it booted, the DSP test
+  passed, and CoreMIDI created `G1-Emu PC Port` and `G1-Emu MIDI` exactly as expected -- checked
+  independently with a small CoreMIDI lister of its own, not just the emulator's self-report.
+  Sound did not: `initialiseWithDefaultDevices` hung forever inside JUCE's
+  `AudioIODeviceCombiner::start()`, because this Mac's default input and default output are two
+  different CoreAudio devices ("Built-in Microphone" and "Built-in Output", not one "Built-in"
+  device the way Apple Silicon Macs have it) and combining them deadlocks there -- a JUCE/CoreAudio
+  bug, not something to patch from here. `JuceAudio` now checks whether the two defaults are the
+  same device before ever asking for both; when they are not, it asks for the output alone and
+  drops the two inputs rather than risk the hang. The explicit-device path (`G1_AUDIO=<name>`, and
+  the settings window) had the mirror bug -- it asked for the same name on input and output, which
+  fails outright on a split-device Mac -- and now falls back to output-only there too.
+  Verification: built with a local CMake 3.31.9, Gearmulator `mdmm-v0.1.0-alpha.13` and JUCE
+  8.0.12; before the fix `g1run` hung indefinitely at `initialiseWithDefaultDevices`, after it
+  `audio: Built-in Output at 44100 Hz, 2 outputs, +36 dB` and the four DSPs run at ~100% real-time
+  speed with the flash freshly installed from the ROM.
+
 - **The window shows the PC Port byte counters (Claude, from the first macOS report).** The
   status bar named the two MIDI ports, which is the one thing you can already see in the editor.
   It now prints `PC Port in/out` and `MIDI in/out` live, because when an editor says "no response
