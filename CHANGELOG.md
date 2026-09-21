@@ -7,6 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **The window shows the PC Port byte counters (Claude, from the first macOS report).** The
+  status bar named the two MIDI ports, which is the one thing you can already see in the editor.
+  It now prints `PC Port in/out` and `MIDI in/out` live, because when an editor says "no response
+  from synth" the question that splits the problem in two is whether its bytes ever arrived: `in`
+  stuck at zero means they did not and it is a routing problem; `in` moving with `out` stuck means
+  the emulator is not answering. `g1run` already printed these; the window did not, and the window
+  is what somebody testing on a Mac has open. Verification: built on the JUCE backend on Linux.
+
 - **alpha.1 carries the universal macOS build too (Claude, asked for by Javier).** Its broken
   `G1-Emu-macos-arm64.tar.gz` was deleted and the universal binary from alpha.2 attached in its
   place, so a link to alpha.1 that is already in somebody's hands now downloads something that

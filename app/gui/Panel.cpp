@@ -409,6 +409,12 @@ namespace g1gui
 			s.speed, s.load, s.cpuCores, dsp.toRawUTF8(),
 			m_peakHold > 1e-6 ? juce::String::formatted("%+.0f dB", 20.0 * std::log10(m_peakHold)).toRawUTF8() : "silence",
 			static_cast<unsigned long long>(s.xruns)) + juce::String(s.audio)
-			+ "  |  MIDI: PC Port, MIDI" + (s.rawMidi.empty() ? juce::String() : "  |  raw: " + juce::String(s.rawMidi)), juce::dontSendNotification);
+			// The byte counters, not just the port names: when an editor says "no response from
+			// synth", the first thing anybody needs to know is whether its bytes ever arrived.
+			// PC in stuck at 0 means they did not; in moving and out stuck means we do not answer.
+			+ juce::String::formatted("  |  PC Port in/out %llu/%llu   MIDI in/out %llu/%llu",
+				static_cast<unsigned long long>(s.pcIn), static_cast<unsigned long long>(s.pcOut),
+				static_cast<unsigned long long>(s.midiIn), static_cast<unsigned long long>(s.midiOut))
+			+ (s.rawMidi.empty() ? juce::String() : "  |  raw: " + juce::String(s.rawMidi)), juce::dontSendNotification);
 	}
 }
