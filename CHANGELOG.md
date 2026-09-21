@@ -7,6 +7,13 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **Release notes prepared for `v0.1.0-alpha.3` (Codex, asked for by Javier).** They now describe
+  the three fixes found on the first real Mac run -- the CoreAudio split-device hang, the `.app`
+  launcher path and truncated PC Port SysEx replies -- instead of claiming that nobody has run the
+  macOS build. They distinguish what was verified on Intel macOS 13.7.8 from Apple Silicon, which
+  still has CI coverage only. Verification: compared with the two merged fixes and the live Mac
+  results recorded immediately below; Markdown links and the release workflow's notes path checked.
+
 - **The JUCE MIDI backend dropped bytes out of the PC Port's own replies, breaking NME's
   handshake (Claude, found live with NME on the same first Mac run).** With the two fixes above
   in place, NME could see and open `G1-Emu PC Port`, but "Connect" still ended in "No response

@@ -1,7 +1,17 @@
-**This is a pre-alpha test build, and its only job is to tell us whether the emulator runs on a
-machine that is not the developer's.** Everything here compiles and passes the DSP tests on Linux
-(x86-64 and arm64), macOS (Apple Silicon) and Windows in CI, but nobody has yet run the macOS or
-Windows builds on real hardware. That is exactly what we are asking for.
+# G1-Emu v0.1.0-alpha.3
+
+**This is a pre-alpha test build.** Everything here compiles and passes the DSP tests on Linux
+(x86-64 and arm64), macOS and Windows in CI. This release also includes the fixes found during the
+first run on a real Mac: an Intel MacBook Pro with macOS 13.7.8 now opens CoreAudio, starts the
+window, publishes both CoreMIDI ports and connects to NME over the PC Port.
+
+## What alpha.3 fixes
+
+- CoreAudio no longer hangs when the default input and output are two different devices, as they
+  are for the built-in microphone and output on Intel Macs. G1-Emu uses output only in that case.
+- `g1gui.sh` starts the executable inside the macOS `.app` bundle.
+- The JUCE MIDI backend keeps incomplete messages between calls. PC Port SysEx replies are no
+  longer sent early and truncated; NME's handshake now receives all 12 bytes and connects.
 
 ## It brings no ROM, and it never will
 
@@ -26,12 +36,12 @@ Signing and notarisation are a job of their own and are not done yet.
 | | Audio | Virtual MIDI ports | Confidence |
 | --- | --- | --- | --- |
 | Linux | JACK/PipeWire or ALSA | ALSA sequencer | used daily |
-| macOS | CoreAudio | CoreMIDI, nothing to install | should work, never run |
+| macOS | CoreAudio | CoreMIDI, nothing to install | verified on Intel, macOS 13.7.8 |
 | Windows | WASAPI/ASIO | **only with Windows MIDI Services** | the real unknown |
 
 **The macOS build is a universal binary (Apple Silicon and Intel) and needs macOS 11 Big Sur or
-newer.** The Apple Silicon half is what CI compiles and tests; the Intel half is built from the
-same source and has never been run, so a report from an Intel Mac is especially welcome.
+newer.** The Intel half has been run on macOS 13.7.8 and connects to NME. Apple Silicon compiles
+and passes the DSP test in CI, but a report from a real Apple Silicon Mac is still welcome.
 
 On Windows, JUCE can only create a virtual port through Windows MIDI Services; with the older
 WinRT or WinMM backends it cannot, and the status line will say so plainly. If that happens the
