@@ -32,7 +32,17 @@ namespace g1app
 			juce::String error;
 			if(_device.empty() && _type.empty())
 			{
-				error = m_manager->initialiseWithDefaultDevices(static_cast<int>(AudioBridge::Ins),
+				// The default input and the default output can be two different physical
+				// devices: an Intel Mac's own speakers and its own microphone already are
+				// ("Built-in Output" and "Built-in Microphone", not one "Built-in" device).
+				// CoreAudio then needs an AudioIODeviceCombiner to bridge them, and its
+				// start() can hang forever waiting for both HAL I/O threads to report ready
+				// -- a real deadlock, seen on Intel Macs, that is JUCE's and not something to
+				// paper over from here. So the two are only asked for together when they are
+				// the same device, which is when combining never happens; otherwise this
+				// settles for the output alone, which every card has, and drops the inputs.
+				error = m_manager->initialiseWithDefaultDevices(
+					sameDefaultInputAndOutput() ? static_cast<int>(AudioBridge::Ins) : 0,
 					static_cast<int>(AudioBridge::Outs));
 				// A card with fewer than four outputs: ask again for a plain stereo pair.
 				if(error.isNotEmpty())
@@ -45,6 +55,15 @@ namespace g1app
 				setup.inputDeviceName = _device;
 				error = m_manager->initialise(static_cast<int>(AudioBridge::Ins),
 					static_cast<int>(AudioBridge::Outs), nullptr, true, _type, &setup);
+				// _device may name a device good for output only (or only for input): on a
+				// split-device Mac "Built-in Output" answers to no input by that name. Settle
+				// for output only rather than refusing to make any sound at all.
+				if(error.isNotEmpty())
+				{
+					juce::AudioDeviceManager::AudioDeviceSetup outOnly;
+					outOnly.outputDeviceName = _device;
+					error = m_manager->initialise(0, static_cast<int>(AudioBridge::Outs), nullptr, true, _type, &outOnly);
+				}
 			}
 			if(error.isNotEmpty())
 			{
@@ -100,6 +119,25 @@ namespace g1app
 		}
 
 	private:
+		// Whether the default input and the default output are the same physical device: true
+		// on most cards (one name for both) and on Apple Silicon Macs, false on an Intel Mac's
+		// own built-in audio (see the constructor). Answered without opening anything, so it is
+		// safe to call before the device is chosen.
+		bool sameDefaultInputAndOutput() const
+		{
+			m_manager->getAvailableDeviceTypes();	// scans, so getCurrentDeviceTypeObject() has data
+			auto* type = m_manager->getCurrentDeviceTypeObject();
+			if(!type)
+				return true;
+			const auto inNames = type->getDeviceNames(true);
+			const auto outNames = type->getDeviceNames(false);
+			const auto inIndex = type->getDefaultDeviceIndex(true);
+			const auto outIndex = type->getDefaultDeviceIndex(false);
+			if(inIndex < 0 || inIndex >= inNames.size() || outIndex < 0 || outIndex >= outNames.size())
+				return true;
+			return inNames[inIndex] == outNames[outIndex];
+		}
+
 		void audioDeviceIOCallbackWithContext(const float* const* _in, const int _numIn,
 			float* const* _out, const int _numOut, const int _frames,
 			const juce::AudioIODeviceCallbackContext&) override
