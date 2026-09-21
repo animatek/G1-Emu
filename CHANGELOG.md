@@ -7,6 +7,13 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **alpha.1 carries the universal macOS build too (Claude, asked for by Javier).** Its broken
+  `G1-Emu-macos-arm64.tar.gz` was deleted and the universal binary from alpha.2 attached in its
+  place, so a link to alpha.1 that is already in somebody's hands now downloads something that
+  starts. Its notes say what was replaced and when, and still point at alpha.2 as the one to
+  prefer. Verification: the asset was downloaded from the alpha.1 URL and its Mach-O header read —
+  two slices, `x86_64 minos 11.0` and `arm64 minos 11.0`.
+
 - **`v0.1.0-alpha.2` published with the universal macOS build; alpha.1 marked superseded
   (Claude).** [The release](https://github.com/animatek/G1-Emu/releases/tag/v0.1.0-alpha.2) was
   checked after publishing, not before: its `G1-Emu-macos-universal.tar.gz` was downloaded and its
