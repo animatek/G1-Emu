@@ -7,6 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **`v0.1.0-alpha.2` published with the universal macOS build; alpha.1 marked superseded
+  (Claude).** [The release](https://github.com/animatek/G1-Emu/releases/tag/v0.1.0-alpha.2) was
+  checked after publishing, not before: its `G1-Emu-macos-universal.tar.gz` was downloaded and its
+  two slices read out of the Mach-O header — `x86_64 minos 11.0` and `arm64 minos 11.0`. alpha.1
+  keeps its files but its notes now open by saying the macOS build there does not start on
+  anything older than macOS 26 and pointing at alpha.2.
+  [Run 35578546697](https://github.com/animatek/G1-Emu/actions/runs/35578546697).
+
 - **The macOS build is universal and runs on macOS 11 and up; it said macOS 26 (Claude, reported
   by Javier).** The first release's macOS binary would not start on Ventura, and not because of
   the architecture: with no `CMAKE_OSX_DEPLOYMENT_TARGET` set, CMake inherits the runner's own
