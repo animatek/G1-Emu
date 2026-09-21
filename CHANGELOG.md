@@ -5,6 +5,17 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-09-21
+
+- **The Apple Silicon DSP failure is isolated and the nested-loop restore no longer relies on
+  cross-boundary ARM bit masks (Codex).** CI annotations prove that short MOVEM, JIT invalidation
+  and both DO FOREVER cases pass on the arm64 macOS runner; the illegal instruction is raised by
+  `nested DO` with a one-instruction JIT block. That case uniquely restores the outer loop's `LF`
+  and `FV` together when the inner loop ends. The build overlay now clears, tests and restores the
+  two bits separately, avoiding the combined immediate masks that the aarch64 emitter turns into
+  the bad instruction. Verification so far: the Release DSP test passes locally on x86-64; the
+  fix is going to the macOS ARM CI runner next.
+
 ## 2026-09-20
 
 - **Apple Silicon's DSP crash can now be pinned to one synthetic program (Codex).**

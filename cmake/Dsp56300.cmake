@@ -41,11 +41,8 @@ g1_dsp_replace(jitops.cpp
 	"m_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));"
 	"m_asm.and_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(~SR_FV));\n\t\t\tm_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));")
 g1_dsp_replace(jitops.cpp
-	"m_asm.and_(r32(r), asmjit::Imm(SR_LF));"
-	"m_asm.and_(r32(r), asmjit::Imm(SR_LF | SR_FV));")
-g1_dsp_replace(jitops.cpp
-	"m_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_LF));"
-	"m_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~(SR_LF | SR_FV)));")
+	"m_dspRegs.getSS(r64(r.get()));\n\t\t\tm_asm.and_(r32(r), asmjit::Imm(SR_LF));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_LF));\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), r32(r.get()));"
+	"m_dspRegs.getSS(r64(r.get()));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_LF));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_FV));\n\n\t\t\tconst auto noLf = m_asm.newLabel();\n\t\t\tm_asm.bitTest(r32(r), SRB_LF);\n\t\t\tm_asm.jz(noLf);\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(SR_LF));\n\t\t\tm_asm.bind(noLf);\n\n\t\t\tconst auto noFv = m_asm.newLabel();\n\t\t\tm_asm.bitTest(r32(r), SRB_FV);\n\t\t\tm_asm.jz(noFv);\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(SR_FV));\n\t\t\tm_asm.bind(noFv);")
 
 # DMA with dual counters on source and destination at once (DAM = 011 011 in the G1's DMA0:
 # copies X:$6C0 -> Y:output buffer on every block). Gearmulator does not implement it and in
