@@ -14,55 +14,19 @@ ports, and **builds on Linux, macOS and Windows** with CI proving it on every pu
 
 ---
 
-## 1. The DSP56300 JIT raises an illegal instruction on Apple Silicon
+## 1. Done — the DSP56300 JIT runs on Apple Silicon (2026-09-21)
 
-**This is the blocker.** Everything else on this list can wait; a macOS build that cannot run its
-own DSP is not a macOS build.
+The failure was in G1-Emu's `FV` extension, not in MOVEM or the generic aarch64 JIT. A finite `DO`
+cleared `FV` with a sign-extended complemented immediate. AsmJit could not encode that value as an
+AArch64 logical instruction, leaving an illegal instruction in the generated block. The ARM path
+in `cmake/Dsp56300.cmake` now uses `BFC` to clear `FV` and `BFI` to restore the adjacent `LF`/`FV`
+pair. The x86 path is unchanged.
 
-**The symptom.** `g1dspcheck` dies with `ILLEGAL` on the `macos-latest` runner, which is arm64. The
-build before it succeeds completely: 68k core, DSP cores, JUCE backend and the window all compile.
-Only running fails. Because of this the macOS **test** step carries `continue-on-error` in the
-workflow; the macOS **build** step does not, and must not.
-
-**What the test does** (`tools/g1dspcheck.cpp`, 136 lines, no ROM, no sound card). Five synthetic
-programs, each run twice, with JIT block sizes 1 and 32:
-
-| | |
-| --- | --- |
-| `shortProgramMove` | a short `MOVEM` |
-| `invalidateProgramMove` | a `MOVEM` that writes P memory and must invalidate the JIT block |
-| `foreverLoop(lc = 0)` and `(lc = 7)` | `DO FOREVER`, and that it keeps `LC` |
-| `nestedLoop` | nested `DO`, `ENDDO`, and that `FV` survives both |
-
-**The suspects, in order.** The core does carry an aarch64 JIT (`jitops_agu_aarch64.cpp`,
-`jitops_alu_aarch64.cpp`, `jitops_ccr_aarch64.cpp`, `jitops_decode_aarch64.cpp`,
-`jitops_helper_aarch64.cpp`, `jitops_jmp_aarch64.inl` in the Gearmulator clone), so aarch64 is
-meant to work. What is new here is **ours**:
-
-- `g1Lib/dsp56300.cpp` — our implementations of `op_Movem_aa` and `op_DoForever`.
-- `cmake/Dsp56300.cmake` — the patches applied to the build copy of the core, including the
-  `DO FOREVER` change inside `jitblock.cpp` (`bitTest`/`jnz`/`cmp`/`jle`/`dec`) and the `FV`
-  save/restore in `jitops.cpp`.
-
-Those are written against the emitter's **shared** mnemonics, which is why they compile for both
-architectures — and why one of them can be wrong on only one of them. Read the aarch64 emitter
-before assuming the x86 semantics carry over; a conditional jump or a flag test that means one
-thing on x86 may not mean the same there.
-
-**How to work on it without a Mac.** Push a branch: the workflow runs on `pull_request` and on
-`workflow_dispatch`, so CI is the ARM machine. Narrow it down by cutting the test:
-`main()` runs the five programs in a fixed order, so the quickest bisect is to comment out four of
-them and see which one raises the illegal instruction, then which of the two block sizes. Say in
-the changelog which one it was — that fact alone is worth the run.
-
-**If the JIT cannot be fixed**, the fallback is the interpreter. `G1_INTERP=mask` already makes the
-chosen DSPs run interpreted in `g1Lib/g1dsp.cpp`, but `g1dspcheck` drives the core directly and
-does not read it, so that needs wiring too. Nobody has measured what the interpreter costs in
-speed: the emulator needs 100% of real time with four DSPs, and today it has about 40% headroom on
-a Ryzen 7 5700X with the JIT. **Measure it before promising it.**
-
-**Done looks like:** `g1dspcheck` passing on macOS in CI, and the `continue-on-error` removed from
-the workflow.
+`g1dspcheck` now names every case and also covers a plain finite `DO`, nested finite loops and a
+`DO FOREVER` containing a finite loop. All cases pass with JIT block sizes 1 and 32 on the arm64
+`macos-latest` runner. The workflow's macOS `continue-on-error` has been removed, so the test gates
+all four builds. Gearmulator is pinned to `mdmm-v0.1.0-alpha.13`; the external clone remains
+untouched. Verification: [Apple Silicon CI run 35566113403](https://github.com/animatek/G1-Emu/actions/runs/35566113403).
 
 ---
 

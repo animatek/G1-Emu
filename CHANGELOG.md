@@ -7,13 +7,21 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **Task 1 is complete and the macOS DSP test is a gate again (Codex).** Removed the temporary
+  `continue-on-error`, marked the Apple Silicon blocker done in `docs/next-steps.md`, and updated
+  the roadmap and technical notes with the AArch64 cause and fix. Gearmulator remains external
+  and is pinned to `mdmm-v0.1.0-alpha.13`. Verification: local Release `g1dspcheck` passes on
+  x86-64; [CI run 35566113403](https://github.com/animatek/G1-Emu/actions/runs/35566113403)
+  built on Apple Silicon and its actual `Test` step passed before the exception was removed. The
+  final four-platform gating run is next.
+
 - **Apple Silicon now uses AArch64 bit-field instructions for the G1 loop flag (Codex).** The
   split regression test showed that the crash happens in the first finite `DO`, not only in a
   nested loop: the G1 extension cleared `FV` with a sign-extended complemented immediate that
   AsmJit cannot encode as an AArch64 logical instruction. The ARM overlay now clears `FV` with
   `BFC` and restores the adjacent `LF`/`FV` pair with `BFI`; x86 keeps its existing mask path.
-  Verification: the Release DSP test passes locally on x86-64; the AArch64 fix is going to the
-  pinned alpha.13 macOS runner next.
+  Verification: the Release DSP test passes locally on x86-64 and in the pinned alpha.13
+  Apple Silicon CI job ([run 35566113403](https://github.com/animatek/G1-Emu/actions/runs/35566113403)).
 
 - **Gearmulator is updated and pinned to `mdmm-v0.1.0-alpha.13` in CI (Codex).** The workflow had
   already picked up alpha.13 implicitly from the dependency repository's default branch; it now
