@@ -29,6 +29,12 @@ jobs:
           - name: Linux (JUCE backend)
             os: ubuntu-latest
             backend: juce
+          # The only other AArch64 machine available here. It runs the same JIT as Apple Silicon,
+          # so it says whether a failure there is in the code we generate or in what macOS does
+          # with it (W^X, icache). Free for public repositories.
+          - name: Linux arm64 (native ALSA/JACK)
+            os: ubuntu-24.04-arm
+            backend: native
           - name: macOS
             os: macos-latest
             backend: juce

@@ -36,13 +36,18 @@ g1_dsp_replace(jitblock.cpp
 	"\t\t\tm_asm.cmp(lc, asmjit::Imm(1));\n\t\t\tm_asm.jle(enddo);\n\t\t\tm_asm.dec(lc);"
 	"\t\t\tconst auto repeatForever = m_asm.newLabel();\n\t\t\tm_asm.bitTest(sr, SRB_FV);\n\t\t\tm_asm.jnz(repeatForever);\n\t\t\tm_asm.cmp(lc, asmjit::Imm(1));\n\t\t\tm_asm.jle(enddo);\n\t\t\tm_asm.dec(lc);\n\t\t\tm_asm.bind(repeatForever);")
 
-# Nested DO and ENDDO also save/restore FV, not only LF.
+# Nested DO and ENDDO also save/restore FV, not only LF. One form for both architectures: every
+# immediate here encodes as an AArch64 logical immediate, checked by cross-assembling the
+# sequences with asmjit's arm64 backend on an x86 host (see NOTES.md, "The DSP JIT on ARM").
 g1_dsp_replace(jitops.cpp
 	"m_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));"
-	"#ifdef HAVE_ARM64\n\t\t\t// BFI with WZR is the proven AArch64 form used elsewhere in this JIT.\n\t\t\tm_asm.bfi(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::a64::regs::wzr, asmjit::Imm(SRB_FV), asmjit::Imm(1));\n#else\n\t\t\tm_asm.and_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(~SR_FV));\n#endif\n\t\t\tm_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));")
+	"m_asm.and_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(~SR_FV));\n\t\t\tm_asm.or_(m_dspRegs.getSR(JitDspRegs::ReadWrite), asmjit::Imm(SR_LF));")
 g1_dsp_replace(jitops.cpp
-	"m_dspRegs.getSS(r64(r.get()));\n\t\t\tm_asm.and_(r32(r), asmjit::Imm(SR_LF));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_LF));\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), r32(r.get()));"
-	"m_dspRegs.getSS(r64(r.get()));\n#ifdef HAVE_ARM64\n\t\t\t// LF and the G1's adjacent FV extension are copied without logical immediates.\n\t\t\tm_asm.bfi(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), r32(r), asmjit::Imm(SRB_LF), asmjit::Imm(2));\n#else\n\t\t\tm_asm.and_(r32(r), asmjit::Imm(SR_LF | SR_FV));\n\t\t\tm_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~(SR_LF | SR_FV)));\n\t\t\tm_asm.or_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), r32(r.get()));\n#endif")
+	"m_asm.and_(r32(r), asmjit::Imm(SR_LF));"
+	"m_asm.and_(r32(r), asmjit::Imm(SR_LF | SR_FV));")
+g1_dsp_replace(jitops.cpp
+	"m_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~SR_LF));"
+	"m_asm.and_(r32(m_dspRegs.getSR(JitDspRegs::ReadWrite)), asmjit::Imm(~(SR_LF | SR_FV)));")
 
 # DMA with dual counters on source and destination at once (DAM = 011 011 in the G1's DMA0:
 # copies X:$6C0 -> Y:output buffer on every block). Gearmulator does not implement it and in

@@ -48,18 +48,21 @@ addressed before multi-instance use.
 5. **macOS and Windows.** **The backend is done and the CI is up**; what is left is running it on
    the two machines nobody here has. `-DG1_BACKEND=juce` builds audio and MIDI on JUCE and is the
    default off Linux, `audiobridge.h` is shared with the native path, and
-   `.github/workflows/build.yml` builds Linux both ways, macOS and Windows on every push. The JUCE
-   backend was checked **on Linux**, where JUCE uses ALSA and can create virtual ports just as
+   `.github/workflows/build.yml` builds Linux both ways, Linux arm64, macOS and Windows on every
+   push. The JUCE backend was checked **on Linux**, where JUCE uses ALSA and can create virtual ports just as
    macOS and Windows do: it opens the card with four outputs, publishes `G1-Emu PC Port` and
    `G1-Emu MIDI`, takes a patch over the PC Port, answers the editor and sounds. That is the whole
    path, so what remains for the other two is the parts only their own systems can tell us:
 
-   - **macOS: the build and DSP JIT pass on Apple Silicon.** The illegal instruction was in the
-     G1-specific `FV` loop-flag extension: an immediate used to clear it could not be encoded by
-     the AArch64 emitter. Its ARM path now uses the emitter's proven `BFI` form, and `g1dspcheck` covers finite,
-     forever and nested loops with one- and 32-instruction blocks. The test gates macOS like the
-     other three jobs. What remains is trying CoreAudio, CoreMIDI and the virtual ports in an
-     editor and a DAW on a real Mac.
+   - **macOS: it builds, but the DSP JIT still raises an illegal instruction on Apple Silicon.**
+     The test gates the job, so macOS is red. It always dies in the same case, `finite DO`, and
+     the "AArch64 cannot encode that immediate" explanation turned out to be wrong: every form
+     tried assembles cleanly when the sequences are cross-assembled here with asmjit's arm64
+     backend (`NOTES.md`, "The DSP JIT on ARM"). The ARM-only code paths are gone again, the
+     core's own JIT errors now reach the CI log, and a `Linux arm64` job says whether the fault is
+     in the code generated or in what macOS does with it. Detail and next steps in
+     [`docs/next-steps.md`](docs/next-steps.md). After that, CoreAudio, CoreMIDI and the virtual
+     ports still have to be tried in an editor and a DAW on a real Mac.
    - **Windows:** the same, plus the one real unknown — whether `createNewDevice` makes a virtual
      port at all (see below). The standalone must not fail when it cannot: it should open ordinary
      MIDI ports, say so, and point at loopMIDI.

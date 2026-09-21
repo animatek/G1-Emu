@@ -7,6 +7,26 @@ Older entries cite their commit by hand.
 
 ## 2026-09-21
 
+- **Task 1 is not done: the Apple Silicon crash is reopened, and the encoding theory is wrong
+  (Claude).** The entries below that closed it cite CI run 35566113403, which is green only
+  because the macOS `Test` step still had `continue-on-error`; its log ends in
+  `g1dspcheck (ILLEGAL)` like the two gating runs after it
+  ([35566928286](https://github.com/animatek/G1-Emu/actions/runs/35566928286),
+  [35567844751](https://github.com/animatek/G1-Emu/actions/runs/35567844751)). The failing case is
+  always `finite DO`, the first one that runs both places the G1 extension patches (the DO entry
+  and `do_end`). The three fixes tried — a complemented mask, `BFC`, `BFI` with the zero register —
+  all assumed AsmJit could not encode the immediate, and that is false: asmjit builds its arm64
+  backend on any host, so the sequences were cross-assembled here on x86 and every form encodes
+  with no error (words in `NOTES.md`, "The DSP JIT on ARM"). So the `#ifdef HAVE_ARM64` paths are
+  removed from `cmake/Dsp56300.cmake` and the portable form is back; `g1dspcheck` now sends the
+  core's log to stderr, flushed and prefixed `CORE:`, so the JIT errors that `AsmJitErrorHandler`
+  only logs in Release survive in a CI log; and the matrix gains `Linux arm64 (native ALSA/JACK)`
+  on `ubuntu-24.04-arm`, the same AArch64 JIT on a system that is not Apple's, to separate the
+  code generated from what macOS does with it. `README.md`, `ROADMAP.md`, `NOTES.md` and
+  `docs/next-steps.md` corrected accordingly. Verification: Release build and `g1dspcheck` pass on
+  x86-64 locally; the cross-assembly probe is quoted in `NOTES.md`; the four-platform run with the
+  arm64 job is next.
+
 - **The ARM flag clear now uses the JIT's proven `BFI` form throughout (Codex).** The first gating
   run exposed that replacing the complemented immediate with AsmJit's `BFC` alias still left the
   finite-DO block illegal. Clearing `FV` now inserts the zero register with `BFI`, the same

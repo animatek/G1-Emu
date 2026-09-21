@@ -67,7 +67,7 @@ JUCE: CoreAudio, WASAPI/ASIO, CoreMIDI, and virtual MIDI ports through
 tested without a Mac — and it is: it opens the card, creates the two virtual ports, takes a patch
 on the PC Port and sounds. The rate conversion and the queues between threads are `audiobridge.h`,
 shared by both, so they sound alike by construction. `.github/workflows/build.yml` builds Linux
-both ways, macOS and Windows on every push.
+both ways, Linux arm64, macOS and Windows on every push.
 
 ## Building and testing
 

@@ -14,22 +14,41 @@ ports, and **builds on Linux, macOS and Windows** with CI proving it on every pu
 
 ---
 
-## 1. Done — the DSP56300 JIT runs on Apple Silicon (2026-09-21)
+## 1. The DSP56300 JIT still raises an illegal instruction on Apple Silicon
 
-The failure was in G1-Emu's `FV` extension, not in MOVEM or the generic aarch64 JIT. A finite `DO`
-cleared `FV` with a sign-extended complemented immediate. AsmJit could not encode that value as an
-AArch64 logical instruction, leaving an illegal instruction in the generated block. The ARM path
-in `cmake/Dsp56300.cmake` now uses `BFI` with the AArch64 zero register to clear `FV`, and `BFI`
-to restore the adjacent `LF`/`FV`
-pair. The x86 path is unchanged.
+**Still open**, despite what this file and the changelog said on 2026-09-21 morning. The entries
+that called it done cite [CI run 35566113403](https://github.com/animatek/G1-Emu/actions/runs/35566113403),
+which is green only because the macOS `Test` step still had `continue-on-error`: its log ends in
+`g1dspcheck (ILLEGAL)` like every run before it. The two runs since, with the test gating
+([35566928286](https://github.com/animatek/G1-Emu/actions/runs/35566928286) and
+[35567844751](https://github.com/animatek/G1-Emu/actions/runs/35567844751)), fail the same way.
 
-`g1dspcheck` now names every case and also covers a plain finite `DO`, nested finite loops and a
-`DO FOREVER` containing a finite loop. All cases pass with JIT block sizes 1 and 32 on the arm64
-`macos-latest` runner. The workflow's macOS `continue-on-error` has been removed, so the test gates
-all four builds. Gearmulator is pinned to `mdmm-v0.1.0-alpha.13`; the external clone remains
-untouched. Verification: [Apple Silicon CI run 35566113403](https://github.com/animatek/G1-Emu/actions/runs/35566113403).
+What is actually known:
 
----
+- The failing case is always **`finite DO`** (block size 1). It is the first case that runs both
+  places the G1 extension patches: the DO entry in `do_exec` and `do_end`. Both `DO FOREVER` cases
+  pass because they never leave the loop and so never reach `do_end`.
+- The **"AArch64 cannot encode that immediate" theory is dead.** asmjit compiles its arm64 backend
+  on any host, so the sequences can be assembled here on x86 and inspected without a Mac: the
+  complemented masks, `BFC` and `BFI` with the zero register all encode with no error (the words
+  are in `NOTES.md`, "The DSP JIT on ARM"). All three attempts changed an encoding that was never
+  wrong, which is why the crash never moved.
+- The ARM-only `#ifdef HAVE_ARM64` paths have therefore been removed from `cmake/Dsp56300.cmake`:
+  one portable form again.
+
+What to try next, in order:
+
+1. **Read the core's own error.** In Release, `AsmJitErrorHandler` only logs (`assert` compiled
+   out) and the broken block runs anyway; the log went to stdout unflushed and was lost.
+   `g1dspcheck` now routes it to stderr flushed, prefixed `CORE:`. The next macOS run should say
+   whether asmjit refused something and what.
+2. **`Linux arm64 (native ALSA/JACK)`** (`ubuntu-24.04-arm`, free for public repositories) is now
+   in the matrix. Same AArch64 JIT, not Apple's system: if it passes, the problem is what macOS
+   does with the generated code (W^X / `MAP_JIT` / icache invalidation), not the code itself, and
+   the macOS `mapRegion@276: MmuHelper: Failed to create memory mapping, err 22` lines in the log
+   become the first suspect. If it fails, the bug is ours and can be debugged on a machine where
+   a core dump and a debugger are available.
+3. Only then, the interpreter fallback as a last resort.
 
 ## 2. What only the real machines can say
 

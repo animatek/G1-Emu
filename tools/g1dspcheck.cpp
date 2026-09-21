@@ -2,11 +2,13 @@
 #include "dsp56kEmu/dsp.h"
 #include "dsp56kEmu/memory.h"
 #include "dsp56kEmu/peripherals.h"
+#include "dsp56kBase/logging.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <initializer_list>
 #include <stdexcept>
+#include <string>
 
 namespace
 {
@@ -147,6 +149,15 @@ namespace
 
 int main()
 {
+	// The core reports JIT errors (bad encodings, blocks it could not emit) through its log, which
+	// by default goes to stdout unflushed: when a broken block then kills the process, the reason
+	// is lost. Send it to stderr, flushed line by line, so a CI log keeps it.
+	Logging::setLogFunc([](const std::string& line)
+	{
+		std::fprintf(stderr, "CORE: %s\n", line.c_str());
+		std::fflush(stderr);
+	});
+
 	try
 	{
 		for(const auto blockSize : {1u, 32u})

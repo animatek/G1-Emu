@@ -208,11 +208,9 @@ At boot the emulated G1 announces itself on the PC PORT (`F0 33 50 06 00 07 08 0
 
 Applied to a build copy; the Gearmulator clone is never modified.
 
-- JIT: short `MOVEM`, `DO FOREVER` (FV flag), nested DO/ENDDO saving FV. On AArch64 the custom
-  flag is cleared and restored with `BFI` (using the zero register to clear it); complemented
-  logical immediates left an illegal
-  instruction in the generated finite-DO block. `g1dspcheck` exercises finite, forever and nested
-  forms with JIT block sizes 1 and 32 on every CI platform.
+- JIT: short `MOVEM`, `DO FOREVER` (FV flag), nested DO/ENDDO saving FV. One form for both
+  architectures. `g1dspcheck` exercises finite, forever and nested forms with JIT block sizes 1
+  and 32 on every CI platform.
 - DMA with dual counters on source and destination at once (DAM `011 011`): not implemented, and
   in Release it reported the block done without copying.
 - Immediate block transfers (the delayed ones let the voices add before the copy and overwrote
@@ -221,6 +219,32 @@ Applied to a build copy; the Gearmulator clone is never modified.
   audio inputs.
 - DMA "block per request, DE not cleared" (DTM=100): ignored; DMA3 of DSP 0 uses it.
 - `g1dspcheck` tests the JIT extensions with synthetic programs (no ROM).
+
+### The DSP JIT on ARM
+
+**Open:** `g1dspcheck` raises an illegal instruction on the Apple Silicon CI runner, always in the
+same case — `finite DO`, the first one that runs both the DO entry and `do_end`, which are the two
+places the G1 extension touches. Everything before it passes, including both `DO FOREVER` cases.
+
+It is **not** an immediate that AArch64 cannot encode, which is what the first three attempts
+(a complemented mask, `BFC`, then `BFI` with the zero register) assumed. asmjit builds its arm64
+backend on any host, so the sequences can be assembled on this x86 machine and looked at without a
+Mac: every form encodes without error, including the complemented masks on both `w` and `x`
+registers.
+
+```
+bfi(w0, wzr, SRB_FV, 1)              err=0 (Ok)   0x331003e0
+and_(w0, w0, Imm(~SR_FV))            err=0 (Ok)   0x120f7800
+and_(x0, x0, Imm(~SR_FV))            err=0 (Ok)   0x926ff800
+and_(w0, w0, Imm(~(SR_LF | SR_FV)))  err=0 (Ok)   0x120f7400
+```
+
+So the ARM-only paths were removed: the portable form is what runs everywhere. What the macOS log
+does show is the core's asmjit error handler printing a block right before the crash, which in
+Release only logs (its `assert` is compiled out) and then runs the broken block. `g1dspcheck` now
+routes the core's log to stderr, flushed, so that message survives in a CI log, and CI has an
+`ubuntu-24.04-arm` job: the same AArch64 JIT on a machine that is not Apple's, which separates the
+code generated from what macOS does with it (W^X, `MAP_JIT`, icache invalidation).
 
 ## The panel
 

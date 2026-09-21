@@ -10,9 +10,10 @@ system runs on an emulated Motorola 68331 and four emulated DSP56303s, and
 **Status: pre-alpha.** The OS boots, NME connects over the PC Port and uploads patches, and it
 sounds clean in real time: oscillators, filters, envelopes, clocks, effects (chorus, overdrive…),
 four outputs and two inputs. It has a window with the panel (display, knobs, buttons and LEDs).
-**Linux only for now**, and not merely untested elsewhere: the audio and MIDI go straight to ALSA
-and JACK, so macOS and Windows do not yet compile. Moving that layer to JUCE is
-[the next big step](ROADMAP.md), and it is what a binary release waits on. Also missing:
+**Runs on Linux**; macOS and Windows now build in CI through a JUCE audio and MIDI backend, but
+nobody has run either on a real machine yet, and on Apple Silicon the DSP JIT still raises an
+illegal instruction ([`docs/next-steps.md`](docs/next-steps.md)). That, and a signed bundle, is
+what a binary release waits on. Also missing:
 module-by-module testing, and the one panel key whose job is still unknown. The technical details are in [`NOTES.md`](NOTES.md), the plan in
 [`ROADMAP.md`](ROADMAP.md) and what changes in [`CHANGELOG.md`](CHANGELOG.md). Contributions are
 welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
