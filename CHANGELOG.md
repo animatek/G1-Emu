@@ -7,6 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-09-22
 
+- **Published `v0.1.0-alpha.4` pre-release (Codex, requested and approved by Javier).**
+  Published the annotated tag and GitHub pre-release with five ROM-free packages: Windows
+  x86_64, macOS universal, Linux x86_64 native, Linux x86_64 JUCE and Linux arm64 native.
+  Tagged GitHub Actions run 35710146687 completed successfully across all five build jobs and
+  the release job. Downloaded the published Windows archive and verified that it contains
+  `G1-Emu.exe`, `g1run.exe`, `WINDOWS.md`, `README.md` and `LICENSE`. Release:
+  <https://github.com/animatek/G1-Emu/releases/tag/v0.1.0-alpha.4>.
+
 - **`v0.1.0-alpha.4` release preparation and stable Windows user data (Codex, requested and
   real-machine tested by Javier).** Prepared the first pre-release
   described as end-to-end verified on Linux, macOS and Windows after Javier confirmed the real
