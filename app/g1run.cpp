@@ -21,6 +21,9 @@
 // window (g1gui) also uses.
 
 #include "emuhost.h"
+#ifdef G1_BACKEND_JUCE
+#include "juceaudio.h"
+#endif
 
 #include <atomic>
 #include <chrono>
@@ -35,6 +38,19 @@ namespace
 
 int main(int argc, char** argv)
 {
+#ifdef G1_BACKEND_JUCE
+	juce::ScopedJuceInitialiser_GUI juceInitialiser;
+	if(argc == 2 && std::string(argv[1]) == "--list-devices")
+	{
+		for(const auto& device : g1app::JuceAudio::devices())
+			std::printf("Audio: %s\n", device.c_str());
+		for(const auto& device : juce::MidiInput::getAvailableDevices())
+			std::printf("MIDI input: %s\n", device.name.toRawUTF8());
+		for(const auto& device : juce::MidiOutput::getAvailableDevices())
+			std::printf("MIDI output: %s\n", device.name.toRawUTF8());
+		return 0;
+	}
+#endif
 	g1app::EmuHost host;
 	std::string log;
 	const bool ok = host.start(argc > 1 ? argv[1] : "", argc > 2 ? argv[2] : "", log);

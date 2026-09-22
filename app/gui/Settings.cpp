@@ -1,6 +1,9 @@
 #include "Settings.h"
 
 #include "romfinder.h"
+#ifdef G1_BACKEND_JUCE
+#include "juceaudio.h"
+#endif
 
 namespace g1gui
 {
@@ -65,7 +68,7 @@ namespace g1gui
 		};
 		label(m_romLabel, "ROM in use");
 		label(m_audioLabel, "Audio driver");
-		label(m_deviceLabel, "ALSA device");
+		label(m_deviceLabel, "Audio device");
 		label(m_gainLabel, "Output level");
 		label(m_rawLabel, "Card ID");
 
@@ -88,19 +91,45 @@ namespace g1gui
 		};
 		addAndMakeVisible(m_romFolder);
 
-		// JACK here is PipeWire's JACK: on this system the emulator becomes a node of the graph
-		// with out_1..out_4 and in_L/in_R, like the back panel.
+		// The native Linux backend is a JACK node or a plain ALSA device. Everywhere else JUCE
+		// exposes the system's real CoreAudio/WASAPI/DirectSound devices.
+#ifdef G1_BACKEND_JUCE
+		m_audio.addItem("System default", 1);
+		m_audio.addItem("None  (no sound)", 3);
+		for(const auto& device : g1app::JuceAudio::devices())
+		{
+			m_audioDevices.add(device);
+			const auto type = juce::String(device).upToFirstOccurrenceOf(": ", false, false);
+			bool found = false;
+			for(int i = 0; i < m_audio.getNumItems(); ++i)
+				found |= m_audio.getItemText(i) == type;
+			if(!found) m_audio.addItem(type, m_audio.getNumItems() + 10);
+		}
+		const auto requestedType = juce::String(o.audio).upToFirstOccurrenceOf(": ", false, false);
+		m_audio.setSelectedId(o.audio == "no" ? 3 : 1, juce::dontSendNotification);
+		for(int i = 0; i < m_audio.getNumItems(); ++i)
+			if(m_audio.getItemText(i) == requestedType)
+				m_audio.setSelectedItemIndex(i, juce::dontSendNotification);
+#else
 		m_audio.addItem("JACK / PipeWire  (4 outputs, 2 inputs)", 1);
 		m_audio.addItem("ALSA  (outputs 1/2 only)", 2);
 		m_audio.addItem("None  (no sound)", 3);
 		m_audio.setSelectedId(o.audio == "no" ? 3 : (o.audio == "jack" ? 1 : 2), juce::dontSendNotification);
-		m_audio.onChange = [this] { updateEnabled(); apply(); };
+#endif
+		m_audio.onChange = [this] { updateAudioDevices(); updateEnabled(); apply(); };
 		addAndMakeVisible(m_audio);
 
-		m_device.setText(o.audio == "jack" || o.audio == "no" || o.audio == "alsa" ? "default" : o.audio, false);
+		m_device.addItem("Default", 1);
+#ifdef G1_BACKEND_JUCE
+		updateAudioDevices(juce::String(o.audio).fromFirstOccurrenceOf(": ", false, false));
+		m_device.setTooltip("Audio device and driver to open on the next start");
+#else
+		m_device.setEditableText(true);
+		m_device.setText(o.audio == "jack" || o.audio == "no" || o.audio == "alsa" ? "Default" : o.audio,
+			juce::dontSendNotification);
 		m_device.setTooltip("The ALSA device to open: default, hw:0,0, ...");
-		m_device.onFocusLost = [this] { apply(); };
-		m_device.onReturnKey = [this] { apply(); };
+#endif
+		m_device.onChange = [this] { apply(); };
 		addAndMakeVisible(m_device);
 
 		// The only one that takes effect straight away: both backends read it from an atomic.
@@ -128,6 +157,22 @@ namespace g1gui
 		m_rawCard.onFocusLost = [this] { apply(); };
 		m_rawCard.onReturnKey = [this] { apply(); };
 		addAndMakeVisible(m_rawCard);
+#ifdef G1_BACKEND_JUCE
+		m_jackConnect.setVisible(false);
+		m_rawEnabled.setVisible(false);
+		m_rawCard.setVisible(false);
+		m_rawLabel.setVisible(false);
+		m_midiInfo.setColour(juce::Label::textColourId, juce::Colour(0xffc8ccd0));
+		m_midiInfo.setJustificationType(juce::Justification::topLeft);
+		m_midiInfo.setText("PC Port: connect the editor here (input and output).\n"
+			"MIDI: connect the DAW or keyboard here.\n"
+#if defined(_WIN32) && !defined(G1_WINDOWS_MIDI)
+			"This build needs external MIDI cables; see docs/windows-build.md.", juce::dontSendNotification);
+#else
+			"Port creation is automatic; check the running status below.", juce::dontSendNotification);
+#endif
+		addAndMakeVisible(m_midiInfo);
+#endif
 
 		// The notice used to stop every startup. It lives here now, readable at any time.
 		m_disclaimer.setToggleState(o.showDisclaimer, juce::dontSendNotification);
@@ -194,13 +239,39 @@ namespace g1gui
 		});
 	}
 
+	void SettingsView::updateAudioDevices(const juce::String& selected)
+	{
+#ifdef G1_BACKEND_JUCE
+		m_device.clear(juce::dontSendNotification);
+		if(m_audio.getSelectedId() == 1 || m_audio.getSelectedId() == 3)
+			m_device.addItem("Default", 1);
+		else
+			for(const auto& device : m_audioDevices)
+				if(device.startsWith(m_audio.getText() + ": "))
+					m_device.addItem(device.fromFirstOccurrenceOf(": ", false, false), m_device.getNumItems() + 1);
+		m_device.setSelectedItemIndex(0, juce::dontSendNotification);
+		for(int i = 0; i < m_device.getNumItems(); ++i)
+			if(m_device.getItemText(i) == selected)
+				m_device.setSelectedItemIndex(i, juce::dontSendNotification);
+#else
+		(void)selected;
+#endif
+	}
+
 	void SettingsView::updateEnabled()
 	{
+#ifdef G1_BACKEND_JUCE
+		const bool audio = m_audio.getSelectedId() != 3;
+		m_device.setEnabled(audio && m_audio.getSelectedId() != 1);
+		m_deviceLabel.setEnabled(audio && m_audio.getSelectedId() != 1);
+		m_jackConnect.setEnabled(false);
+#else
 		const bool alsa = m_audio.getSelectedId() == 2;
 		const bool jack = m_audio.getSelectedId() == 1;
 		m_device.setEnabled(alsa);
 		m_deviceLabel.setEnabled(alsa);
 		m_jackConnect.setEnabled(jack);
+#endif
 		m_gain.setEnabled(m_audio.getSelectedId() != 3);
 		m_gainLabel.setEnabled(m_audio.getSelectedId() != 3);
 		m_rawCard.setEnabled(m_rawEnabled.getToggleState());
@@ -210,12 +281,18 @@ namespace g1gui
 	void SettingsView::apply()
 	{
 		auto& o = m_host.options();
+#ifdef G1_BACKEND_JUCE
+		o.audio = m_audio.getSelectedId() == 3 ? "no" : m_audio.getSelectedId() == 1 ? "alsa"
+			: (m_audio.getText() + ": " + m_device.getText()).toStdString();
+#else
 		switch(m_audio.getSelectedId())
 		{
 		case 1:  o.audio = "jack"; break;
 		case 3:  o.audio = "no"; break;
-		default: o.audio = m_device.getText().trim().isEmpty() ? "alsa" : m_device.getText().trim().toStdString(); break;
+		default: o.audio = m_device.getText().trim().isEmpty() || m_device.getText() == "Default"
+			? "alsa" : m_device.getText().trim().toStdString(); break;
 		}
+#endif
 		o.gainDb = static_cast<float>(m_gain.getValue());
 		o.jackConnect = m_jackConnect.getToggleState();
 		o.rawMidiCard = m_rawEnabled.getToggleState() ? m_rawCard.getText().trim().toStdString() : std::string();
@@ -231,7 +308,9 @@ namespace g1gui
 		juce::String text;
 		text << "  audio:     " << juce::String(s.audio) << "\n";
 		text << "  MIDI:      " << juce::String(s.midi) << "\n";
+#ifndef G1_BACKEND_JUCE
 		text << "  raw MIDI:  " << (s.rawMidi.empty() ? juce::String("none (no card taken over)") : juce::String(s.rawMidi));
+#endif
 		if(text != m_running.getText())
 			m_running.setText(text, juce::dontSendNotification);
 	}
@@ -246,7 +325,11 @@ namespace g1gui
 		_g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
 		_g.drawText("ROM", g_margin, g_margin - 4, 200, 20, juce::Justification::centredLeft);
 		_g.drawText("Audio", g_margin, 108, 200, 20, juce::Justification::centredLeft);
+#ifdef G1_BACKEND_JUCE
+		_g.drawText("MIDI ports", g_margin, 294, 200, 20, juce::Justification::centredLeft);
+#else
 		_g.drawText("Raw MIDI", g_margin, 294, 200, 20, juce::Justification::centredLeft);
+#endif
 		_g.drawText("Notice", g_margin, 408, 200, 20, juce::Justification::centredLeft);
 		_g.drawText("In use now", g_margin, 608, 200, 20, juce::Justification::centredLeft);
 	}
@@ -266,7 +349,7 @@ namespace g1gui
 
 		y = 108 + 22;
 		row(m_audioLabel, m_audio, g_width - g_margin * 2 - g_labelW - g_gap);
-		row(m_deviceLabel, m_device, 200);
+		row(m_deviceLabel, m_device, g_width - g_margin * 2 - g_labelW - g_gap);
 		row(m_gainLabel, m_gain, g_width - g_margin * 2 - g_labelW - g_gap);
 		m_jackConnect.setBounds(g_margin + g_labelW + g_gap, y, g_width - g_margin - g_labelW - g_gap, g_rowH);
 
@@ -274,11 +357,12 @@ namespace g1gui
 		m_rawEnabled.setBounds(g_margin, y, g_width - g_margin * 2, g_rowH);
 		y += g_rowH + g_gap;
 		row(m_rawLabel, m_rawCard, 160);
+		m_midiInfo.setBounds(g_margin, 320, g_width - g_margin * 2, 76);
 
 		m_disclaimer.setBounds(g_margin, 432, g_width - g_margin * 2, g_rowH);
 		m_notice.setBounds(g_margin, 432 + g_rowH + 4, g_width - g_margin * 2, 124);
 
-		m_running.setBounds(g_margin, 632, g_width - g_margin * 2, 52);
+		m_running.setBounds(g_margin, 632, g_width - g_margin * 2, 68);
 		m_note.setBounds(g_margin, 704, g_width - g_margin * 2 - 110, 52);
 		m_close.setBounds(g_width - g_margin - 90, 728, 90, 26);
 	}

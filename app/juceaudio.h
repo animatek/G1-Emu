@@ -50,11 +50,22 @@ namespace g1app
 			}
 			else
 			{
+				if(!_type.empty())
+				{
+					m_manager->getAvailableDeviceTypes();
+					m_manager->setCurrentAudioDeviceType(_type, false);
+					if(m_manager->getCurrentAudioDeviceType() != juce::String(_type))
+					{
+						m_error = "Audio driver unavailable: " + _type;
+						m_manager.reset();
+						return;
+					}
+				}
 				juce::AudioDeviceManager::AudioDeviceSetup setup;
 				setup.outputDeviceName = _device;
 				setup.inputDeviceName = _device;
 				error = m_manager->initialise(static_cast<int>(AudioBridge::Ins),
-					static_cast<int>(AudioBridge::Outs), nullptr, true, _type, &setup);
+					static_cast<int>(AudioBridge::Outs), nullptr, false, {}, &setup);
 				// _device may name a device good for output only (or only for input): on a
 				// split-device Mac "Built-in Output" answers to no input by that name. Settle
 				// for output only rather than refusing to make any sound at all.
@@ -62,7 +73,7 @@ namespace g1app
 				{
 					juce::AudioDeviceManager::AudioDeviceSetup outOnly;
 					outOnly.outputDeviceName = _device;
-					error = m_manager->initialise(0, static_cast<int>(AudioBridge::Outs), nullptr, true, _type, &outOnly);
+					error = m_manager->initialise(0, static_cast<int>(AudioBridge::Outs), nullptr, false, {}, &outOnly);
 				}
 			}
 			if(error.isNotEmpty())
@@ -107,8 +118,6 @@ namespace g1app
 		{
 			std::vector<std::string> out;
 			juce::AudioDeviceManager manager;
-			juce::AudioDeviceManager::AudioDeviceSetup setup;
-			manager.initialise(0, 2, nullptr, false, {}, &setup);
 			for(auto* type : manager.getAvailableDeviceTypes())
 			{
 				type->scanForDevices();

@@ -62,9 +62,18 @@ addressed before multi-instance use.
      green on all five jobs with the test gating each one, the new `Linux arm64` included. What
      remains is trying CoreAudio, CoreMIDI and the virtual ports in an editor and a DAW on a real
      Mac.
-   - **Windows:** the same, plus the one real unknown — whether `createNewDevice` makes a virtual
-     port at all (see below). The standalone must not fail when it cannot: it should open ordinary
-     MIDI ports, say so, and point at loopMIDI.
+   - **Windows: tried on a real Windows 11 machine, and blocked by a Microsoft bug, not ours.**
+     The native build runs (audio opens over WASAPI, the DSP test passes), and an opt-in
+     `G1_WINDOWS_MIDI_SERVICES` backend (`app/windowsmidi.cpp`, gated behind the preview SDK,
+     see `docs/windows-build.md`) reaches Windows MIDI Services endpoint creation. But on this
+     machine's build — Windows 11 25H2, build 26200.9457, in-box MIDI component 26100.8875 — the
+     owned endpoint is never projected as MIDI 1.0 ports, and teardown leaves the shared MIDI
+     service stuck. That matches Microsoft/MIDI issue #1047, fixed only in the November 2026
+     Windows release: nothing left to fix here until that update ships. Meanwhile the decision
+     changed from the loopMIDI fallback first sketched below: **G1-Emu must publish owned ports
+     like the hardware does**, so the standalone does not fall back to loopback cables or
+     physical devices — it just says plainly that it could not make its own ports
+     (`docs/next-steps.md`).
    - Both: a signed/notarised bundle, which is its own job and not this one.
 
    **The audio is the easy half.** JUCE 8 carries every backend we need and we already have them

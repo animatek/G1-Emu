@@ -54,8 +54,9 @@ machine, and both are quick once someone is:
   comment may be stale. **Try it on a real Windows 11 before promising anything.**
 
 `JuceMidi::virtualPorts()` already reports whether the ports were created, and `EmuHost` puts it
-in the status line. What is missing is the graceful end: when they cannot be made, the standalone
-should open ordinary MIDI ports, say so plainly, and point at loopMIDI — not fail.
+in the status line. G1-Emu must publish owned ports like the hardware; it deliberately does not
+open loopback cables or physical MIDI devices as a fallback. The Windows MIDI Services experiment
+is blocked on Microsoft issue #1047 in component 26100.8875, fixed for the November 2026 release.
 
 ---
 

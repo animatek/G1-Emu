@@ -37,7 +37,6 @@ namespace g1app
 		// True when every port asked for was really created. False means the system would not
 		// make virtual ports (Windows without MIDI Services) and only real devices can be used.
 		bool virtualPorts() const { return m_virtual; }
-
 		// Creates a port and returns its index. Input and output share a name, like a DIN pair.
 		int addPort(const char* _name)
 		{
@@ -46,6 +45,8 @@ namespace g1app
 
 			port.out = juce::MidiOutput::createNewDevice(port.name);
 			port.in = juce::MidiInput::createNewDevice(port.name, &m_collector);
+			if(!port.out || !port.in)
+				m_virtual = false;
 			if(port.in)
 			{
 				m_collector.add(static_cast<int>(m_ports.size()) - 1, port.in.get());
@@ -177,8 +178,8 @@ namespace g1app
 		};
 
 		std::string m_clientName;
-		std::vector<Port> m_ports;
 		Collector m_collector;
+		std::vector<Port> m_ports; // Stop input callbacks before destroying their collector.
 		bool m_virtual = true;
 	};
 }

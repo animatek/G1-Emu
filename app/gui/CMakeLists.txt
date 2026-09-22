@@ -5,3 +5,6 @@ target_compile_definitions(g1gui PRIVATE
 	G1_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
 	JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_APPLICATION_NAME_STRING="G1-Emu" JUCE_APPLICATION_VERSION_STRING="0.1")
 target_link_libraries(g1gui PRIVATE g1Host juce::juce_gui_basics juce::juce_data_structures juce::juce_recommended_config_flags)
+if(G1_HAVE_WINDOWS_MIDI)
+	g1_copy_midi_runtime(g1gui)
+endif()

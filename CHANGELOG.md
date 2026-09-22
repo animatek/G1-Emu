@@ -5,7 +5,48 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-09-22
+
+- **Windows audio UI and experimental owned MIDI ports (Codex, requested by Javier).**
+  Enabled ASIO in Windows builds, separated driver and
+  device selection, removed Linux-only settings from the JUCE view, and fixed garbled
+  status text caused by UTF-8 strings passed to Windows wide `printf`. Added an opt-in
+  x64 Windows MIDI Services backend using SDK 0.99.81-devpreview.9, generated C++/WinRT
+  projections, two bidirectional endpoints, byte-stream/UMP conversion, and a live
+  `g1midicheck` test for WinMM notes, fragmented SysEx and independent port routing.
+  Represented the two G1 ports as two MIDI 1.0 function blocks/groups on one owned device,
+  sanitized internal device identifiers, and moved SDK lifetime operations to a dedicated
+  COM MTA. Added `G1_WINDOWS_MIDI=0` for audio-only recovery and ignored workspace-local
+  runtime state (`.local/`). Documented preview licensing and local-only build requirements.
+  Verification so far: ASIO drivers enumerate, the DSP CTest passes (1/1), and a sanitized
+  test port appeared once in WinMM. A one-device/two-function-block build reaches endpoint
+  creation, but component 26100.8875 does not publish either MIDI 1.0 port and hangs during
+  teardown, matching Microsoft issue #1047 (fixed for the November 2026 Windows release).
+  This is not a working/release-ready native MIDI claim. No loopMIDI integration or system
+  driver was used, and no physical MIDI port was opened.
+
 ## 2026-09-21
+
+- **Native Windows build completed (Codex, requested by Javier).**
+  Reused the installed Visual Studio 2022 C++ tools and Windows SDK 10.0.26100.0; downloaded
+  Gearmulator `mdmm-v0.1.0-alpha.13` and its submodules into ignored `build-windows-deps`, using
+  the existing JUCE 8.0.12. Built every target in `build-windows` as Release x64. Fixed the
+  optional patch test's nonstandard `M_PI` constant for MSVC and initialized JUCE in `g1run`,
+  which previously failed to open audio on Windows. Added `g1run --list-devices` for diagnostics.
+  Verification: full build succeeds, `ctest -C Release -L g1` passes (1/1), and a 12-second
+  scratch-flash run opens Komplete Audio 6 via WASAPI at 44.1 kHz with four outputs, runs at
+  100% speed and reports zero dropouts. No editor/loopMIDI connection or audible patch playback
+  was verified. Preserved the pre-existing local MIDI logging changes in `emuhost.cpp`.
+
+- **Windows audio selection (Codex, requested by
+  Javier).** The JUCE settings view lists the available driver and
+  device pairs (WASAPI/DirectSound/ASIO when JUCE exposes them) instead of Linux-only JACK/ALSA
+  choices, and `EmuHost` preserves the selected device type when opening it. The MIDI backend
+  does not open loopback cables or physical devices when owned ports are unavailable.
+  Corrected the driver-selection API (the initialise argument is a device-name pattern), stopped
+  opening audio during enumeration, and kept the native ALSA default working. Windows build and
+  MIDI status are documented in `docs/windows-build.md`. Verification: Windows Release build,
+  DSP test and explicit WASAPI device opening pass (see above); GUI interaction remains unverified.
 
 - **`v0.1.0-alpha.3` published with the fixes proven on the first real Mac run (Codex, asked for
   by Javier).** [The pre-release](https://github.com/animatek/G1-Emu/releases/tag/v0.1.0-alpha.3)

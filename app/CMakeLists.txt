@@ -29,6 +29,35 @@ if(G1_BACKEND STREQUAL "juce")
 	target_link_libraries(g1Host PUBLIC juce::juce_audio_devices juce::juce_recommended_config_flags)
 	# The console front end has no window, so it needs JUCE's message loop started by hand.
 	target_compile_definitions(g1Host PUBLIC JUCE_STANDALONE_APPLICATION=1)
+	if(WIN32)
+		target_compile_definitions(g1Host PUBLIC JUCE_ASIO=1)
+		set(G1_WINDOWS_MIDI_SDK "" CACHE PATH "Experimental Windows MIDI Services SDK package (0.99.81)")
+		set(G1_CPPWINRT "" CACHE FILEPATH "C++/WinRT 3 cppwinrt.exe")
+		if(G1_WINDOWS_MIDI_SDK)
+			if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR CMAKE_SYSTEM_PROCESSOR MATCHES "[Aa][Rr][Mm]" OR CMAKE_GENERATOR_PLATFORM MATCHES "[Aa][Rr][Mm]")
+				message(FATAL_ERROR "The experimental Windows MIDI SDK integration currently supports x64 only")
+			endif()
+			set(G1_HAVE_WINDOWS_MIDI TRUE)
+			message(WARNING "Windows MIDI SDK preview: local development only; do not redistribute this runtime")
+			if(NOT EXISTS "${G1_CPPWINRT}")
+				message(FATAL_ERROR "G1_WINDOWS_MIDI_SDK requires G1_CPPWINRT")
+			endif()
+			execute_process(COMMAND "${G1_CPPWINRT}" -input sdk
+				-input "${G1_WINDOWS_MIDI_SDK}/ref/native/Windows.Devices.Midi2.winmd"
+				-output "${CMAKE_BINARY_DIR}/midi-projection" COMMAND_ERROR_IS_FATAL ANY)
+			target_sources(g1Host PRIVATE windowsmidi.cpp windowsmidi.h)
+			target_include_directories(g1Host PRIVATE "${CMAKE_BINARY_DIR}/midi-projection")
+			target_compile_definitions(g1Host PUBLIC G1_WINDOWS_MIDI=1)
+			target_link_libraries(g1Host PUBLIC runtimeobject)
+			function(g1_copy_midi_runtime target)
+				add_custom_command(TARGET ${target} POST_BUILD
+					COMMAND ${CMAKE_COMMAND} -E copy_if_different
+					"${G1_WINDOWS_MIDI_SDK}/runtimes/win-x64/native/Windows.Devices.Midi2.dll"
+					"${G1_WINDOWS_MIDI_SDK}/runtimes/win-x64/native/Windows.Devices.Midi2.pri"
+					"$<TARGET_FILE_DIR:${target}>")
+			endfunction()
+		endif()
+	endif()
 else()
 	target_sources(g1Host PRIVATE alsamidi.h alsaaudio.h jackaudio.h)
 	target_compile_definitions(g1Host PUBLIC G1_BACKEND_NATIVE=1)
@@ -51,6 +80,12 @@ endif()
 
 add_executable(g1run g1run.cpp)
 target_link_libraries(g1run PRIVATE g1Host)
+if(G1_HAVE_WINDOWS_MIDI)
+	g1_copy_midi_runtime(g1run)
+	add_executable(g1midicheck ../tools/g1midicheck.cpp)
+	target_link_libraries(g1midicheck PRIVATE g1Host)
+	g1_copy_midi_runtime(g1midicheck)
+endif()
 
 if(G1_HAVE_JUCE)
 	add_subdirectory(gui)

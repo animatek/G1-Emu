@@ -5,6 +5,9 @@
 #ifdef G1_BACKEND_JUCE
 #include "juceaudio.h"
 #include "jucemidi.h"
+#ifdef G1_WINDOWS_MIDI
+#include "windowsmidi.h"
+#endif
 #else
 #include "alsaaudio.h"
 #include "alsamidi.h"
@@ -225,8 +228,12 @@ namespace g1app
 		m_midi = std::make_unique<Midi>("G1-Emu");
 		if(!m_midi->valid())
 		{
+#ifdef G1_WINDOWS_MIDI
+			_log += "Windows MIDI Services: " + m_midi->error() + "\n";
+#else
 			_log += "cannot open the ALSA sequencer\n";
 			return false;
+#endif
 		}
 		m_pcPort = m_midi->addPort("PC Port");
 		m_midiPort = m_midi->addPort("MIDI");
@@ -236,9 +243,11 @@ namespace g1app
 		else
 			// Nothing was created, and nothing real was opened either: no editor can reach the G1.
 			// Saying which system refused, and what the way round it is, saves the user the hunt.
-#ifdef _WIN32
-			m_stats.midi = "no virtual MIDI ports: Windows only makes them through Windows MIDI "
-				"Services, so no editor can reach the G1 yet (loopMIDI is the usual way round it)";
+#ifdef G1_WINDOWS_MIDI
+			m_stats.midi = "Windows MIDI Services: " + m_midi->error();
+#elif defined(_WIN32)
+			m_stats.midi = "Windows did not create G1-Emu's owned MIDI ports; this Windows MIDI "
+				"Services version cannot expose the emulated instrument yet";
 #else
 			m_stats.midi = "no virtual MIDI ports on this system: no editor can reach the G1";
 #endif
@@ -255,8 +264,11 @@ namespace g1app
 			const float gain = std::pow(10.0f, gainDb / 20.0f);
 			char buf[200];
 #ifdef G1_BACKEND_JUCE
-			const auto device = (m_options.audio == "jack" || m_options.audio == "alsa") ? std::string() : m_options.audio;
-			m_juceAudio = std::make_unique<JuceAudio>(device, gain);
+			const auto selected = (m_options.audio == "jack" || m_options.audio == "alsa") ? std::string() : m_options.audio;
+			const auto separator = selected.find(": ");
+			const auto type = separator == std::string::npos ? std::string() : selected.substr(0, separator);
+			const auto device = separator == std::string::npos ? selected : selected.substr(separator + 2);
+			m_juceAudio = std::make_unique<JuceAudio>(device, gain, type);
 			if(m_juceAudio->valid())
 				std::snprintf(buf, sizeof(buf), "%s at %u Hz, %zu outputs, %+.0f dB",
 					m_juceAudio->deviceName().c_str(), m_juceAudio->rate(), m_juceAudio->outputs(), static_cast<double>(gainDb));
@@ -483,6 +495,26 @@ namespace g1app
 		std::vector<std::vector<uint8_t>> incoming;
 		std::vector<uint8_t> out;
 
+		// G1_MIDI_LOG=1: every chunk in and out of both ports, with its first bytes. The G1's
+		// protocol is all SysEx, so "F0 33 ..." arriving and nothing going back says more in one
+		// line than any amount of guessing about whose side the silence is on.
+		const bool midiLog = [] { const char* v = std::getenv("G1_MIDI_LOG"); return v && *v && *v != '0'; }();
+		const auto logMidi = [midiLog](const char* _dir, const char* _port, const std::vector<uint8_t>& _bytes)
+		{
+			if(!midiLog || _bytes.empty())
+				return;
+			std::string hex;
+			for(size_t i = 0; i < _bytes.size() && i < 16; ++i)
+			{
+				char b[4];
+				std::snprintf(b, sizeof(b), "%02x ", _bytes[i]);
+				hex += b;
+			}
+			std::printf("[midi] %s %-7s %3zu bytes: %s%s\n", _dir, _port, _bytes.size(), hex.c_str(),
+				_bytes.size() > 16 ? "..." : "");
+			std::fflush(stdout);
+		};
+
 		while(!m_quit)
 		{
 			const auto t0 = clock::now();
@@ -492,6 +524,7 @@ namespace g1app
 			if(!incoming[m_pcPort].empty())
 			{
 				m_pcIn += incoming[m_pcPort].size();
+				logMidi("in ", "PC Port", incoming[m_pcPort]);
 				pcLog.write(reinterpret_cast<const char*>(incoming[m_pcPort].data()), static_cast<std::streamsize>(incoming[m_pcPort].size()));
 				pcLog.flush();
 				mc.getPcPort().receive(incoming[m_pcPort]);
@@ -500,6 +533,7 @@ namespace g1app
 			if(!incoming[m_midiPort].empty())
 			{
 				m_midiIn += incoming[m_midiPort].size();
+				logMidi("in ", "MIDI", incoming[m_midiPort]);
 				mc.getSci().write(incoming[m_midiPort]);
 				incoming[m_midiPort].clear();
 			}
@@ -515,10 +549,12 @@ namespace g1app
 			out.clear();
 			mc.getPcPort().takeTx(out);
 			m_pcOut += out.size();
+			logMidi("out", "PC Port", out);
 			m_midi->send(m_pcPort, out);
 			out.clear();
 			mc.getSci().read(out);
 			m_midiOut += out.size();
+			logMidi("out", "MIDI", out);
 			m_midi->send(m_midiPort, out);
 
 			const auto t1 = clock::now();

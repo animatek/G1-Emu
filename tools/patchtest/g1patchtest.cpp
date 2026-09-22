@@ -159,8 +159,9 @@ int main(int argc, char** argv)
 		mc.getDsp(0).setInputProvider([&](int32_t& _l, int32_t& _r)
 		{
 			const double t = static_cast<double>(inputPhase++) / 96000.0;
-			_l = static_cast<int32_t>(0.25 * 8388607.0 * std::sin(2.0 * M_PI * inputHz * t));
-			_r = static_cast<int32_t>(0.25 * 8388607.0 * std::sin(2.0 * M_PI * 2.0 * inputHz * t));
+			constexpr double twoPi = 6.28318530717958647692;
+			_l = static_cast<int32_t>(0.25 * 8388607.0 * std::sin(twoPi * inputHz * t));
+			_r = static_cast<int32_t>(0.25 * 8388607.0 * std::sin(twoPi * 2.0 * inputHz * t));
 		});
 
 	// Boot and handshake.

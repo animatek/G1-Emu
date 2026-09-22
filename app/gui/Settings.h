@@ -38,6 +38,7 @@ namespace g1gui
 		void apply();			// takes what the controls say into the options and saves them
 		void chooseRom();		// the file picker, which checks the file before writing it down
 		void updateEnabled();	// the ALSA device only matters with the ALSA driver, and so on
+		void updateAudioDevices(const juce::String& selected = {});
 
 		g1app::EmuHost& m_host;
 
@@ -46,7 +47,9 @@ namespace g1gui
 		juce::TextButton m_romChoose{"Choose..."}, m_romFolder{"Open the ROM folder"};
 		std::unique_ptr<juce::FileChooser> m_chooser;
 		juce::ComboBox m_audio;
-		juce::TextEditor m_device;
+		juce::ComboBox m_device;
+		juce::StringArray m_audioDevices;
+		juce::Label m_midiInfo;
 		juce::Slider m_gain;
 		juce::ToggleButton m_jackConnect{"Connect outputs 1/2 to the sound card"};
 		juce::ToggleButton m_rawEnabled{"Take over a card, so raw MIDI programs see the G1"};

@@ -27,7 +27,12 @@ namespace g1app
 #ifdef G1_BACKEND_JUCE
 	class JuceMidi;
 	class JuceAudio;
+#ifdef G1_WINDOWS_MIDI
+	class WindowsMidi;
+	using Midi = WindowsMidi;
+#else
 	using Midi = JuceMidi;
+#endif
 #else
 	class AlsaMidi;
 	class AlsaAudio;

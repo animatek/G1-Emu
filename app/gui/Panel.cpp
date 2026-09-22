@@ -405,10 +405,14 @@ namespace g1gui
 		juce::String dsp;
 		for(bool on : s.dspOn)
 			dsp << (on ? "o" : "-");
-		m_status.setText(juce::String::formatted("speed %5.1f%%   load %3.0f%%   CPU %.1f cores   DSP %s   output 1/2 %s   dropouts %llu   |  ",
-			s.speed, s.load, s.cpuCores, dsp.toRawUTF8(),
-			m_peakHold > 1e-6 ? juce::String::formatted("%+.0f dB", 20.0 * std::log10(m_peakHold)).toRawUTF8() : "silence",
-			static_cast<unsigned long long>(s.xruns)) + juce::String(s.audio)
+		// String::formatted uses wide printf on Windows: never pass UTF-8 pointers to %s.
+		juce::String status = juce::String::formatted("speed %5.1f%%   load %3.0f%%", s.speed, s.load);
+#ifdef __linux__
+		status += juce::String::formatted("   CPU %.1f cores", s.cpuCores);
+#endif
+		status += "   DSP " + dsp + "   output 1/2 ";
+		status += m_peakHold > 1e-6 ? juce::String::formatted("%+.0f dB", 20.0 * std::log10(m_peakHold)) : "silence";
+		m_status.setText(status + "   dropouts " + juce::String(static_cast<juce::int64>(s.xruns)) + "   |  " + juce::String(s.audio)
 			// The byte counters, not just the port names: when an editor says "no response from
 			// synth", the first thing anybody needs to know is whether its bytes ever arrived.
 			// PC in stuck at 0 means they did not; in moving and out stuck means we do not answer.

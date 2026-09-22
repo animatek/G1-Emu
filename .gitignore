@@ -6,6 +6,7 @@ Roms/
 build/
 build-*/
 bin/
+.local/
 
 # Private Patreon drafts
 /Patreon post/
