@@ -109,6 +109,14 @@ namespace g1app
 
 	std::string EmuHost::defaultFlashPath()
 	{
+#ifdef _WIN32
+		// HOME is normally unset in a native Windows process. Falling back to "." made the
+		// settings and flash follow the executable's working directory, so launching the same
+		// build from Explorer and a terminal produced two independent G1s. APPDATA is the native,
+		// per-user location and remains stable regardless of how the program was started.
+		if(const char* appData = std::getenv("APPDATA"))
+			return (std::filesystem::path(appData) / "Animatek/G1-Emu/flash.bin").string();
+#endif
 		const char* home = std::getenv("HOME");
 		return std::string(home ? home : ".") + "/.local/share/Animatek/G1-Emu/flash.bin";
 	}
@@ -143,6 +151,10 @@ namespace g1app
 			else if(key == "rawMidiCard")	rawMidiCard = value;
 			else if(key == "rom")			rom = value;
 			else if(key == "showDisclaimer") showDisclaimer = value != "0";
+			else if(key == "pcPortOutDevice") pcPortOutDevice = value;
+			else if(key == "pcPortInDevice")  pcPortInDevice = value;
+			else if(key == "midiOutDevice")   midiOutDevice = value;
+			else if(key == "midiInDevice")    midiInDevice = value;
 		}
 		return true;
 	}
@@ -160,7 +172,11 @@ namespace g1app
 		  << "jackConnect = " << (jackConnect ? 1 : 0) << "\n"
 		  << "rawMidiCard = " << rawMidiCard << "\n"
 		  << "rom = " << rom << "\n"
-		  << "showDisclaimer = " << (showDisclaimer ? 1 : 0) << "\n";
+		  << "showDisclaimer = " << (showDisclaimer ? 1 : 0) << "\n"
+		  << "pcPortOutDevice = " << pcPortOutDevice << "\n"
+		  << "pcPortInDevice = " << pcPortInDevice << "\n"
+		  << "midiOutDevice = " << midiOutDevice << "\n"
+		  << "midiInDevice = " << midiInDevice << "\n";
 		return f.good();
 	}
 
@@ -180,6 +196,14 @@ namespace g1app
 			m_options.jackConnect = std::string(v) != "0";
 		if(const char* v = std::getenv("G1_RAWMIDI"))
 			m_options.rawMidiCard = std::string(v) == "0" ? "" : v;
+		if(const char* v = std::getenv("G1_PCPORT_OUT"))
+			m_options.pcPortOutDevice = v;
+		if(const char* v = std::getenv("G1_PCPORT_IN"))
+			m_options.pcPortInDevice = v;
+		if(const char* v = std::getenv("G1_MIDI_OUT"))
+			m_options.midiOutDevice = v;
+		if(const char* v = std::getenv("G1_MIDI_IN"))
+			m_options.midiInDevice = v;
 
 		// The ROM. G1-Emu ships none, so not finding one is the normal first run, not a crash:
 		// the message has to say what to put where, and what was wrong with what is already there.
@@ -235,23 +259,44 @@ namespace g1app
 			return false;
 #endif
 		}
-		m_pcPort = m_midi->addPort("PC Port");
-		m_midiPort = m_midi->addPort("MIDI");
-#ifdef G1_BACKEND_JUCE
+#if defined(G1_BACKEND_JUCE) && !defined(G1_WINDOWS_MIDI)
+		// The manual MIDI pairing patch only applies to the plain JUCE backend: it is what stands
+		// in for owned ports on Windows until Windows MIDI Services can make them (see jucemidi.h).
+		m_pcPort = m_midi->addPort("PC Port", m_options.pcPortOutDevice, m_options.pcPortInDevice);
+		m_midiPort = m_midi->addPort("MIDI", m_options.midiOutDevice, m_options.midiInDevice);
+		const bool manualMidi = !m_options.pcPortOutDevice.empty() || !m_options.pcPortInDevice.empty()
+			|| !m_options.midiOutDevice.empty() || !m_options.midiInDevice.empty();
+		auto disp = [](const std::string& _s) { return _s.empty() ? std::string("auto") : _s; };
 		if(m_midi->virtualPorts())
-			m_stats.midi = "G1-Emu PC Port (editor) and G1-Emu MIDI";
+			m_stats.midi = manualMidi
+				? "manual MIDI devices (patch until Windows MIDI Services can own ports): PC Port out="
+					+ disp(m_options.pcPortOutDevice) + " in=" + disp(m_options.pcPortInDevice)
+					+ ", MIDI out=" + disp(m_options.midiOutDevice) + " in=" + disp(m_options.midiInDevice)
+				: "G1-Emu PC Port (editor) and G1-Emu MIDI";
+		else if(manualMidi)
+			// The user pointed Settings at real device names, and at least one of them could not
+			// be opened -- most likely the loopback driver was not running, or the names changed.
+			m_stats.midi = "could not open one of the chosen MIDI devices: PC Port out="
+				+ disp(m_options.pcPortOutDevice) + " in=" + disp(m_options.pcPortInDevice)
+				+ ", MIDI out=" + disp(m_options.midiOutDevice) + " in=" + disp(m_options.midiInDevice)
+				+ "; check Settings and that the loopback driver is running";
+#if defined(_WIN32)
 		else
-			// Nothing was created, and nothing real was opened either: no editor can reach the G1.
-			// Saying which system refused, and what the way round it is, saves the user the hunt.
-#ifdef G1_WINDOWS_MIDI
-			m_stats.midi = "Windows MIDI Services: " + m_midi->error();
-#elif defined(_WIN32)
 			m_stats.midi = "Windows did not create G1-Emu's owned MIDI ports; this Windows MIDI "
-				"Services version cannot expose the emulated instrument yet";
+				"Services version cannot expose the emulated instrument yet, pick manual MIDI "
+				"devices in Settings as a patch until it does";
 #else
+		else
 			m_stats.midi = "no virtual MIDI ports on this system: no editor can reach the G1";
 #endif
+#elif defined(G1_BACKEND_JUCE)
+		m_pcPort = m_midi->addPort("PC Port");
+		m_midiPort = m_midi->addPort("MIDI");
+		m_stats.midi = m_midi->virtualPorts() ? "G1-Emu PC Port (editor) and G1-Emu MIDI"
+			: "Windows MIDI Services: " + m_midi->error();
 #else
+		m_pcPort = m_midi->addPort("PC Port");
+		m_midiPort = m_midi->addPort("MIDI");
 		m_stats.midi = "G1-Emu:PC Port (editor) and G1-Emu:MIDI, client " + std::to_string(m_midi->clientId());
 #endif
 		_log += "MIDI ports: " + m_stats.midi + "\n";

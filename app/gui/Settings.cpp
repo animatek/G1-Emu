@@ -3,14 +3,27 @@
 #include "romfinder.h"
 #ifdef G1_BACKEND_JUCE
 #include "juceaudio.h"
+#if defined(_WIN32) && !defined(G1_WINDOWS_MIDI)
+#include "jucemidi.h"
+#endif
 #endif
 
 namespace g1gui
 {
 	namespace
 	{
-		constexpr int g_width = 560, g_height = 790;
 		constexpr int g_labelW = 150, g_rowH = 28, g_gap = 10, g_margin = 18;
+		// The manual MIDI pairing patch (Windows, until Windows MIDI Services can own ports;
+		// jucemidi.h) adds four device rows to the MIDI section, so the window grows to fit them.
+#if defined(_WIN32) && defined(G1_BACKEND_JUCE) && !defined(G1_WINDOWS_MIDI)
+		constexpr bool g_manualMidiUi = true;
+#else
+		constexpr bool g_manualMidiUi = false;
+#endif
+		constexpr int g_midiInfoH = g_manualMidiUi ? 92 : 76;
+		constexpr int g_midiRowsH = g_manualMidiUi ? 4 * (g_rowH + g_gap) : 0;
+		constexpr int g_midiExtra = (g_midiInfoH - 76) + g_midiRowsH + (g_manualMidiUi ? 10 : 0);
+		constexpr int g_width = 560, g_height = 790 + g_midiExtra;
 
 		// The window holding one SettingsView. There is at most one, kept here so a second
 		// click brings the same one to the front instead of opening another.
@@ -167,11 +180,68 @@ namespace g1gui
 		m_midiInfo.setText("PC Port: connect the editor here (input and output).\n"
 			"MIDI: connect the DAW or keyboard here.\n"
 #if defined(_WIN32) && !defined(G1_WINDOWS_MIDI)
-			"This build needs external MIDI cables; see docs/windows-build.md.", juce::dontSendNotification);
+			"Windows cannot create these as owned ports yet (Microsoft/MIDI issue #1047): pick a "
+			"loopback driver's ports below (e.g. loopMIDI) and pick the same ones in the editor.",
+			juce::dontSendNotification);
 #else
 			"Port creation is automatic; check the running status below.", juce::dontSendNotification);
 #endif
 		addAndMakeVisible(m_midiInfo);
+#if defined(_WIN32) && !defined(G1_WINDOWS_MIDI)
+		{
+			// Matches a saved name against what the system has right now, keeping it selected
+			// (with a "(not found)" marker) even if the loopback driver is not running yet.
+			auto populate = [](juce::ComboBox& _box, const std::vector<std::string>& _devices,
+				const std::string& _selected)
+			{
+				_box.clear(juce::dontSendNotification);
+				_box.addItem("Automatic (owned port)", 1);
+				int id = 2;
+				for(const auto& d : _devices)
+					_box.addItem(d, id++);
+				if(_selected.empty())
+				{
+					_box.setSelectedId(1, juce::dontSendNotification);
+					return;
+				}
+				for(int i = 0; i < _box.getNumItems(); ++i)
+					if(_box.getItemText(i).toStdString() == _selected)
+					{
+						_box.setSelectedItemIndex(i, juce::dontSendNotification);
+						return;
+					}
+				_box.addItem(_selected + "  (not found)", id);
+				_box.setSelectedId(id, juce::dontSendNotification);
+			};
+			const auto outputs = g1app::JuceMidi::availableOutputs();
+			const auto inputs = g1app::JuceMidi::availableInputs();
+			populate(m_pcOutDevice, outputs, o.pcPortOutDevice);
+			populate(m_pcInDevice, inputs, o.pcPortInDevice);
+			populate(m_midiOutDeviceBox, outputs, o.midiOutDevice);
+			populate(m_midiInDeviceBox, inputs, o.midiInDevice);
+
+			auto label = [this](juce::Label& _l, const juce::String& _text)
+			{
+				_l.setText(_text, juce::dontSendNotification);
+				_l.setColour(juce::Label::textColourId, juce::Colours::white);
+				_l.setJustificationType(juce::Justification::centredRight);
+				addAndMakeVisible(_l);
+			};
+			label(m_pcOutLabel, "PC Port out");
+			label(m_pcInLabel, "PC Port in");
+			label(m_midiOutLabel, "MIDI out");
+			label(m_midiInLabel, "MIDI in");
+			for(auto* box : {&m_pcOutDevice, &m_pcInDevice, &m_midiOutDeviceBox, &m_midiInDeviceBox})
+			{
+				box->onChange = [this] { apply(); };
+				addAndMakeVisible(*box);
+			}
+			m_pcOutDevice.setTooltip("What G1-Emu sends the editor through, when not automatic");
+			m_pcInDevice.setTooltip("What G1-Emu receives from the editor through, when not automatic");
+			m_midiOutDeviceBox.setTooltip("What G1-Emu sends the DAW/keyboard through, when not automatic");
+			m_midiInDeviceBox.setTooltip("What G1-Emu receives from the DAW/keyboard through, when not automatic");
+		}
+#endif
 #endif
 
 		// The notice used to stop every startup. It lives here now, readable at any time.
@@ -297,6 +367,20 @@ namespace g1gui
 		o.jackConnect = m_jackConnect.getToggleState();
 		o.rawMidiCard = m_rawEnabled.getToggleState() ? m_rawCard.getText().trim().toStdString() : std::string();
 		o.showDisclaimer = m_disclaimer.getToggleState();
+#if defined(_WIN32) && defined(G1_BACKEND_JUCE) && !defined(G1_WINDOWS_MIDI)
+		// Item 1 is "Automatic"; anything else is a device name, minus the "(not found)" marker
+		// populate() appends when a remembered name is not among the system's devices right now.
+		auto deviceName = [](const juce::ComboBox& _box) -> std::string
+		{
+			if(_box.getSelectedId() <= 1)
+				return {};
+			return _box.getText().upToFirstOccurrenceOf("  (not found)", false, false).toStdString();
+		};
+		o.pcPortOutDevice = deviceName(m_pcOutDevice);
+		o.pcPortInDevice = deviceName(m_pcInDevice);
+		o.midiOutDevice = deviceName(m_midiOutDeviceBox);
+		o.midiInDevice = deviceName(m_midiInDeviceBox);
+#endif
 		o.save(g1app::EmuHost::defaultSettingsPath());
 	}
 
@@ -319,7 +403,7 @@ namespace g1gui
 	{
 		_g.fillAll(juce::Colour(0xff1c1c20));
 		_g.setColour(juce::Colour(0xff35353c));
-		for(const float y : {100.0f, 286.0f, 400.0f, 600.0f})
+		for(const float y : {100.0f, 286.0f, 400.0f + g_midiExtra, 600.0f + g_midiExtra})
 			_g.drawLine(static_cast<float>(g_margin), y, static_cast<float>(g_width - g_margin), y);
 		_g.setColour(juce::Colours::white);
 		_g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
@@ -330,8 +414,8 @@ namespace g1gui
 #else
 		_g.drawText("Raw MIDI", g_margin, 294, 200, 20, juce::Justification::centredLeft);
 #endif
-		_g.drawText("Notice", g_margin, 408, 200, 20, juce::Justification::centredLeft);
-		_g.drawText("In use now", g_margin, 608, 200, 20, juce::Justification::centredLeft);
+		_g.drawText("Notice", g_margin, 408 + g_midiExtra, 200, 20, juce::Justification::centredLeft);
+		_g.drawText("In use now", g_margin, 608 + g_midiExtra, 200, 20, juce::Justification::centredLeft);
 	}
 
 	void SettingsView::resized()
@@ -357,13 +441,20 @@ namespace g1gui
 		m_rawEnabled.setBounds(g_margin, y, g_width - g_margin * 2, g_rowH);
 		y += g_rowH + g_gap;
 		row(m_rawLabel, m_rawCard, 160);
-		m_midiInfo.setBounds(g_margin, 320, g_width - g_margin * 2, 76);
+		m_midiInfo.setBounds(g_margin, 320, g_width - g_margin * 2, g_midiInfoH);
+#if defined(_WIN32) && defined(G1_BACKEND_JUCE) && !defined(G1_WINDOWS_MIDI)
+		y = 320 + g_midiInfoH + 6;
+		row(m_pcOutLabel, m_pcOutDevice, g_width - g_margin * 2 - g_labelW - g_gap);
+		row(m_pcInLabel, m_pcInDevice, g_width - g_margin * 2 - g_labelW - g_gap);
+		row(m_midiOutLabel, m_midiOutDeviceBox, g_width - g_margin * 2 - g_labelW - g_gap);
+		row(m_midiInLabel, m_midiInDeviceBox, g_width - g_margin * 2 - g_labelW - g_gap);
+#endif
 
-		m_disclaimer.setBounds(g_margin, 432, g_width - g_margin * 2, g_rowH);
-		m_notice.setBounds(g_margin, 432 + g_rowH + 4, g_width - g_margin * 2, 124);
+		m_disclaimer.setBounds(g_margin, 432 + g_midiExtra, g_width - g_margin * 2, g_rowH);
+		m_notice.setBounds(g_margin, 432 + g_midiExtra + g_rowH + 4, g_width - g_margin * 2, 124);
 
-		m_running.setBounds(g_margin, 632, g_width - g_margin * 2, 68);
-		m_note.setBounds(g_margin, 704, g_width - g_margin * 2 - 110, 52);
-		m_close.setBounds(g_width - g_margin - 90, 728, 90, 26);
+		m_running.setBounds(g_margin, 632 + g_midiExtra, g_width - g_margin * 2, 68);
+		m_note.setBounds(g_margin, 704 + g_midiExtra, g_width - g_margin * 2 - 110, 52);
+		m_close.setBounds(g_width - g_margin - 90, 728 + g_midiExtra, 90, 26);
 	}
 }

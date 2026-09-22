@@ -12,6 +12,14 @@
 //           still works for talking to real MIDI hardware, says so through virtualPorts(), and
 //           it is up to the caller to tell the user (see ROADMAP.md, point 5).
 //
+// addPort() can also be told to open an existing system MIDI device by name instead of creating
+// a new one, one name for the output half and one for the input half. This is the manual patch
+// used on Windows while Windows MIDI Services cannot own ports (Microsoft/MIDI issue #1047,
+// docs/windows-build.md): the user runs a loopback driver such as loopMIDI, names two ports "G1
+// PC Port" and "G1 MIDI" (or reuses whatever names loopMIDI gave them), points G1-Emu's Settings
+// at them, and points the editor at the very same names. Every other caller leaves the names
+// empty and behaviour is exactly as before.
+//
 // Interface deliberately the same as AlsaMidi's, so EmuHost does not care which one it has.
 
 #include <juce_audio_devices/juce_audio_devices.h>
@@ -34,17 +42,22 @@ namespace g1app
 		bool valid() const { return true; }		// there is no session to open: ports stand alone
 		int clientId() const { return -1; }		// an ALSA notion; nothing to report here
 
-		// True when every port asked for was really created. False means the system would not
-		// make virtual ports (Windows without MIDI Services) and only real devices can be used.
+		// True when every port asked for was really created or, for a manually-paired one, really
+		// opened. False means something was neither: on Windows without MIDI Services and with no
+		// manual device chosen, or a chosen device that no longer exists.
 		bool virtualPorts() const { return m_virtual; }
-		// Creates a port and returns its index. Input and output share a name, like a DIN pair.
-		int addPort(const char* _name)
+		// Creates a port and returns its index. Input and output share a name, like a DIN pair --
+		// unless _outDevice/_inDevice name an existing system MIDI device to open instead of
+		// creating a new one (see the class comment). Either can be set without the other.
+		int addPort(const char* _name, const std::string& _outDevice = {}, const std::string& _inDevice = {})
 		{
 			auto& port = m_ports.emplace_back();
 			port.name = juce::String(m_clientName) + " " + _name;
 
-			port.out = juce::MidiOutput::createNewDevice(port.name);
-			port.in = juce::MidiInput::createNewDevice(port.name, &m_collector);
+			port.out = _outDevice.empty() ? juce::MidiOutput::createNewDevice(port.name)
+										   : openExistingOutput(_outDevice);
+			port.in = _inDevice.empty() ? juce::MidiInput::createNewDevice(port.name, &m_collector)
+										 : openExistingInput(_inDevice);
 			if(!port.out || !port.in)
 				m_virtual = false;
 			if(port.in)
@@ -52,9 +65,23 @@ namespace g1app
 				m_collector.add(static_cast<int>(m_ports.size()) - 1, port.in.get());
 				port.in->start();
 			}
-			if(!port.out || !port.in)
-				m_virtual = false;
 			return static_cast<int>(m_ports.size()) - 1;
+		}
+
+		// The system's MIDI devices, for a Settings view to list as manual-pairing choices.
+		static std::vector<std::string> availableOutputs()
+		{
+			std::vector<std::string> names;
+			for(const auto& d : juce::MidiOutput::getAvailableDevices())
+				names.push_back(d.name.toStdString());
+			return names;
+		}
+		static std::vector<std::string> availableInputs()
+		{
+			std::vector<std::string> names;
+			for(const auto& d : juce::MidiInput::getAvailableDevices())
+				names.push_back(d.name.toStdString());
+			return names;
 		}
 
 		// Collects everything that has arrived, split by port.
@@ -99,6 +126,25 @@ namespace g1app
 		}
 
 	private:
+		// Opens an existing system MIDI device by name for the manual-pairing patch. Matches by
+		// name rather than by identifier: identifiers are not guaranteed stable across restarts or
+		// reboots, while a loopback driver's port names are what the user actually picked and typed
+		// into the editor too.
+		static std::unique_ptr<juce::MidiOutput> openExistingOutput(const std::string& _name)
+		{
+			for(const auto& d : juce::MidiOutput::getAvailableDevices())
+				if(d.name.toStdString() == _name)
+					return juce::MidiOutput::openDevice(d.identifier);
+			return nullptr;
+		}
+		std::unique_ptr<juce::MidiInput> openExistingInput(const std::string& _name)
+		{
+			for(const auto& d : juce::MidiInput::getAvailableDevices())
+				if(d.name.toStdString() == _name)
+					return juce::MidiInput::openDevice(d.identifier, &m_collector);
+			return nullptr;
+		}
+
 		// How many bytes the message starting at _at occupies, or 0 if _b does not yet hold all
 		// of it -- the caller then waits for the rest instead of sending a truncated message.
 		// Running status does not appear on the G1's ports: the OS always sends a status byte.

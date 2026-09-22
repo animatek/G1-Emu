@@ -5,7 +5,7 @@
 // Without a ROM argument it looks for one: the settings file first, then the ROM folders
 // (romfinder.h). With none anywhere it says what to put where and offers to open the folder or to
 // pick a file, and starts as soon as it has one. The flash works like g1run (default
-// ~/.local/share/Animatek/G1-Emu/flash.bin). Everything else (MIDI, JACK audio, G1_* variables) is
+// the per-user G1-Emu data directory). Everything else (MIDI, JACK audio, G1_* variables) is
 // the same as in g1run: EmuHost does it. What the window lets the user choose is in the settings
 // window (Settings.h), the notice included.
 

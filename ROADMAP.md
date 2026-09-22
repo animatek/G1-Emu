@@ -45,23 +45,23 @@ addressed before multi-instance use.
    now is in the modules or the OS, not in the transport.
 4. **Compare the level with a real G1**: record the same OscA → 2Output at full master volume and
    see whether the hardware is louder (analog stage).
-5. **macOS and Windows.** **The backend is done and the CI is up**; what is left is running it on
-   the two machines nobody here has. `-DG1_BACKEND=juce` builds audio and MIDI on JUCE and is the
+5. **macOS and Windows.** **The backend is done, the CI is up and both have run on real
+   machines.** `-DG1_BACKEND=juce` builds audio and MIDI on JUCE and is the
    default off Linux, `audiobridge.h` is shared with the native path, and
    `.github/workflows/build.yml` builds Linux both ways, Linux arm64, macOS and Windows on every
-   push. The JUCE backend was checked **on Linux**, where JUCE uses ALSA and can create virtual ports just as
+   push. The JUCE backend was first checked **on Linux**, where JUCE uses ALSA and can create virtual ports just as
    macOS and Windows do: it opens the card with four outputs, publishes `G1-Emu PC Port` and
    `G1-Emu MIDI`, takes a patch over the PC Port, answers the editor and sounds. That is the whole
-   path, so what remains for the other two is the parts only their own systems can tell us:
+   path. Real-machine tests have now covered those system-specific parts:
 
    - **macOS: the illegal instruction on Apple Silicon has a cause and a fix.** It was not the
      G1's `FV` extension: the core closes a loop body with `tst lc, maxDoIterations - 1`, G1-Emu
      runs one iteration per block, and a mask of zero is not an encodable AArch64 logical
      immediate, so asmjit refused the instruction and the block was left unfinished (`NOTES.md`,
      "The DSP JIT on ARM"). The overlay emits an unconditional jump there, and [CI run 35570337853](https://github.com/animatek/G1-Emu/actions/runs/35570337853) is
-     green on all five jobs with the test gating each one, the new `Linux arm64` included. What
-     remains is trying CoreAudio, CoreMIDI and the virtual ports in an editor and a DAW on a real
-     Mac.
+     green on all five jobs with the test gating each one, the new `Linux arm64` included.
+     Javier has now also run the macOS application and confirmed the CoreAudio/CoreMIDI path with
+     the editor on a real Mac.
    - **Windows: tried on a real Windows 11 machine, and blocked by a Microsoft bug, not ours.**
      The native build runs (audio opens over WASAPI, the DSP test passes), and an opt-in
      `G1_WINDOWS_MIDI_SERVICES` backend (`app/windowsmidi.cpp`, gated behind the preview SDK,
@@ -69,11 +69,13 @@ addressed before multi-instance use.
      machine's build — Windows 11 25H2, build 26200.9457, in-box MIDI component 26100.8875 — the
      owned endpoint is never projected as MIDI 1.0 ports, and teardown leaves the shared MIDI
      service stuck. That matches Microsoft/MIDI issue #1047, fixed only in the November 2026
-     Windows release: nothing left to fix here until that update ships. Meanwhile the decision
-     changed from the loopMIDI fallback first sketched below: **G1-Emu must publish owned ports
-     like the hardware does**, so the standalone does not fall back to loopback cables or
-     physical devices — it just says plainly that it could not make its own ports
-     (`docs/next-steps.md`).
+     Windows release: nothing left to fix here until that update ships. The default is still
+     that G1-Emu publishes owned ports like the hardware does, with no silent fallback
+     (`docs/next-steps.md`); but with the fix two months out, Settings now also has an opt-in
+     manual MIDI device pairing patch (`docs/windows-build.md`, "Manual MIDI device pairing"),
+     picking up the loopMIDI fallback first sketched below after all, until Windows MIDI
+     Services can own ports on its own. Verified working end to end on this machine with separate
+     `G1→NME` and `NME→G1` loopMIDI ports and Animatek NME completing its handshake.
    - Both: a signed/notarised bundle, which is its own job and not this one.
 
    **The audio is the easy half.** JUCE 8 carries every backend we need and we already have them

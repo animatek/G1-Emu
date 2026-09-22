@@ -8,8 +8,9 @@
 // at their defaults. The G1_* environment variables still win over both, so scripts and the test
 // bench keep working: G1_AUDIO (jack, alsa, an ALSA device or no), G1_GAIN_DB (+36 by default),
 // G1_JACK_CONNECT=0, G1_RAWMIDI (the ID of the snd-virmidi card to take over, G1Emu by default;
-// 0 disables it), G1_RECORD=seconds (4-channel WAV next to the flash). G1_THREADS and G1_INTERP
-// are debugging knobs of the emulator core and stay environment-only.
+// 0 disables it), G1_RECORD=seconds (4-channel WAV next to the flash), G1_PCPORT_OUT/G1_PCPORT_IN/
+// G1_MIDI_OUT/G1_MIDI_IN (manual MIDI device names, see Options::pcPortOutDevice). G1_THREADS and
+// G1_INTERP are debugging knobs of the emulator core and stay environment-only.
 
 #include "g1Lib/g1mc.h"
 
@@ -52,6 +53,15 @@ namespace g1app
 			std::string rawMidiCard = "G1";		// the raw MIDI card to take over (empty: none)
 			std::string rom;					// the ROM to use; empty: look for one (romfinder.h)
 			bool showDisclaimer = false;		// the notice at startup; the window can turn it back on
+
+			// Manual MIDI device pairing (JUCE backend only): the name of an existing system MIDI
+			// device to open instead of creating an owned port, one per direction. Empty means try
+			// to create an owned port as usual. This is the patch for Windows while Windows MIDI
+			// Services cannot own ports (Microsoft/MIDI issue #1047, docs/windows-build.md): point
+			// these at a loopback driver's ports (e.g. loopMIDI) and point the editor at the same
+			// names. Ignored on the native (ALSA) backend, which always owns real sequencer ports.
+			std::string pcPortOutDevice, pcPortInDevice;	// PC Port: the editor's side
+			std::string midiOutDevice, midiInDevice;		// MIDI: the DAW/keyboard's side
 
 			// The names used in the settings file and in the panel.
 			static const char* const audioNames[3];	// "jack", "alsa", "no"

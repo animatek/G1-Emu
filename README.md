@@ -10,11 +10,12 @@ system runs on an emulated Motorola 68331 and four emulated DSP56303s, and
 **Status: pre-alpha.** The OS boots, NME connects over the PC Port and uploads patches, and it
 sounds clean in real time: oscillators, filters, envelopes, clocks, effects (chorus, overdrive…),
 four outputs and two inputs. It has a window with the panel (display, knobs, buttons and LEDs).
-**Runs on Linux**; macOS and Windows build in CI through a JUCE audio and MIDI backend, and the
-DSP tests pass on all of them, Apple Silicon and Linux arm64 included. What nobody has done yet is
-run either on a real machine, which is what the test builds in
-[Releases](https://github.com/animatek/G1-Emu/releases) are for: unsigned, no ROM inside, and we
-want to hear what happens ([`docs/release-notes.md`](docs/release-notes.md)). Also missing:
+**Runs on Linux, macOS and Windows.** The three systems build in CI, and their DSP tests pass on
+x86-64 and arm64. The macOS and Windows applications have also been run on real machines and
+connected to Animatek NME; Windows currently uses two loopMIDI cables because of a Windows MIDI
+Services bug. See the [Windows first-run guide](WINDOWS.md). Builds in
+[Releases](https://github.com/animatek/G1-Emu/releases) are unsigned and contain no ROM
+([release notes](docs/release-notes.md)). Also missing:
 module-by-module testing, and the one panel key whose job is still unknown. The technical details are in [`NOTES.md`](NOTES.md), the plan in
 [`ROADMAP.md`](ROADMAP.md) and what changes in [`CHANGELOG.md`](CHANGELOG.md). Contributions are
 welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
@@ -112,9 +113,11 @@ want to hear about it.
   `Settings` shows which one is running and changes it. A file that is not the right ROM is told
   apart from a missing one, and the reason is given.
 - **Settings** (in the window): the ROM, audio driver and device, output level, whether outputs 1/2
-  connect themselves, the raw MIDI card, and the notice above. Saved in `~/.local/share/Animatek/G1-Emu/settings.conf`, which
-  the console reads too; the `G1_*` environment variables win over it.
-- The flash (installed OS and stored patches) is saved in `~/.local/share/Animatek/G1-Emu/flash.bin`.
+  connect themselves, the raw MIDI card, and the notice above. The console reads the same settings;
+  the `G1_*` environment variables win over them.
+- The flash (installed OS and stored patches) is saved beside it. On Windows both live in
+  `%APPDATA%\Animatek\G1-Emu`; on Linux and macOS the existing path is
+  `~/.local/share/Animatek/G1-Emu`.
 - The level is low because the OS itself caps the master volume at −36 dB; it is compensated with
   +36 dB (`G1_GAIN_DB`). More settings in [`CLAUDE.md`](CLAUDE.md).
 

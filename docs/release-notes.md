@@ -1,60 +1,73 @@
-# G1-Emu v0.1.0-alpha.3
+# G1-Emu v0.1.0-alpha.4
 
-**This is a pre-alpha test build.** Everything here compiles and passes the DSP tests on Linux
-(x86-64 and arm64), macOS and Windows in CI. This release also includes the fixes found during the
-first run on a real Mac: an Intel MacBook Pro with macOS 13.7.8 now opens CoreAudio, starts the
-window, publishes both CoreMIDI ports and connects to NME over the PC Port.
+**This is the first pre-release verified end to end on Linux, macOS and Windows.** The same tag is
+built and DSP-tested in CI on Linux x86-64 (native and JUCE backends), Linux arm64, macOS universal
+and Windows x86-64. The window, audio and Animatek NME handshake have now also been exercised on
+real macOS and Windows machines; macOS has additionally completed patch uploads.
 
-## What alpha.3 fixes
+## What alpha.4 adds
 
-- CoreAudio no longer hangs when the default input and output are two different devices, as they
-  are for the built-in microphone and output on Intel Macs. G1-Emu uses output only in that case.
-- `g1gui.sh` starts the executable inside the macOS `.app` bundle.
-- The JUCE MIDI backend keeps incomplete messages between calls. PC Port SysEx replies are no
-  longer sent early and truncated; NME's handshake now receives all 12 bytes and connects.
+- Windows can manually pair each half of the **PC Port** and regular **MIDI** port with an existing
+  system MIDI device. This is the practical bridge to loopMIDI while Microsoft issue #1047 blocks
+  G1-Emu's application-owned Windows MIDI endpoints.
+- The Windows ZIP includes `WINDOWS.md`, a complete first-run guide: install loopMIDI, create the
+  two directional cables, configure G1-Emu and NME, restart after device changes, upload a patch
+  and diagnose a timeout from the byte counters.
+- Windows settings and flash now use `%APPDATA%\Animatek\G1-Emu` instead of accidentally following
+  the process's working directory. Opening the same executable from Explorer and a terminal no
+  longer creates two unrelated configurations.
+- The Windows audio settings list the real JUCE device types and devices, including WASAPI,
+  DirectSound and installed ASIO drivers.
+- The JUCE MIDI backend preserves fragmented SysEx replies, so NME receives the complete handshake
+  and larger PC Port messages.
+
+## Windows quick start
+
+Read `WINDOWS.md` inside the ZIP for the complete step-by-step version. In short:
+
+1. Install and run [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html).
+2. Create `G1→NME` and `NME→G1`.
+3. In G1-Emu Settings choose **PC Port out = G1→NME** and
+   **PC Port in = NME→G1**, then restart G1-Emu.
+4. In Animatek NME choose **MIDI INPUT = G1→NME** and
+   **MIDI OUTPUT = NME→G1**, then press **Connect**.
+
+The two cables must remain separate. One shared loopback port can return a program's own output to
+its input and make the traffic counters misleading.
 
 ## It brings no ROM, and it never will
 
-G1-Emu emulates the hardware, not Clavia's software. You need a Nord Modular **rack** OS 3.03 ROM
-image of your own (512 KB). The program looks for one when it starts and tells you where to put
-it; the README explains the search order. Without a ROM it will not run, and that is by design.
+G1-Emu emulates the hardware, not Clavia's software. You need your own 512 KB ROM dump from a Nord
+Modular **rack** running OS 3.03. The program asks for it on first start. Do not distribute the ROM
+with G1-Emu or upload it to the project.
 
-**It also starts empty.** The ROM carries the operating system and nothing else, so every slot
-says `Empty patch`. To make a sound you need a patch, and to make a patch you need an **editor**
-talking to the emulator over the PC Port — any editor that speaks the G1's protocol.
+The emulated synth also starts with empty patch slots. Use a compatible editor, such as
+[Animatek NME](https://github.com/animatek/Animatek-NME), to create or upload a `.pch` patch over
+the PC Port.
 
 ## Nothing is signed
 
-- **macOS:** Gatekeeper will say the developer is unidentified. Right-click the app and choose
-  Open, or run `xattr -dr com.apple.quarantine G1-Emu.app`.
-- **Windows:** SmartScreen will warn. "More info" then "Run anyway".
+- **macOS:** Gatekeeper may say the developer is unidentified. Right-click the app and choose
+  **Open**, or run `xattr -dr com.apple.quarantine G1-Emu.app`.
+- **Windows:** SmartScreen may warn. Choose **More info**, verify that the file came from this
+  GitHub release, and choose **Run anyway**.
 
-Signing and notarisation are a job of their own and are not done yet.
+Signing and notarisation are not done yet.
 
-## What we expect on each system, and what to report
+## Platforms
 
-| | Audio | Virtual MIDI ports | Confidence |
+| System | Audio | Editor MIDI | Status |
 | --- | --- | --- | --- |
-| Linux | JACK/PipeWire or ALSA | ALSA sequencer | used daily |
-| macOS | CoreAudio | CoreMIDI, nothing to install | verified on Intel, macOS 13.7.8 |
-| Windows | WASAPI/ASIO | **only with Windows MIDI Services** | the real unknown |
+| Linux | JACK/PipeWire or ALSA | ALSA sequencer ports | used daily |
+| macOS 11+ | CoreAudio | CoreMIDI virtual ports | verified on real hardware |
+| Windows 11 | WASAPI/DirectSound/ASIO | two loopMIDI cables | verified on real hardware |
 
-**The macOS build is a universal binary (Apple Silicon and Intel) and needs macOS 11 Big Sur or
-newer.** The Intel half has been run on macOS 13.7.8 and connects to NME. Apple Silicon compiles
-and passes the DSP test in CI, but a report from a real Apple Silicon Mac is still welcome.
-
-On Windows, JUCE can only create a virtual port through Windows MIDI Services; with the older
-WinRT or WinMM backends it cannot, and the status line will say so plainly. If that happens the
-emulator still runs and makes sound, but no editor can reach it. Tell us what the status line
-says — that answer is worth as much to us as a success.
-
-Useful reports: whether the window opens, whether the audio device is found and sounds, whether an
-editor and a DAW see `G1-Emu PC Port` and `G1-Emu MIDI`, and whatever the status bar says.
-Open an issue with the system, its version, and the log the program prints at startup.
+The macOS package is universal (Apple Silicon and Intel). Windows' loopMIDI step is temporary:
+[Microsoft/MIDI issue #1047](https://github.com/microsoft/MIDI/issues/1047) is fixed upstream but
+awaiting the November 2026 Windows release.
 
 ## Files
 
-`G1-Emu` is the window with the panel; `g1run` is the same emulator in a console. The licence and
-the README travel inside each archive.
-
-GPLv3, because it links Gearmulator. The source of this build is the tag this release points at.
+`G1-Emu` / `G1-Emu.exe` is the panel application. `g1run` / `g1run.exe` is the console front end.
+Every archive contains the README and GPLv3 licence; the Windows ZIP also contains `WINDOWS.md`.
+The source of this build is the tag attached to the release.

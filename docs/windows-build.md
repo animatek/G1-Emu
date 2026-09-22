@@ -1,5 +1,8 @@
 # Building on Windows
 
+This is the developer build guide. People using a release should follow the packaged
+[`WINDOWS.md`](../WINDOWS.md) first-run guide instead.
+
 Use Visual Studio 2022 Build Tools with the C++ x64/x86 tools and a Windows SDK,
 CMake 3.22 or newer, Git, and JUCE 8.0.12. WSL is not required. The commands below
 run from the G1-Emu repository in PowerShell and keep dependencies and outputs in
@@ -36,9 +39,32 @@ Device changes apply after restarting the emulator. This is an application using
 the sound card's driver, not an installed virtual audio driver.
 
 The emulator must publish its own two MIDI ports, like the instrument it emulates.
-It does not open loopMIDI cables or physical MIDI devices as a fallback. A default
-Windows build reports that owned endpoints are unavailable; it must not silently
-change the device model.
+By default it still does not open loopMIDI cables or physical MIDI devices: a
+default Windows build reports that owned endpoints are unavailable and changes
+nothing silently. See "Manual MIDI device pairing" below for the opt-in patch.
+
+## Manual MIDI device pairing (patch until Windows MIDI Services can own ports)
+
+Owned ports need Windows MIDI Services, which is blocked by Microsoft/MIDI issue
+#1047 (see the next section) until the November 2026 Windows release. Until then,
+Settings has four MIDI device dropdowns -- PC Port out/in, MIDI out/in -- each
+defaulting to "Automatic (owned port)", which keeps the previous behaviour. Picking
+an existing system MIDI device for one instead opens that device rather than
+creating an owned port, and ordinary loopMIDI ports such as `G1→NME`/`NME→G1` (already
+running via `teVirtualMIDI` on this machine) are exactly the kind of device meant to
+go there.
+
+Each direction is independent, matching how the real G1's MIDI IN and OUT are
+separate DIN jacks: a single loopMIDI port name delivers to every other client that
+has it open for input, itself included, so pointing both PC Port out and PC Port in
+at the *same* loopMIDI port risks the emulator hearing its own output. Two loopMIDI
+ports per logical G1 port (one for G1-to-editor, one for editor-to-G1) avoid that,
+the way a real MIDI cable pair would. Point the editor at the matching pair.
+
+Also settable as environment variables, which win over Settings like every other
+G1_* one: `G1_PCPORT_OUT`, `G1_PCPORT_IN`, `G1_MIDI_OUT`, `G1_MIDI_IN`. Verified on
+this machine with the directional `G1→NME`/`NME→G1` pair: after restarting G1-Emu,
+Animatek NME completed its handshake and connected, confirming live two-way traffic.
 
 ## Experimental own MIDI ports (local development only)
 

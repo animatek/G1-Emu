@@ -34,7 +34,7 @@ The window (`app/gui`) shows the display, the 18 knobs and the master volume, th
 buttons and LEDs, a status bar with speed, emulator load and CPU cores, and a **Settings** button:
 the audio driver and device, the output level, whether outputs 1/2 connect themselves, which
 `snd-virmidi` card is taken over, and the notice about Clavia, ROMs and support, which is shown at
-startup only on the first run (no settings file yet) and lives in that window afterwards. It writes `~/.local/share/Animatek/G1-Emu/settings.conf`, a
+startup only on the first run (no settings file yet) and lives in that window afterwards. It writes `settings.conf` in the per-user G1-Emu data directory (`%APPDATA%/Animatek/G1-Emu` on Windows, `~/.local/share/Animatek/G1-Emu` elsewhere), a
 plain `key = value` file that `g1run` reads too. Order: defaults, then the file, then the `G1_*`
 variables, which always win so the scripts and the test bench keep working. Only the level applies
 while it plays; the rest, on the next start. JUCE comes from
@@ -47,7 +47,7 @@ takes over the card whose ID is `G1` by itself and links its first port to the M
 directions. That card is a USB MIDI gadget (`dummy_hcd` + `g_midi`, stock kernel modules), **not
 `snd-virmidi`**, which hard-codes sixteen subdevices per device and floods the DAW's list
 (`G1_RAWMIDI`, `docs/bitwig-midi.md`). The
-flash (OS + stored patches) lives in `~/.local/share/Animatek/G1-Emu/flash.bin`; if missing, it is
+flash (OS + stored patches) lives beside it as `flash.bin`; if missing, it is
 created with the factory OS from the ROM.
 
 Audio goes through JACK (pipewire-jack): client **G1-Emu** with `out_1..out_4` and `in_L`/`in_R`,

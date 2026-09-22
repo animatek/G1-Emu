@@ -3,8 +3,9 @@
 // The settings window: which ROM the G1 runs, which audio driver and device it uses, its output
 // level, whether its
 // outputs 1/2 connect themselves to the sound card, which snd-virmidi card it takes over for
-// programs that read raw MIDI devices (docs/bitwig-midi.md), and the notice about Clavia, ROMs
-// and support, which lives here instead of stopping every startup.
+// programs that read raw MIDI devices (docs/bitwig-midi.md), the manual MIDI device pairing used
+// as a patch on Windows while it cannot own ports (docs/windows-build.md), and the notice about
+// Clavia, ROMs and support, which lives here instead of stopping every startup.
 //
 // It writes EmuHost::Options to the settings file next to the flash, which the console front end
 // reads too. Only the level takes effect while it plays: everything else opens a driver, and the
@@ -50,6 +51,10 @@ namespace g1gui
 		juce::ComboBox m_device;
 		juce::StringArray m_audioDevices;
 		juce::Label m_midiInfo;
+		// The manual MIDI pairing patch (Windows, until Windows MIDI Services can own ports):
+		// pick an existing system device per direction instead of creating an owned port.
+		juce::Label m_pcOutLabel, m_pcInLabel, m_midiOutLabel, m_midiInLabel;
+		juce::ComboBox m_pcOutDevice, m_pcInDevice, m_midiOutDeviceBox, m_midiInDeviceBox;
 		juce::Slider m_gain;
 		juce::ToggleButton m_jackConnect{"Connect outputs 1/2 to the sound card"};
 		juce::ToggleButton m_rawEnabled{"Take over a card, so raw MIDI programs see the G1"};

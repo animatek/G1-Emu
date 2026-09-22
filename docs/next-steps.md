@@ -39,24 +39,25 @@ where it matters: [CI run 35570337853](https://github.com/animatek/G1-Emu/action
 **macOS** and Windows — with the DSP test gating every one of them, no `continue-on-error`
 anywhere.
 
-## 2. What only the real machines can say
+## 2. Done — real macOS and Windows runs (2026-09-22)
 
-CI proves it compiles. It cannot plug in a sound card. Both of these need somebody sitting at the
-machine, and both are quick once someone is:
+CI proves it compiles but cannot plug in a sound card. The missing real-machine checks are now
+complete:
 
-- **macOS:** that CoreAudio opens, that CoreMIDI publishes `G1-Emu PC Port` and `G1-Emu MIDI`, and
-  that an editor and a DAW see them. Every sign says they will — CoreMIDI creates virtual ports
-  natively with nothing to install — but nobody has looked.
-- **Windows:** the same, plus the one real unknown. JUCE only creates virtual MIDI ports through
+- **macOS:** Javier confirmed the application works on a real Mac, including its editor
+  connection through the CoreMIDI ports.
+- **Windows:** audio and the emulator run on the real Windows 11 machine. JUCE only creates owned virtual MIDI ports through
   **Windows MIDI Services**; with the older WinRT or WinMM backends `createNewDevice` returns
   nothing. `JUCE_USE_WINDOWS_MIDI_SERVICES` is **off by default**, needs a minimum Windows SDK,
   and JUCE's own comment says it only worked on a Canary insider build when it was written. That
-  comment may be stale. **Try it on a real Windows 11 before promising anything.**
+  comment is not useful on the affected Windows component: the owned endpoints do not appear.
 
 `JuceMidi::virtualPorts()` already reports whether the ports were created, and `EmuHost` puts it
-in the status line. G1-Emu must publish owned ports like the hardware; it deliberately does not
-open loopback cables or physical MIDI devices as a fallback. The Windows MIDI Services experiment
-is blocked on Microsoft issue #1047 in component 26100.8875, fixed for the November 2026 release.
+in the status line. G1-Emu still defaults to owned ports like the hardware, with no silent
+fallback. The Windows MIDI Services experiment is blocked on Microsoft issue #1047 in component
+26100.8875, fixed for the November 2026 release; until then, Settings' manual MIDI device pairing
+(`WINDOWS.md`) is the opt-in patch, verified end to end with separate `G1→NME` and `NME→G1`
+loopMIDI ports and Animatek NME completing its handshake.
 
 ---
 
@@ -98,8 +99,8 @@ yields something, and each finding improves NME for the real G1 and not just the
 
 ## 6. Signing and notarising
 
-Not started, and its own job. Without it macOS and Windows will refuse to open what we ship, so it
-has to happen before a release even if it happens last.
+Not started, and its own job. Unsigned pre-releases are usable after the operating-system warning,
+but signing and notarisation remain necessary for a polished stable release.
 
 ---
 

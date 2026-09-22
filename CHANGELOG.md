@@ -7,6 +7,45 @@ Older entries cite their commit by hand.
 
 ## 2026-09-22
 
+- **`v0.1.0-alpha.4` release preparation and stable Windows user data (Codex, requested and
+  real-machine tested by Javier).** Prepared the first pre-release
+  described as end-to-end verified on Linux, macOS and Windows after Javier confirmed the real
+  Mac run and completed the Animatek NME handshake on Windows. Added a packaged `WINDOWS.md` with
+  the exact two-cable loopMIDI setup (`G1→NME` and `NME→G1`), restart requirement, ROM/audio/
+  patch steps and counter-based timeout diagnosis; rewrote the release notes for alpha.4 and
+  updated the README, roadmap and handover to match the real platform status. Windows now stores
+  settings and flash in `%APPDATA%\Animatek\G1-Emu` instead of a working-directory-relative
+  `.local` tree, so Explorer and terminal launches share one configuration. The Windows CI
+  package now includes the guide. Verification: Javier's live Windows test connected NME through
+  the two directional ports; a clean local Windows Release build completed with the NMake
+  generator, `g1dspcheck` passed (1/1), the rebuilt executable enumerated both directional ports,
+  and `git diff --check` passed. Tagged cross-platform CI is the publication gate.
+
+- **Manual MIDI device pairing, the loopMIDI patch for Windows (Claude Sonnet 5, requested by
+  Javier).** Windows MIDI Services still cannot own ports here (Microsoft/MIDI issue #1047,
+  fixed only in the November 2026 Windows release), and Javier already had loopMIDI running
+  with `G1-PC Port`/`G1 MIDI` ports and AnimatekNME pointed at them, but nothing on the G1-Emu
+  side was using them yet. Added four `EmuHost::Options` fields (`pcPortOutDevice`,
+  `pcPortInDevice`, `midiOutDevice`, `midiInDevice`; matching `G1_PCPORT_OUT`/`G1_PCPORT_IN`/
+  `G1_MIDI_OUT`/`G1_MIDI_IN` environment overrides), persisted in the settings file like every
+  other option. Empty (the default) keeps the existing owned-port behaviour unchanged on every
+  platform. `JuceMidi::addPort` can now open an existing system MIDI device by name instead of
+  creating one, and exposes `availableOutputs()`/`availableInputs()`. Settings (Windows, plain
+  JUCE backend only, not the experimental Windows MIDI Services one) grew four device dropdowns
+  -- PC Port out/in, MIDI out/in -- defaulting to "Automatic (owned port)", with the window
+  height and layout adjusted to fit them and the stale "This build needs external MIDI cables"
+  message replaced with one naming the Microsoft issue and the patch. Documented in
+  `docs/windows-build.md` ("Manual MIDI device pairing") that each direction is independent and
+  wants its own loopMIDI port, the way a real MIDI cable pair would, since pointing both halves
+  of one logical G1 port at the same loopMIDI port risks the emulator hearing its own output.
+  Updated `ROADMAP.md` and `docs/next-steps.md`, which had recorded the opposite decision
+  (owned ports only, no loopback fallback) two days ago; that stance stands as the default, this
+  is the temporary patch on top of it. Verification: full `build-windows` Release build and
+  `ctest -C Release -L g1` (1/1) still pass. The initial same-port counter check was only a smoke
+  test and could include loopback traffic; the conclusive live test used separate `G1→NME` and
+  `NME→G1` ports, restarted G1-Emu after selecting them, and Animatek NME then completed the
+  handshake and connected.
+
 - **Windows audio UI and experimental owned MIDI ports (Codex, requested by Javier).**
   Enabled ASIO in Windows builds, separated driver and
   device selection, removed Linux-only settings from the JUCE view, and fixed garbled

@@ -6,7 +6,7 @@
 //         the settings file is used, and failing that the ROM folders are searched (romfinder.h);
 //         when none of them has one, the message says where to put it.
 // FLASH = where the 1 MB flash is saved (installed OS + stored patches). Default
-//         ~/.local/share/Animatek/G1-Emu/flash.bin. If missing, it is created with the
+//         the per-user G1-Emu data directory (see EmuHost::defaultFlashPath). If missing, it is created with the
 //         factory OS from the ROM, like a freshly updated G1.
 //
 // Creates the ALSA client "G1-Emu" with two ports, like the hardware:

@@ -138,7 +138,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item build/app/Release/g1run.exe package/
           Copy-Item build/app/gui/g1gui_artefacts/Release/G1-Emu.exe package/
-          Copy-Item G1-Emu/README.md, G1-Emu/LICENSE package/
+          Copy-Item G1-Emu/README.md, G1-Emu/WINDOWS.md, G1-Emu/LICENSE package/
 
       - uses: actions/upload-artifact@v4
         with:
