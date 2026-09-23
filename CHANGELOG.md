@@ -5,6 +5,38 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-09-22
+
+- **Windows reached at last: MIDI works without Windows MIDI Services, and the settings window
+  picks the cables (Mizu, with Thor testing on the real machine).** Three changes:
+  - **MIDI fallback to real cables.** When `MidiInput/Output::createNewDevice` returns nothing
+    (every Windows before MIDI Services, which JUCE only reaches through
+    `JUCE_USE_WINDOWS_MIDI_SERVICES`), `JuceMidi` no longer leaves the G1 unreachable: each port
+    falls back to a *cable* — a device with the same name on the input and the output side
+    (loopMIDI's cables are exactly that) — opened **in both directions on the same cable**, so
+    the editor's requests come in and the G1's replies go out through the one cable a handshake
+    needs. Measured first: a cable does not echo back to the process writing to it, so opening
+    both directions of one cable is safe. `G1_MIDI_DEVICES="PC Port cable,MIDI cable"` fixes the
+    ports to cables by name; empty entries mean "first free cable". The status line now names
+    the device each port took ("G1-Emu PC Port -> loopMIDI Port") instead of the old dead-end
+    sentence. Verified live: the G1's PC Port handshake byte counts moved from `in/out 0/21`
+    (sent, nobody listening) to `in/out 39/39` — two-way traffic with the editor side.
+  - **The settings window picks the cables.** A new MIDI section offers PC Port and MIDI as
+    combo boxes listing every cable the system has plus "Auto (first free cable)"; the choice
+    goes to the settings file (`midiDevices = <PC>,<MIDI>`) and applies on the next start, the
+    same as the other settings. `G1_MIDI_DEVICES` still wins over the file, as before.
+  - **The home folder on Windows.** `romfinder` and `EmuHost::defaultFlashPath` fell back to
+    `.` when `HOME` was unset — which on Windows is *always*, for anything started from
+    Explorer, a DAW or the start menu — so the ROM folder was announced as the relative
+    `./Documents\Animatek\G1-Emu
+oms`, a path that exists for nobody. They now fall back to
+    `%USERPROFILE%` (`homeFolder()` in romfinder.h). Verified by running `g1run` with `HOME`
+    removed from the environment: before, no ROM found and the relative path in the message;
+    after, the ROM in `C:\Users\...\Documents\Animatek\G1-Emu
+oms` is found and the emulator
+    runs. Both front ends rebuilt on Windows (`g1run.exe`, `G1-Emu.exe`) with JUCE 8.0.12 and
+    the gearmulator core; standalone verified end-to-end on Thor's machine.
+
 ## 2026-09-21
 
 - **`v0.1.0-alpha.3` published with the fixes proven on the first real Mac run (Codex, asked for

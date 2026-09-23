@@ -45,6 +45,7 @@ namespace g1app
 			float gainDb = 36.0f;				// undoes the -36 dB cap the OS puts on the master volume
 			bool jackConnect = true;			// out_1/out_2 connect themselves to the sound card
 			std::string rawMidiCard = "G1";		// the raw MIDI card to take over (empty: none)
+			std::string midiDevices;			// the MIDI cables to bind PC Port and MIDI to (JUCE backend, empty: first free)
 			std::string rom;					// the ROM to use; empty: look for one (romfinder.h)
 			bool showDisclaimer = false;		// the notice at startup; the window can turn it back on
 

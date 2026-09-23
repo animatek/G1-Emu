@@ -35,6 +35,10 @@ namespace g1app
 	// called "Documents" in every language). This is the one the user is told about.
 	std::string publicRomFolder();
 
+	// The user's home folder: $HOME, or on Windows where that variable does not exist,
+	// %USERPROFILE%. "." is the last resort, as it always was.
+	std::string homeFolder();
+
 	// Every folder searched, in order, whether or not it exists. For the "put it here" message.
 	std::vector<std::string> romFolders();
 

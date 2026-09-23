@@ -106,8 +106,9 @@ namespace g1app
 
 	std::string EmuHost::defaultFlashPath()
 	{
-		const char* home = std::getenv("HOME");
-		return std::string(home ? home : ".") + "/.local/share/Animatek/G1-Emu/flash.bin";
+		// The same home() logic as the ROM finder: %USERPROFILE% on Windows, where HOME is
+		// not set for programs started from Explorer, a DAW or the start menu.
+		return g1app::homeFolder() + "/.local/share/Animatek/G1-Emu/flash.bin";
 	}
 
 	std::string EmuHost::defaultSettingsPath()
@@ -134,10 +135,11 @@ namespace g1app
 			};
 			const auto key = trim(line.substr(0, eq));
 			const auto value = trim(line.substr(eq + 1));
-			if(key == "audio")				audio = value;
+			if(key == "audio")			audio = value;
 			else if(key == "gainDb")		gainDb = static_cast<float>(std::atof(value.c_str()));
 			else if(key == "jackConnect")	jackConnect = value != "0";
 			else if(key == "rawMidiCard")	rawMidiCard = value;
+			else if(key == "midiDevices")	midiDevices = value;
 			else if(key == "rom")			rom = value;
 			else if(key == "showDisclaimer") showDisclaimer = value != "0";
 		}
@@ -156,6 +158,7 @@ namespace g1app
 		  << "gainDb = " << gainDb << "\n"
 		  << "jackConnect = " << (jackConnect ? 1 : 0) << "\n"
 		  << "rawMidiCard = " << rawMidiCard << "\n"
+		  << "midiDevices = " << midiDevices << "\n"
 		  << "rom = " << rom << "\n"
 		  << "showDisclaimer = " << (showDisclaimer ? 1 : 0) << "\n";
 		return f.good();
@@ -177,6 +180,8 @@ namespace g1app
 			m_options.jackConnect = std::string(v) != "0";
 		if(const char* v = std::getenv("G1_RAWMIDI"))
 			m_options.rawMidiCard = std::string(v) == "0" ? "" : v;
+		if(const char* v = std::getenv("G1_MIDI_DEVICES"))
+			m_options.midiDevices = v;
 
 		// The ROM. G1-Emu ships none, so not finding one is the normal first run, not a crash:
 		// the message has to say what to put where, and what was wrong with what is already there.
@@ -222,7 +227,7 @@ namespace g1app
 			_log += "new flash with the factory OS (will be saved in " + m_flashPath + ")\n";
 		}
 
-		m_midi = std::make_unique<Midi>("G1-Emu");
+		m_midi = std::make_unique<Midi>("G1-Emu", m_options.midiDevices);
 		if(!m_midi->valid())
 		{
 			_log += "cannot open the ALSA sequencer\n";
@@ -234,14 +239,25 @@ namespace g1app
 		if(m_midi->virtualPorts())
 			m_stats.midi = "G1-Emu PC Port (editor) and G1-Emu MIDI";
 		else
-			// Nothing was created, and nothing real was opened either: no editor can reach the G1.
-			// Saying which system refused, and what the way round it is, saves the user the hunt.
-#ifdef _WIN32
-			m_stats.midi = "no virtual MIDI ports: Windows only makes them through Windows MIDI "
-				"Services, so no editor can reach the G1 yet (loopMIDI is the usual way round it)";
-#else
-			m_stats.midi = "no virtual MIDI ports on this system: no editor can reach the G1";
-#endif
+		{
+			// The system would not make virtual ports (Windows needs its new MIDI Services
+			// for that, which JUCE only reaches through JUCE_USE_WINDOWS_MIDI_SERVICES), so
+			// the ports fell back to real MIDI devices and describe() says which one each
+			// took: with loopMIDI installed that is "G1-Emu PC Port -> loopMIDI Port", and
+			// the editor connects to the other end of that same cable. Only when no real
+			// device was there either does the G1 stay unreachable, and then the line says
+			// so and names the way round it.
+			m_stats.midi = m_midi->describe();
+			for(const auto& d : m_midi->devices())
+			{
+				if(d.empty())
+				{
+					m_stats.midi += " -- no MIDI device for one port: nothing reaches the G1"
+						" through it; a virtual cable (loopMIDI on Windows) is the way round it";
+					break;
+				}
+			}
+		}
 #else
 		m_stats.midi = "G1-Emu:PC Port (editor) and G1-Emu:MIDI, client " + std::to_string(m_midi->clientId());
 #endif
