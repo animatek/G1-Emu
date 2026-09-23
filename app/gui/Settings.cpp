@@ -10,7 +10,7 @@ namespace g1gui
 {
 	namespace
 	{
-		constexpr int g_width = 560, g_height = 900;
+		constexpr int g_width = 560, g_height = 960;
 		constexpr int g_labelW = 150, g_rowH = 28, g_gap = 10, g_margin = 18;
 
 		// The window holding one SettingsView. There is at most one, kept here so a second
@@ -133,40 +133,50 @@ namespace g1gui
 		m_rawCard.onReturnKey = [this] { apply(); };
 		addAndMakeVisible(m_rawCard);
 
-		// The MIDI cables the JUCE backend can fall back to when the system makes no virtual
-		// ports (Windows). "Auto" takes the first free cable; naming one fixes the port to
-		// that cable, which is what an editor setup wants. The choice goes to the settings
-		// file as midiDevices = <PC Port cable>,<MIDI cable> and applies on the next start.
+		// The four MIDI bindings of the JUCE backend, for the systems that make no virtual
+		// ports (Windows): each side of each port gets its own device, chosen from the full
+		// system list, and "None" binds nothing — the same as leaving a DIN socket empty on
+		// the hardware. This is what a loopMIDI setup needs: the editor's out goes to PC
+		// Port in, PC Port out goes to the editor's in, each through its own cable, so the
+		// two directions never meet. The choice is saved as midiDevices = <PC in>,<PC out>,
+		// <MIDI in>,<MIDI out> and applies on the next start, like the other settings.
 #ifdef G1_BACKEND_JUCE
-		label(m_midiLabel, "PC Port");
-		label(m_midiPortsLabel, "MIDI");
-		auto fillCables = [](juce::ComboBox& _box, const juce::String& _selected)
+		auto fillDevices = [](juce::ComboBox& _box, const bool _inputs, const juce::String& _selected)
 		{
-			_box.addItem("Auto (first free cable)", 1);
+			_box.addItem("None", 1);
 			auto id = 2;
-			for(const auto& cable : g1app::JuceMidi::cables())
+			for(const auto& device : g1app::JuceMidi::devices(_inputs))
 			{
-				_box.addItem(juce::String(cable), id);
-				if(juce::String(cable) == _selected)
+				_box.addItem(juce::String(device), id);
+				if(juce::String(device) == _selected)
 					_box.setSelectedId(id, juce::dontSendNotification);
 				++id;
 			}
 			if(_box.getSelectedId() == 0)
 				_box.setSelectedId(1, juce::dontSendNotification);
 		};
-		// midiDevices is "<PC Port cable>,<MIDI cable>"; empty entries mean Auto.
+		// midiDevices is "<PC in>,<PC out>,<MIDI in>,<MIDI out>"; empty entries mean None.
 		juce::StringArray parts;
 		parts.addTokens(juce::String(o.midiDevices), ",", "");
-		while(parts.size() < 2)
+		while(parts.size() < 4)
 			parts.add("");
-		fillCables(m_pcCable, parts[0].trim());
-		fillCables(m_midiCable, parts[1].trim());
-		m_pcCable.setTooltip("Where the editor talks to the G1, when virtual ports cannot be made (loopMIDI on Windows)");
-		m_midiCable.setTooltip("The notes and controllers port, when virtual ports cannot be made");
-		m_pcCable.onChange = [this] { apply(); };
-		m_midiCable.onChange = [this] { apply(); };
-		addAndMakeVisible(m_pcCable);
-		addAndMakeVisible(m_midiCable);
+		label(m_pcInLabel, "PC Port in");
+		label(m_pcOutLabel, "PC Port out");
+		label(m_midiInLabel, "MIDI in");
+		label(m_midiOutLabel, "MIDI out");
+		fillDevices(m_pcIn, true, parts[0].trim());
+		fillDevices(m_pcOut, false, parts[1].trim());
+		fillDevices(m_midiIn, true, parts[2].trim());
+		fillDevices(m_midiOut, false, parts[3].trim());
+		m_pcIn.setTooltip("Where the editor's messages come FROM (e.g. the loopMIDI cable the editor sends on)");
+		m_pcOut.setTooltip("Where the G1's editor replies go TO (e.g. the loopMIDI cable the editor listens on)");
+		m_midiIn.setTooltip("Where notes and controllers come from (keyboard, sequencer)");
+		m_midiOut.setTooltip("Where the G1's MIDI out goes (rarely used)");
+		for(auto* box : {&m_pcIn, &m_pcOut, &m_midiIn, &m_midiOut})
+		{
+			box->onChange = [this] { apply(); };
+			addAndMakeVisible(*box);
+		}
 #endif
 
 		// The notice used to stop every startup. It lives here now, readable at any time.
@@ -261,12 +271,15 @@ namespace g1gui
 		o.rawMidiCard = m_rawEnabled.getToggleState() ? m_rawCard.getText().trim().toStdString() : std::string();
 		o.showDisclaimer = m_disclaimer.getToggleState();
 #ifdef G1_BACKEND_JUCE
-		// Both ports fall back to cables when virtual ports cannot be made: "<PC Port
-		// cable>,<MIDI cable>", either side may be empty for Auto (first free cable).
+		// The four MIDI bindings: "<PC in>,<PC out>,<MIDI in>,<MIDI out>", an empty entry
+		// (None in the combo boxes) binding nothing on that side.
 		{
-			juce::String pc = m_pcCable.getSelectedId() == 1 ? juce::String() : m_pcCable.getText();
-			juce::String midi = m_midiCable.getSelectedId() == 1 ? juce::String() : m_midiCable.getText();
-			o.midiDevices = (pc + "," + midi).toStdString();
+			const auto pick = [](const juce::ComboBox& _box) -> juce::String
+			{
+				return _box.getSelectedId() == 1 ? juce::String() : _box.getText();
+			};
+			o.midiDevices = (pick(m_pcIn) + "," + pick(m_pcOut) + ","
+				+ pick(m_midiIn) + "," + pick(m_midiOut)).toStdString();
 		}
 #endif
 		o.save(g1app::EmuHost::defaultSettingsPath());
@@ -289,7 +302,7 @@ namespace g1gui
 	{
 		_g.fillAll(juce::Colour(0xff1c1c20));
 		_g.setColour(juce::Colour(0xff35353c));
-		for(const float y : {100.0f, 286.0f, 400.0f, 486.0f, 686.0f})
+		for(const float y : {100.0f, 286.0f, 400.0f, 486.0f, 742.0f})
 			_g.drawLine(static_cast<float>(g_margin), y, static_cast<float>(g_width - g_margin), y);
 		_g.setColour(juce::Colours::white);
 		_g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
@@ -298,7 +311,7 @@ namespace g1gui
 		_g.drawText("Raw MIDI", g_margin, 294, 200, 20, juce::Justification::centredLeft);
 		_g.drawText("MIDI", g_margin, 394, 200, 20, juce::Justification::centredLeft);
 		_g.drawText("Notice", g_margin, 494, 200, 20, juce::Justification::centredLeft);
-		_g.drawText("In use now", g_margin, 694, 200, 20, juce::Justification::centredLeft);
+		_g.drawText("In use now", g_margin, 750, 200, 20, juce::Justification::centredLeft);
 	}
 
 	void SettingsView::resized()
@@ -325,18 +338,20 @@ namespace g1gui
 		y += g_rowH + g_gap;
 		row(m_rawLabel, m_rawCard, 160);
 
-		// MIDI: the fallback cables for the two ports, JUCE backend only.
+		// MIDI: the four bindings, JUCE backend only.
 		y += g_rowH + 6;
 #ifdef G1_BACKEND_JUCE
-		row(m_midiLabel, m_pcCable, 220);
-		row(m_midiPortsLabel, m_midiCable, 220);
+		row(m_pcInLabel, m_pcIn, 220);
+		row(m_pcOutLabel, m_pcOut, 220);
+		row(m_midiInLabel, m_midiIn, 220);
+		row(m_midiOutLabel, m_midiOut, 220);
 #endif
 
-		m_disclaimer.setBounds(g_margin, 500, g_width - g_margin * 2, g_rowH);
-		m_notice.setBounds(g_margin, 500 + g_rowH + 4, g_width - g_margin * 2, 124);
+		m_disclaimer.setBounds(g_margin, 556, g_width - g_margin * 2, g_rowH);
+		m_notice.setBounds(g_margin, 556 + g_rowH + 4, g_width - g_margin * 2, 124);
 
-		m_running.setBounds(g_margin, 700, g_width - g_margin * 2, 52);
-		m_note.setBounds(g_margin, 772, g_width - g_margin * 2 - 110, 52);
-		m_close.setBounds(g_width - g_margin - 90, 796, 90, 26);
+		m_running.setBounds(g_margin, 756, g_width - g_margin * 2, 52);
+		m_note.setBounds(g_margin, 828, g_width - g_margin * 2 - 110, 52);
+		m_close.setBounds(g_width - g_margin - 90, 852, 90, 26);
 	}
 }

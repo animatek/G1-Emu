@@ -42,12 +42,12 @@ namespace g1gui
 		g1app::EmuHost& m_host;
 
 		juce::Label m_romLabel, m_audioLabel, m_deviceLabel, m_gainLabel, m_rawLabel;
-		juce::Label m_midiLabel, m_midiPortsLabel;
+		juce::Label m_midiSectionLabel, m_pcInLabel, m_pcOutLabel, m_midiInLabel, m_midiOutLabel;
 		juce::Label m_romPath;
 		juce::TextButton m_romChoose{"Choose..."}, m_romFolder{"Open the ROM folder"};
 		std::unique_ptr<juce::FileChooser> m_chooser;
 		juce::ComboBox m_audio;
-		juce::ComboBox m_pcCable, m_midiCable;
+		juce::ComboBox m_pcIn, m_pcOut, m_midiIn, m_midiOut;
 		juce::TextEditor m_device;
 		juce::Slider m_gain;
 		juce::ToggleButton m_jackConnect{"Connect outputs 1/2 to the sound card"};

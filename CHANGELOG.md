@@ -7,6 +7,26 @@ Older entries cite their commit by hand.
 
 ## 2026-09-22
 
+- **MIDI bindings reworked: four independent choices, nothing is ever bound by default
+  (Mizu, after Thor's live testing showed the "Auto" fallback was the wrong architecture).**
+  The first fallback bound each port to one cable (same name for its input and output sides):
+  on a loopMIDI cable that is a loop back into the same program — the G1's own output came
+  back in as its input (PC Port in/out 39/39 with no editor running), and any editor
+  connecting the same way would have fought the echo. A cable is two ends, and which end
+  belongs to whom is the *user's* wiring decision, not the program's. Now each side of each
+  port is its own setting: **PC Port in, PC Port out, MIDI in, MIDI out** (`midiDevices` in
+  the settings file, `G1_MIDI_DEVICES` still wins), each chosen from the full system device
+  list — hardware ports under their own names ("UMC1820 MIDI In" and "UMC1820 MIDI Out" are
+  two entries) — and an empty entry binds *nothing*, like leaving a DIN socket empty. There
+  is no Auto and no guessing: a fresh setup opens no MIDI device at all. The status line
+  names all four ("G1-Emu PC Port in: loopMIDI Port 2, out: loopMIDI Port 1, MIDI in: -,
+  out: -") and only says "pick them in settings" when all four are empty. `JuceMidi::devices
+  (_inputs)` replaces `cables()`; the ALSA backend's constructor takes and ignores the
+  bindings string so the shared interface stays. Verified on the real machine: with no
+  bindings, PC Port in/out stays 0/0 (no echo); a JUCE enumeration probe and WinMM agree
+  on the system's device list (loopMIDI gone after it was killed, UMC1820 MIDI present when
+  the interface is connected).
+
 - **Windows reached at last: MIDI works without Windows MIDI Services, and the settings window
   picks the cables (Mizu, with Thor testing on the real machine).** Three changes:
   - **MIDI fallback to real cables.** When `MidiInput/Output::createNewDevice` returns nothing

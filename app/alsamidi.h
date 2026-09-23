@@ -19,7 +19,9 @@ namespace g1app
 	class AlsaMidi
 	{
 	public:
-		explicit AlsaMidi(const char* _clientName)
+		// The second parameter is the JUCE backend's bindings string; the ALSA sequencer
+		// makes its own virtual ports and has no use for it, but the interface is shared.
+		explicit AlsaMidi(const char* _clientName, const std::string& = {})
 		{
 			if(snd_seq_open(&m_seq, "default", SND_SEQ_OPEN_DUPLEX, SND_SEQ_NONBLOCK) < 0)
 			{

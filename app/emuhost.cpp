@@ -242,21 +242,16 @@ namespace g1app
 		{
 			// The system would not make virtual ports (Windows needs its new MIDI Services
 			// for that, which JUCE only reaches through JUCE_USE_WINDOWS_MIDI_SERVICES), so
-			// the ports fell back to real MIDI devices and describe() says which one each
-			// took: with loopMIDI installed that is "G1-Emu PC Port -> loopMIDI Port", and
-			// the editor connects to the other end of that same cable. Only when no real
-			// device was there either does the G1 stay unreachable, and then the line says
-			// so and names the way round it.
+			// the ports are real MIDI devices the user chose, one per side, and describe()
+			// says which: "G1-Emu PC Port in: loopMIDI Port 2, out: loopMIDI Port 1, ...".
+			// Sides bound to nothing are the user's choice too — like an empty DIN socket —
+			// and show as "-", with a hint at the settings window only when ALL four are
+			// empty, which is the one case where no editor can possibly reach the G1.
 			m_stats.midi = m_midi->describe();
-			for(const auto& d : m_midi->devices())
-			{
-				if(d.empty())
-				{
-					m_stats.midi += " -- no MIDI device for one port: nothing reaches the G1"
-						" through it; a virtual cable (loopMIDI on Windows) is the way round it";
-					break;
-				}
-			}
+			const auto& bound = m_midi->devices();
+			if(std::all_of(bound.begin(), bound.end(), [](const std::string& _s) { return _s.empty(); }))
+				m_stats.midi += " -- no MIDI device bound: pick them in settings"
+					" (a virtual cable like loopMIDI is the usual way on Windows)";
 		}
 #else
 		m_stats.midi = "G1-Emu:PC Port (editor) and G1-Emu:MIDI, client " + std::to_string(m_midi->clientId());

@@ -31,11 +31,13 @@ namespace g1app
 	class JuceMidi
 	{
 	public:
-		// _preferred names the MIDI cables to bind to, in PC Port, MIDI order ("G1,loopMIDI
-		// Port"), when virtual ports cannot be made and the fallback runs. Empty: the first
-		// free cables are taken. From the settings file; G1_MIDI_DEVICES wins over it.
-		explicit JuceMidi(const char* _clientName, const std::string& _preferred = {})
-		: m_clientName(_clientName), m_preferred(_preferred)
+		// _bindings names the real MIDI devices to open when virtual ports cannot be made
+		// (Windows without MIDI Services), four comma-separated entries in
+		// "PC Port in,PC Port out,MIDI in,MIDI out" order. An empty entry binds nothing:
+		// that side of that port stays unconnected, exactly like leaving a DIN socket
+		// empty on the hardware. From the settings file; G1_MIDI_DEVICES wins over it.
+		explicit JuceMidi(const char* _clientName, const std::string& _bindings = {})
+		: m_clientName(_clientName), m_bindings(_bindings)
 		{
 		}
 
@@ -46,48 +48,58 @@ namespace g1app
 		// make virtual ports (Windows without MIDI Services) and only real devices can be used.
 		bool virtualPorts() const { return m_virtual; }
 
-		// Which real device each port ended up on, for the status line. Empty when the ports
-		// are virtual (they are their own devices, there is nothing to report) or when no
-		// device could be opened at all.
+		// Which real device each port's two sides ended up on, for the status line
+		// ("<PC in>,<PC out>,<MIDI in>,<MIDI out>"). Empty when the ports are virtual
+		// (they are their own devices, there is nothing to report) or when a side was
+		// bound to nothing.
 		std::vector<std::string> devices() const
 		{
 			std::vector<std::string> result;
 			if(m_virtual)
 				return result;
 			for(const auto& port : m_ports)
-				result.push_back(port.dead ? std::string() : port.device);
-			return result;
-		}
-
-		// Every MIDI cable the system has (a device with the same name on the input and the
-		// output side), for the settings window to offer as a choice. Virtual ports made by
-		// this program are their own devices and never appear here.
-		static std::vector<std::string> cables()
-		{
-			std::vector<std::string> result;
-			std::set<std::string> outputs;
-			for(const auto& d : juce::MidiOutput::getAvailableDevices())
-				outputs.insert(d.name.toStdString());
-			for(const auto& d : juce::MidiInput::getAvailableDevices())
 			{
-				const auto name = d.name.toStdString();
-				if(outputs.count(name) && std::find(result.begin(), result.end(), name) == result.end())
-					result.push_back(name);
+				result.push_back(port.in ? port.inDevice : std::string());
+				result.push_back(port.out ? port.outDevice : std::string());
 			}
 			return result;
 		}
 
-		// A human-readable one-liner for the status line: "PC Port -> loopMIDI Port 1" or,
-		// when no real device was there either, "PC Port (dead)".
+		// Every MIDI device the system has, for the settings window to offer as a choice.
+		// _inputs: the devices that deliver MIDI; false: the ones that accept it. Nothing is
+		// filtered out by name or by pairing: hardware ports show up under their own names
+		// ("UMC1820 MIDI In" and "UMC1820 MIDI Out" are two entries, not one cable), and
+		// what a loopMIDI cable is for is the user's to decide, not the program's.
+		static std::vector<std::string> devices(const bool _inputs)
+		{
+			std::vector<std::string> result;
+			const auto& list = _inputs ? juce::MidiInput::getAvailableDevices()
+				: juce::MidiOutput::getAvailableDevices();
+			for(const auto& d : list)
+				result.push_back(d.name.toStdString());
+			return result;
+		}
+
+		// A human-readable one-liner for the status line: "PC Port in: loopMIDI Port, out:
+		// loopMIDI Port 1, MIDI in: -, out: -", with "-" for the sides bound to nothing.
 		std::string describe() const
 		{
 			std::string result;
 			for(size_t i = 0; i < m_ports.size(); ++i)
 			{
+				const auto& port = m_ports[i];
 				if(i)
 					result += ", ";
-				result += m_ports[i].name.toStdString() + (m_ports[i].dead
-					? " (dead: no device)" : " -> " + m_ports[i].device);
+				const auto side = [](const std::string& _device, const bool _open)
+				{
+					if(_open && !_device.empty())
+						return _device;
+					if(_open)
+						return std::string("unconnected");
+					return std::string("-");
+				};
+				result += port.name.toStdString() + " in: " + side(port.inDevice, port.in != nullptr)
+					+ ", out: " + side(port.outDevice, port.out != nullptr);
 			}
 			return result;
 		}
@@ -109,32 +121,41 @@ namespace g1app
 			{
 				m_virtual = false;
 				// The system would not make virtual ports (Windows needs its new MIDI
-				// Services for that, which JUCE only reaches through JUCE_USE_WINDOWS_MIDI_SERVICES).
-				// Without a cable nothing reaches the G1, so the pair falls back to real
-				// devices. A MIDI cable is a device with the same name on the input and the
-				// output side (loopMIDI's cables are exactly that; the GS Wavetable Synth has
-				// no input and a sound card's ports have different names, so neither is one),
-				// and both directions of a port must be the SAME cable: the editor's requests
-				// come in on one end and the G1's replies go out the other, through the very
-				// same cable, or no handshake can ever complete. A cable does not echo back to
-				// the process that writes to it (measured), so the pair is safe to open both
-				// ways. G1_MIDI_DEVICES, when set, names the cables in PC Port, MIDI order
-				// ("G1,loopMIDI Port"); otherwise the first two free cables are taken.
-				port.device = pickCable();
-				if(!port.device.empty())
+				// Services for that, which JUCE only reaches through JUCE_USE_WINDOWS_
+				// MIDI_SERVICES), so both sides of the pair fall back to real MIDI devices.
+				// Each side is chosen on its own, from m_bindings: "PC Port in,PC Port out,
+				// MIDI in,MIDI out". An empty entry binds nothing on that side — the same
+				// choice as leaving a DIN socket empty on the hardware — and nothing is
+				// ever bound by default: no device is opened the user did not ask for.
+				// This is what a loopMIDI setup needs: the program on the other end of the
+				// editor connection opens its own in and out on the same cable's two ends,
+				// so PC Port out and the editor's in are one cable, and the editor's out and
+				// PC Port in are another, with the pair kept whole by the user and not
+				// guessed at here.
+				const auto wanted = splitList(m_bindings);
+				const auto index = static_cast<int>(m_ports.size()) - 1;
+				const auto inName = wanted.size() > static_cast<size_t>(index) * 2
+					&& !wanted[static_cast<size_t>(index) * 2].empty() ? wanted[static_cast<size_t>(index) * 2] : std::string();
+				const auto outName = wanted.size() > static_cast<size_t>(index) * 2 + 1
+					&& !wanted[static_cast<size_t>(index) * 2 + 1].empty() ? wanted[static_cast<size_t>(index) * 2 + 1] : std::string();
+				if(!inName.empty())
 				{
-					port.out = openCableOutput(port.device);
-					port.in = openCableInput(port.device);
+					port.in = openDeviceInput(inName);
+					if(port.in)
+					{
+						port.inDevice = inName;
+						// Same registration the virtual port gets: without it the collector
+						// drops every message this device delivers.
+						m_collector.add(index, port.in.get());
+						port.in->start();
+					}
 				}
-				if(port.in)
+				if(!outName.empty())
 				{
-					// Same registration the virtual port gets: without it the collector
-					// drops every message this device delivers.
-					m_collector.add(static_cast<int>(m_ports.size()) - 1, port.in.get());
-					port.in->start();
+					port.out = openDeviceOutput(outName);
+					if(port.out)
+						port.outDevice = outName;
 				}
-				if(!port.out || !port.in)
-					port.dead = true;
 			}
 			return static_cast<int>(m_ports.size()) - 1;
 		}
@@ -181,37 +202,8 @@ namespace g1app
 		}
 
 	private:
-		// A MIDI cable, for the fallback: a device with the same name on the input and the
-		// output side. G1_MIDI_DEVICES, when set, names them in PC Port, MIDI order
-		// ("G1,loopMIDI Port"); otherwise the first cable not already taken by another port
-		// is used. The empty string when the system has none.
-		std::string pickCable()
-		{
-			std::set<std::string> outputs;
-			for(const auto& d : juce::MidiOutput::getAvailableDevices())
-				outputs.insert(d.name.toStdString());
-
-			// What the settings window asked for wins over taking the first free cable.
-			// m_preferred comes from the settings file, and EmuHost::start() has already
-			// let G1_MIDI_DEVICES win over that, the same way as every other setting.
-			std::vector<std::string> wanted = splitList(m_preferred);
-			const auto port = static_cast<int>(m_ports.size());
-			if(static_cast<size_t>(port) < wanted.size() && !wanted[static_cast<size_t>(port)].empty()
-				&& outputs.count(wanted[static_cast<size_t>(port)]))
-				return wanted[static_cast<size_t>(port)];
-
-			for(const auto& d : juce::MidiInput::getAvailableDevices())
-			{
-				const auto name = d.name.toStdString();
-				if(!outputs.count(name) || m_usedDevices.count(name))
-					continue;
-				return name;
-			}
-			return {};
-		}
-
-		// "G1, loopMIDI Port" -> {"G1", "loopMIDI Port"}; empty names are kept (a
-		// comma with nothing in it means "take the first free one for that port").
+		// "a, b" -> {"a", " b"->trimmed}; the count is padded to four, so a missing entry
+		// is an empty name, which binds nothing (see addPort).
 		static std::vector<std::string> splitList(const std::string& _list)
 		{
 			std::vector<std::string> result;
@@ -227,36 +219,40 @@ namespace g1app
 					break;
 				at = comma + 1;
 			}
+			result.resize(4, std::string());
 			return result;
 		}
 
-		std::unique_ptr<juce::MidiOutput> openCableOutput(const std::string& _cable)
+		// Opens the real MIDI device the user named for that side of that port. Null when
+		// the name is not among the system's devices (unplugged, driver gone) — the side
+		// then stays unconnected, and describe() says so.
+		std::unique_ptr<juce::MidiInput> openDeviceInput(const std::string& _name)
 		{
-			for(const auto& d : juce::MidiOutput::getAvailableDevices())
+			for(const auto& d : juce::MidiInput::getAvailableDevices())
 			{
-				if(d.name.toStdString() != _cable)
+				if(d.name.toStdString() != _name)
 					continue;
-				auto out = juce::MidiOutput::openDevice(d.identifier);
-				if(out)
+				auto in = juce::MidiInput::openDevice(d.identifier, &m_collector);
+				if(in)
 				{
-					m_usedDevices.insert(_cable);
-					return out;
+					m_usedDevices.insert(_name);
+					return in;
 				}
 			}
 			return nullptr;
 		}
 
-		std::unique_ptr<juce::MidiInput> openCableInput(const std::string& _cable)
+		std::unique_ptr<juce::MidiOutput> openDeviceOutput(const std::string& _name)
 		{
-			for(const auto& d : juce::MidiInput::getAvailableDevices())
+			for(const auto& d : juce::MidiOutput::getAvailableDevices())
 			{
-				if(d.name.toStdString() != _cable)
+				if(d.name.toStdString() != _name)
 					continue;
-				auto in = juce::MidiInput::openDevice(d.identifier, &m_collector);
-				if(in)
+				auto out = juce::MidiOutput::openDevice(d.identifier);
+				if(out)
 				{
-					m_usedDevices.insert(_cable);
-					return in;
+					m_usedDevices.insert(_name);
+					return out;
 				}
 			}
 			return nullptr;
@@ -338,12 +334,12 @@ namespace g1app
 			std::unique_ptr<juce::MidiOutput> out;
 			std::unique_ptr<juce::MidiInput> in;
 			std::vector<uint8_t> pending;	// a message send() has not seen the end of yet
-			std::string device;			// the real device this port fell back to (virtual: empty)
-			bool dead = false;			// neither virtual nor real: nothing to talk to
+			std::string inDevice;			// the real device this port's input fell back to
+			std::string outDevice;			// the real device this port's output fell back to
 		};
 
 		std::string m_clientName;
-		std::string m_preferred;
+		std::string m_bindings;
 		std::vector<Port> m_ports;
 		Collector m_collector;
 		std::set<std::string> m_usedDevices;
