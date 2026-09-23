@@ -25,7 +25,9 @@ Older entries cite their commit by hand.
   bindings string so the shared interface stays. Verified on the real machine: with no
   bindings, PC Port in/out stays 0/0 (no echo); a JUCE enumeration probe and WinMM agree
   on the system's device list (loopMIDI gone after it was killed, UMC1820 MIDI present when
-  the interface is connected).
+  the interface is connected). End-to-end verified live by Thor: with the Animatek NME editor
+  wired through two loopMIDI cables (editor out → PC Port in, PC Port out → editor in), the
+  editor and the G1 talk. That connection is the goal this started with, and it stands.
 
 - **Windows reached at last: MIDI works without Windows MIDI Services, and the settings window
   picks the cables (Mizu, with Thor testing on the real machine).** Three changes:
