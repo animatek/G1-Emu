@@ -5,6 +5,23 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-09-24
+
+- **Upload timeout diagnosis written down, and two ideas noted (Claude, asked for by Javier).**
+  New `docs/upload-timeouts.md` for issues #3 and #4: with JUCE 8.0.12, `MidiInput` rebuilds each
+  SysEx from CoreMIDI's UMP packets and calls only `handleIncomingMidiMessage`. The empty
+  `handlePartialSysexMessage` that #3 blames is never reached, so filling it would change nothing.
+  #4 also reports timeouts on Linux, which does not use that code. The document gives one logged
+  upload (`G1_MIDI_LOG=1`, NME's `[UPLOAD]` lines, `pcport-in.bin`) that tells whether the packet
+  is lost before the emulator, gets no ACK from the emulated G1, or its ACK does not reach NME.
+  It also says what to do in each case. `docs/next-steps.md` points to it (point 7). `ROADMAP.md`,
+  "Ideas for later", gains a direct NME–emulator link over a local socket, beside the MIDI ports
+  and not instead of them, and browsing nordmodular.com patches from NME, which depends on that
+  site's maintainer. Verified by reading JUCE 8.0.12's `juce_MidiDevices.cpp`,
+  `juce_UMPMidi1ToBytestreamTranslator.h`, `juce_MidiDataConcatenator.h` and
+  `juce_CoreMidi_mac.mm`, and NME's `ConnectionManager.*` (5 s ACK timeout). Nothing was built or
+  run: no Mac, ROM or Gearmulator clone in this session.
+
 ## 2026-09-22
 
 - **Published `v0.1.0-alpha.4` pre-release (Codex, requested and approved by Javier).**

@@ -123,6 +123,25 @@ With the real OS running in the emulator there is a "lab" G1 without switching o
   long they take. That lets NME pace and order its messages to what the OS really supports.
 - **Reproduce hangs:** record a session that hangs the real G1 and replay it in the emulator.
 
+### A direct link between NME and the emulator
+
+Beside the MIDI ports, never instead of them: the **PC Port** stays for the original Clavia
+editor and any other editor. NME, which is ours, could also reach the emulator over a local
+socket or named pipe (`juce::InterprocessConnection`) and carry the same SysEx. That would need no
+virtual MIDI port or driver, so it would also work inside a VST3 and on Windows. It would let NME
+pick which instance to edit. It plays the part of the G2's USB cable, but in software.
+Emulating a real USB device is not worth it: it needs a kernel driver on every system, and the G1
+never had USB. NME's transport is narrow (`source/midi/MidiDeviceManager.*`: connect, disconnect,
+send SysEx, incoming to `NmProtocol`), so a second transport is small work on both sides.
+
+### Browse nordmodular.com patches from NME
+
+The nordmodular.com site, where people upload their own patches, is a great resource. It would be
+good to ask its maintainer whether they could offer an API or connector, so that NME could log in
+and browse both other users' patches and the user's own, and load them straight into the emulator
+or a real G1. Only an idea for now, and it depends on someone else. It is NME work, not emulator
+work.
+
 ### NME editing several G1s at once
 
 The original editor could edit **up to four Nord Modulars at once** (its MIDI Setup has Ports 1–4,

@@ -104,6 +104,14 @@ but signing and notarisation remain necessary for a polished stable release.
 
 ---
 
+## 7. The patch upload timeouts (issues #3 and #4)
+
+Uploads time out on macOS (#3) and, for patches with several modules, on every system (#4). The fix
+proposed in #3 would change nothing with JUCE 8.0.12. The diagnosis, and the one logged upload that
+tells where the packet is lost, are in [`docs/upload-timeouts.md`](upload-timeouts.md).
+
+---
+
 ## Two things that are easy to get wrong
 
 **Two emulators at once.** If the maintainer has `g1gui` open, `aseqsend -p "G1-Emu:PC Port"`
