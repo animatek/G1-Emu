@@ -14,8 +14,15 @@ namespace g1app
 	{
 		std::string home()
 		{
-			const char* h = std::getenv("HOME");
-			return h ? h : ".";
+			// $HOME is the XDG way, but a program started from Explorer or a DAW on Windows
+			// has no HOME at all, and falling back to "." made every path relative to the
+			// working directory: the ROM folder became ./Documents/Animatek/G1-Emu/roms,
+			// which exists for nobody. %USERPROFILE% is where the user's things are there.
+			if(const char* h = std::getenv("HOME"); h && *h)
+				return h;
+			if(const char* u = std::getenv("USERPROFILE"); u && *u)
+				return u;
+			return ".";
 		}
 
 		// The user's document folder. XDG_DOCUMENTS_DIR wins, then the line the desktop writes in

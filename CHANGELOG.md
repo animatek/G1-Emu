@@ -7,8 +7,20 @@ Older entries cite their commit by hand.
 
 ## 2026-09-24
 
+- **ROM folder on Windows: fall back to `%USERPROFILE%` when `HOME` is unset (Tuth in PR #5,
+  ported by Claude, requested by Javier).** `romfinder`'s `home()`
+  fell back to `.` when `HOME` was missing, which on Windows is always the case for a program
+  started from Explorer or a DAW, so the announced ROM folder was the relative
+  `./Documents/Animatek/G1-Emu/roms`, a path that exists for nobody. It now tries `USERPROFILE`
+  before giving up. Taken from PR #5 on its own, because `main` already fixed the flash and
+  settings location with `%APPDATA%` (alpha.4) and already has its own manual MIDI pairing, which
+  the rest of that PR reimplements with a different API. Verified on Linux with `HOME` unset and
+  `USERPROFILE` pointing at a folder holding the ROM under `Documents/Animatek/G1-Emu/roms`:
+  `g1run` picks that ROM ahead of the one in the source tree. **Not verified on Windows**; Tuth's
+  PR reports the same fix working there.
+
 - **JUCE MIDI backend: a truncated inbound SysEx now shows in `G1_MIDI_LOG` (Claude, requested by
-  Javier; local change, not committed).** Triage of issue #3 (macOS: every patch upload ends in
+  Javier).** Triage of issue #3 (macOS: every patch upload ends in
   `Upload timeout at packet 0`). Its diagnosis, that the empty `handlePartialSysexMessage`
   discards fragments of a long SysEx, does not hold against JUCE 8.0.12, the version CI builds:
   `SingleGroupMidi1ToBytestreamTranslator` (UMP path) and `MidiDataConcatenator` (bytestream path)
