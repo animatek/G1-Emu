@@ -26,6 +26,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -194,7 +196,20 @@ namespace g1app
 				dst.insert(dst.end(), raw, raw + _message.getRawDataSize());
 			}
 
-			void handlePartialSysexMessage(juce::MidiInput*, const juce::uint8*, int, double) override {}
+			// JUCE reassembles a SysEx that arrives in several packets (CoreMIDI, ALSA) and only
+			// calls handleIncomingMidiMessage once it has the F7. It calls this instead when the
+			// stream ended without one, so what it carries is a truncated message that JUCE
+			// discards right after. Nothing to rebuild from it, but if a patch upload dies on a
+			// Mac this line is the tell: with G1_MIDI_LOG=1 it says a SysEx was cut short.
+			void handlePartialSysexMessage(juce::MidiInput*, const juce::uint8* _data, int _size, double) override
+			{
+				static const bool log = [] { const char* v = std::getenv("G1_MIDI_LOG"); return v && *v && *v != '0'; }();
+				if(!log)
+					return;
+				std::printf("[midi] in  truncated SysEx, %d bytes dropped by JUCE (no F7): %02x %02x ...\n",
+					_size, _size > 0 ? _data[0] : 0, _size > 1 ? _data[1] : 0);
+				std::fflush(stdout);
+			}
 
 			void take(std::vector<std::vector<uint8_t>>& _perPort)
 			{

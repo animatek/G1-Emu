@@ -5,6 +5,24 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-09-24
+
+- **JUCE MIDI backend: a truncated inbound SysEx now shows in `G1_MIDI_LOG` (Claude, requested by
+  Javier; local change, not committed).** Triage of issue #3 (macOS: every patch upload ends in
+  `Upload timeout at packet 0`). Its diagnosis, that the empty `handlePartialSysexMessage`
+  discards fragments of a long SysEx, does not hold against JUCE 8.0.12, the version CI builds:
+  `SingleGroupMidi1ToBytestreamTranslator` (UMP path) and `MidiDataConcatenator` (bytestream path)
+  reassemble the packets themselves and call `handleIncomingMidiMessage` with the whole message,
+  and call the partial callback only for a stream that ended without `F7`, whose data they then
+  clear. So there is nothing to accumulate there, and filling it in would not fix the report.
+  What was missing is a way to see it happen: `handlePartialSysexMessage` now prints one line
+  under `G1_MIDI_LOG=1` saying a SysEx was cut short and how many bytes JUCE dropped. Verified on
+  Linux with the JUCE backend forced (`build-juce`, scratch flash): SysEx of 5005 and 3005 bytes
+  sent to the virtual PC Port arrive whole in one chunk (`[midi] in PC Port 5005 bytes`), and
+  `g1patchtest` uploads a 4.2 KB patch in 8 packets. **Not verified:** the truncated case itself
+  (`aseqsend` refuses to send a SysEx with no `F7`) and anything on CoreMIDI, since there is no
+  Mac here. Issue #3 stays open until the reporter runs a build with `G1_MIDI_LOG=1`.
+
 ## 2026-09-22
 
 - **Published `v0.1.0-alpha.4` pre-release (Codex, requested and approved by Javier).**
