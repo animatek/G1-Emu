@@ -2,15 +2,12 @@
 
 #include "romfinder.h"
 
+#include "miditransport.h"
+
 #ifdef G1_BACKEND_JUCE
 #include "juceaudio.h"
-#include "jucemidi.h"
-#ifdef G1_WINDOWS_MIDI
-#include "windowsmidi.h"
-#endif
 #else
 #include "alsaaudio.h"
-#include "alsamidi.h"
 #ifdef G1_HAVE_JACK
 #include "jackaudio.h"
 #else
@@ -63,33 +60,6 @@ namespace g1app
 				if(i == 15) stime = std::stoull(field);
 			}
 			return static_cast<double>(utime + stime) / static_cast<double>(sysconf(_SC_CLK_TCK));
-#endif
-		}
-
-		// The snd-virmidi card reserved for the G1 (its ID is G1Emu unless G1_RAWMIDI names
-		// another one). Returns its card number, or -1 if it is not loaded.
-		int rawMidiCard(const std::string& _id)
-		{
-#ifndef __linux__
-			(void)_id;		// only Linux hides application ports from raw MIDI programs
-			return -1;
-#else
-			if(_id.empty())
-				return -1;
-			const std::string& id = _id;
-			std::error_code ec;
-			for(const auto& entry : std::filesystem::directory_iterator("/proc/asound", ec))
-			{
-				const auto name = entry.path().filename().string();
-				if(name.rfind("card", 0) != 0)
-					continue;
-				std::ifstream f(entry.path() / "id");
-				std::string line;
-				if(!std::getline(f, line) || line != id)
-					continue;
-				try { return std::stoi(name.substr(4)); } catch(...) { return -1; }
-			}
-			return -1;
 #endif
 		}
 
@@ -249,56 +219,12 @@ namespace g1app
 			_log += "new flash with the factory OS (will be saved in " + m_flashPath + ")\n";
 		}
 
-		m_midi = std::make_unique<Midi>("G1-Emu");
-		if(!m_midi->valid())
-		{
-#ifdef G1_WINDOWS_MIDI
-			_log += "Windows MIDI Services: " + m_midi->error() + "\n";
-#else
-			_log += "cannot open the ALSA sequencer\n";
+		m_midi = makeMidiTransport("G1-Emu", _log);
+		if(!m_midi)
 			return false;
-#endif
-		}
-#if defined(G1_BACKEND_JUCE) && !defined(G1_WINDOWS_MIDI)
-		// The manual MIDI pairing patch only applies to the plain JUCE backend: it is what stands
-		// in for owned ports on Windows until Windows MIDI Services can make them (see jucemidi.h).
-		m_pcPort = m_midi->addPort("PC Port", m_options.pcPortOutDevice, m_options.pcPortInDevice);
-		m_midiPort = m_midi->addPort("MIDI", m_options.midiOutDevice, m_options.midiInDevice);
-		const bool manualMidi = !m_options.pcPortOutDevice.empty() || !m_options.pcPortInDevice.empty()
-			|| !m_options.midiOutDevice.empty() || !m_options.midiInDevice.empty();
-		auto disp = [](const std::string& _s) { return _s.empty() ? std::string("auto") : _s; };
-		if(m_midi->virtualPorts())
-			m_stats.midi = manualMidi
-				? "manual MIDI devices (patch until Windows MIDI Services can own ports): PC Port out="
-					+ disp(m_options.pcPortOutDevice) + " in=" + disp(m_options.pcPortInDevice)
-					+ ", MIDI out=" + disp(m_options.midiOutDevice) + " in=" + disp(m_options.midiInDevice)
-				: "G1-Emu PC Port (editor) and G1-Emu MIDI";
-		else if(manualMidi)
-			// The user pointed Settings at real device names, and at least one of them could not
-			// be opened -- most likely the loopback driver was not running, or the names changed.
-			m_stats.midi = "could not open one of the chosen MIDI devices: PC Port out="
-				+ disp(m_options.pcPortOutDevice) + " in=" + disp(m_options.pcPortInDevice)
-				+ ", MIDI out=" + disp(m_options.midiOutDevice) + " in=" + disp(m_options.midiInDevice)
-				+ "; check Settings and that the loopback driver is running";
-#if defined(_WIN32)
-		else
-			m_stats.midi = "Windows did not create G1-Emu's owned MIDI ports; this Windows MIDI "
-				"Services version cannot expose the emulated instrument yet, pick manual MIDI "
-				"devices in Settings as a patch until it does";
-#else
-		else
-			m_stats.midi = "no virtual MIDI ports on this system: no editor can reach the G1";
-#endif
-#elif defined(G1_BACKEND_JUCE)
-		m_pcPort = m_midi->addPort("PC Port");
-		m_midiPort = m_midi->addPort("MIDI");
-		m_stats.midi = m_midi->virtualPorts() ? "G1-Emu PC Port (editor) and G1-Emu MIDI"
-			: "Windows MIDI Services: " + m_midi->error();
-#else
-		m_pcPort = m_midi->addPort("PC Port");
-		m_midiPort = m_midi->addPort("MIDI");
-		m_stats.midi = "G1-Emu:PC Port (editor) and G1-Emu:MIDI, client " + std::to_string(m_midi->clientId());
-#endif
+		m_pcPort = m_midi->addPort("PC Port", {m_options.pcPortOutDevice, m_options.pcPortInDevice});
+		m_midiPort = m_midi->addPort("MIDI", {m_options.midiOutDevice, m_options.midiInDevice});
+		m_stats.midi = m_midi->describe();
 		_log += "MIDI ports: " + m_stats.midi + "\n";
 		m_rawMidiBound = bindRawMidi(_log);
 
@@ -429,38 +355,12 @@ namespace g1app
 	// It is tried again while it fails: the card can be loaded after the emulator.
 	bool EmuHost::bindRawMidi(std::string& _log)
 	{
-#ifdef G1_BACKEND_JUCE
-		// Nothing to do: the split between "application ports" and "raw MIDI devices" that makes
-		// this necessary is the ALSA sequencer's, and the JUCE backend does not use it. On macOS
-		// and Windows a virtual port is a MIDI device like any other.
-		(void)_log;
-		return false;
-#else
-		const int card = rawMidiCard(m_options.rawMidiCard);
-		if(card < 0)
+		std::string summary;
+		if(!m_midi->linkRawCard(m_options.rawMidiCard, m_pcPort, m_midiPort, _log, summary))
 			return false;
-		const auto ports = m_midi->findCardPorts(card);
-		if(ports.empty())
-			return false;
-		auto describe = [card](const AlsaMidi::Port& _p, const char* _ours)
-		{
-			return std::string(_ours) + " <-> " + (_p.name.empty() ? "card " + std::to_string(card) : _p.name);
-		};
-		std::string done;
-		if(m_midi->link(m_midiPort, ports[0].client, ports[0].port))
-			done = describe(ports[0], "MIDI");
-		if(ports.size() > 1 && m_midi->link(m_pcPort, ports[1].client, ports[1].port))
-			done += (done.empty() ? "" : ", ") + describe(ports[1], "PC Port");
-		if(done.empty())
-			return false;
-		// The warning goes to the log only: the status bar has one line and this would wrap it.
-		_log += "raw MIDI: " + done + (ports.size() > 2
-			? " (this card publishes " + std::to_string(ports.size()) + " ports; every one of them clutters "
-			  "the DAW's MIDI list, see docs/bitwig-midi.md)" : "") + "\n";
 		std::lock_guard<std::mutex> lock(m_statsMutex);
-		m_stats.rawMidi = done;
+		m_stats.rawMidi = summary;
 		return true;
-#endif
 	}
 
 	// The level can change while it plays: both backends read it from an atomic on their own thread.

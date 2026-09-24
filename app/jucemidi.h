@@ -20,7 +20,9 @@
 // at them, and points the editor at the very same names. Every other caller leaves the names
 // empty and behaviour is exactly as before.
 //
-// Interface deliberately the same as AlsaMidi's, so EmuHost does not care which one it has.
+// It implements MidiTransport, like AlsaMidi, so EmuHost does not care which one it has.
+
+#include "miditransport.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 
@@ -36,30 +38,30 @@
 
 namespace g1app
 {
-	class JuceMidi
+	class JuceMidi final : public MidiTransport
 	{
 	public:
 		explicit JuceMidi(const char* _clientName) : m_clientName(_clientName) {}
-
-		bool valid() const { return true; }		// there is no session to open: ports stand alone
-		int clientId() const { return -1; }		// an ALSA notion; nothing to report here
 
 		// True when every port asked for was really created or, for a manually-paired one, really
 		// opened. False means something was neither: on Windows without MIDI Services and with no
 		// manual device chosen, or a chosen device that no longer exists.
 		bool virtualPorts() const { return m_virtual; }
+
 		// Creates a port and returns its index. Input and output share a name, like a DIN pair --
-		// unless _outDevice/_inDevice name an existing system MIDI device to open instead of
-		// creating a new one (see the class comment). Either can be set without the other.
-		int addPort(const char* _name, const std::string& _outDevice = {}, const std::string& _inDevice = {})
+		// unless _manual names an existing system MIDI device to open instead of creating a new
+		// one (see the class comment). Either direction can be set without the other.
+		int addPort(const char* _name, const PortDevices& _manual = {}) override
 		{
 			auto& port = m_ports.emplace_back();
+			port.shortName = _name;
+			port.manual = _manual;
 			port.name = juce::String(m_clientName) + " " + _name;
 
-			port.out = _outDevice.empty() ? juce::MidiOutput::createNewDevice(port.name)
-										   : openExistingOutput(_outDevice);
-			port.in = _inDevice.empty() ? juce::MidiInput::createNewDevice(port.name, &m_collector)
-										 : openExistingInput(_inDevice);
+			port.out = _manual.out.empty() ? juce::MidiOutput::createNewDevice(port.name)
+										   : openExistingOutput(_manual.out);
+			port.in = _manual.in.empty() ? juce::MidiInput::createNewDevice(port.name, &m_collector)
+										 : openExistingInput(_manual.in);
 			if(!port.out || !port.in)
 				m_virtual = false;
 			if(port.in)
@@ -86,15 +88,45 @@ namespace g1app
 			return names;
 		}
 
+		// Where the ports are, or why they are not (which depends on the system: this is the
+		// class that runs on all three).
+		std::string describe() const override
+		{
+			bool manual = false;
+			std::string detail;
+			const auto shown = [](const std::string& _s) { return _s.empty() ? std::string("auto") : _s; };
+			for(const auto& port : m_ports)
+			{
+				manual = manual || !port.manual.out.empty() || !port.manual.in.empty();
+				detail += (detail.empty() ? "" : ", ") + port.shortName + " out=" + shown(port.manual.out)
+					+ " in=" + shown(port.manual.in);
+			}
+			if(m_virtual)
+				return manual ? "manual MIDI devices (patch until Windows MIDI Services can own ports): " + detail
+							  : "G1-Emu PC Port (editor) and G1-Emu MIDI";
+			if(manual)
+				// The user pointed Settings at real device names, and at least one of them could not
+				// be opened -- most likely the loopback driver was not running, or the names changed.
+				return "could not open one of the chosen MIDI devices: " + detail
+					+ "; check Settings and that the loopback driver is running";
+#if defined(_WIN32)
+			return "Windows did not create G1-Emu's owned MIDI ports; this Windows MIDI "
+				"Services version cannot expose the emulated instrument yet, pick manual MIDI "
+				"devices in Settings as a patch until it does";
+#else
+			return "no virtual MIDI ports on this system: no editor can reach the G1";
+#endif
+		}
+
 		// Collects everything that has arrived, split by port.
-		void poll(std::vector<std::vector<uint8_t>>& _perPort)
+		void poll(std::vector<std::vector<uint8_t>>& _perPort) override
 		{
 			_perPort.resize(m_ports.size());
 			m_collector.take(_perPort);
 		}
 
 		// Sends raw bytes through a port.
-		void send(const int _index, const std::vector<uint8_t>& _bytes)
+		void send(const int _index, const std::vector<uint8_t>& _bytes) override
 		{
 			if(_bytes.empty() || _index < 0 || static_cast<size_t>(_index) >= m_ports.size())
 				return;
@@ -233,6 +265,8 @@ namespace g1app
 		struct Port
 		{
 			juce::String name;
+			std::string shortName;			// "PC Port" or "MIDI", as EmuHost named it
+			PortDevices manual;				// the devices chosen by hand for it, if any
 			std::unique_ptr<juce::MidiOutput> out;
 			std::unique_ptr<juce::MidiInput> in;
 			std::vector<uint8_t> pending;	// a message send() has not seen the end of yet

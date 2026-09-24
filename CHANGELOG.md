@@ -7,6 +7,26 @@ Older entries cite their commit by hand.
 
 ## 2026-09-24
 
+- **The MIDI backends behind one interface, `MidiTransport` (Claude, requested by Javier; branch
+  `refactor/midi-transport`, not merged).** `AlsaMidi`, `JuceMidi` and `WindowsMidi` resembled each
+  other by habit, with no declared interface, and `EmuHost` chose between them with `#ifdef`s and
+  carried the status text of each. Now `app/miditransport.h` declares `MidiTransport` (`addPort`,
+  `poll`, `send`, `describe`, and `linkRawCard` for the ALSA-only raw MIDI card), the three classes
+  implement it, and `makeMidiTransport()` in `app/miditransport.cpp` is the only place that knows
+  which one a build uses. What moved: the status-bar wording into each transport's `describe()`, and
+  the snd-virmidi/USB-gadget card lookup and linking from `EmuHost` into `AlsaMidi::linkRawCard`.
+  `EmuHost` lost the `Midi` alias, its MIDI `#ifdef`s and about 60 lines. No behaviour change is
+  intended; the point is that a new way to reach the emulator (a local socket straight from NME) is
+  one class and one line in the factory. Verified on Linux, both configurations: native (ALSA) and
+  JUCE forced, `g1dspcheck` passes on both; with a scratch flash, SysEx of 4005 bytes and a
+  note-on arrive on the PC Port and MIDI on both, the emulator answers, the status line is the same
+  text as before, the raw card `G1` is still linked on the native one (`MIDI <-> f_midi`), and a
+  manual device name that does not exist gives the same "could not open one of the chosen MIDI
+  devices" message. **Not verified:** macOS and Windows builds (the CI does it on push), and
+  `windowsmidi.cpp`, which only builds with the preview Windows MIDI Services SDK that neither CI
+  nor this machine has: its change is small (inherit, `override`, a `describe()` that moves the old
+  status string) but nothing has compiled it.
+
 - **ROM folder on Windows: fall back to `%USERPROFILE%` when `HOME` is unset (Tuth in PR #5,
   ported by Claude, requested by Javier).** `romfinder`'s `home()`
   fell back to `.` when `HOME` was missing, which on Windows is always the case for a program

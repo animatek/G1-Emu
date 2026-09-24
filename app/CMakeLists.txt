@@ -16,7 +16,8 @@ if(G1_BACKEND STREQUAL "juce" AND NOT G1_HAVE_JUCE)
 endif()
 message(STATUS "g1Host: ${G1_BACKEND} audio and MIDI backend")
 
-add_library(g1Host STATIC emuhost.cpp emuhost.h romfinder.cpp romfinder.h audiobridge.h)
+add_library(g1Host STATIC emuhost.cpp emuhost.h romfinder.cpp romfinder.h audiobridge.h
+	miditransport.cpp miditransport.h)
 target_include_directories(g1Host PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # So a clone works with no setup: the repo's own Roms/ is one of the folders searched.
 target_compile_definitions(g1Host PRIVATE G1_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

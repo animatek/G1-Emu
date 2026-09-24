@@ -25,20 +25,12 @@
 
 namespace g1app
 {
+	class MidiTransport;
 #ifdef G1_BACKEND_JUCE
-	class JuceMidi;
 	class JuceAudio;
-#ifdef G1_WINDOWS_MIDI
-	class WindowsMidi;
-	using Midi = WindowsMidi;
 #else
-	using Midi = JuceMidi;
-#endif
-#else
-	class AlsaMidi;
 	class AlsaAudio;
 	class JackAudio;
-	using Midi = AlsaMidi;
 #endif
 
 	class EmuHost
@@ -129,7 +121,7 @@ namespace g1app
 		void finishWav();
 
 		std::unique_ptr<g1::Microcontroller> m_mc;
-		std::unique_ptr<Midi> m_midi;
+		std::unique_ptr<MidiTransport> m_midi;
 #ifdef G1_BACKEND_JUCE
 		std::unique_ptr<JuceAudio> m_juceAudio;
 #else

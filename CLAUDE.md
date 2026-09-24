@@ -100,8 +100,10 @@ the four outputs and the links between DSPs; it also has probes for the panel (s
 | `app/gui/Settings.*` | The settings window: ROM, audio driver and device, level, raw MIDI card. |
 | `app/romfinder.*`, `g1Lib/g1rom.h` | Where the ROM comes from, and whether a file is the right one. |
 | `app/audiobridge.h` | Rate conversion and the lock-free queues between the emulator and the card. |
-| `app/alsamidi.h`, `app/alsaaudio.h`, `app/jackaudio.h` | The native Linux backend: ALSA MIDI, ALSA audio, JACK audio. |
-| `app/juceaudio.h`, `app/jucemidi.h` | The JUCE backend: every system, and the only one off Linux. |
+| `app/miditransport.*` | `MidiTransport`, the interface every way of carrying the G1's MIDI bytes implements, and `makeMidiTransport()`, the one place that picks which. `EmuHost` knows none of them by name. |
+| `app/alsamidi.h`, `app/alsaaudio.h`, `app/jackaudio.h` | The native Linux backend: ALSA MIDI (a `MidiTransport`), ALSA audio, JACK audio. |
+| `app/juceaudio.h`, `app/jucemidi.h` | The JUCE backend: every system, and the only one off Linux. `JuceMidi` is a `MidiTransport`. |
+| `app/windowsmidi.*` | The experimental Windows MIDI Services `MidiTransport`, opt-in. |
 | `tools/g1boot.cpp` | Headless boot and disassembler. |
 | `tools/patchtest/` | `g1patchtest`: the test bench. |
 | `tools/battery/` | `battery.py`: one patch per module type, played and measured (`docs/module-battery.md`). |

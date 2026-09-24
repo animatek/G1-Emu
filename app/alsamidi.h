@@ -7,16 +7,20 @@
 // It works on raw bytes: incoming events are turned into MIDI bytes and outgoing bytes are
 // split into events with ALSA's encoder, SysEx included.
 
+#include "miditransport.h"
+
 #include <alsa/asoundlib.h>
 
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace g1app
 {
-	class AlsaMidi
+	class AlsaMidi final : public MidiTransport
 	{
 	public:
 		explicit AlsaMidi(const char* _clientName)
@@ -31,7 +35,7 @@ namespace g1app
 			snd_midi_event_no_status(m_decoder, 1);
 		}
 
-		~AlsaMidi()
+		~AlsaMidi() override
 		{
 			for(auto* e : m_encoders)
 				snd_midi_event_free(e);
@@ -44,8 +48,8 @@ namespace g1app
 		bool valid() const { return m_seq != nullptr; }
 		int clientId() const { return m_seq ? snd_seq_client_id(m_seq) : -1; }
 
-		// Creates a port and returns its index.
-		int addPort(const char* _name)
+		// Creates a port and returns its index. The ports are always our own sequencer ports.
+		int addPort(const char* _name, const PortDevices& = {}) override
 		{
 			const int port = snd_seq_create_simple_port(m_seq, _name,
 				SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ | SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE,
@@ -101,7 +105,7 @@ namespace g1app
 		}
 
 		// Collects everything that has arrived, split by port.
-		void poll(std::vector<std::vector<uint8_t>>& _perPort)
+		void poll(std::vector<std::vector<uint8_t>>& _perPort) override
 		{
 			_perPort.resize(m_ports.size());
 			snd_seq_event_t* ev = nullptr;
@@ -129,7 +133,7 @@ namespace g1app
 		}
 
 		// Sends raw bytes through a port (grouped into complete events).
-		void send(const int _index, const std::vector<uint8_t>& _bytes)
+		void send(const int _index, const std::vector<uint8_t>& _bytes) override
 		{
 			if(_bytes.empty())
 				return;
@@ -147,7 +151,65 @@ namespace g1app
 			}
 		}
 
+		std::string describe() const override
+		{
+			return "G1-Emu:PC Port (editor) and G1-Emu:MIDI, client " + std::to_string(clientId());
+		}
+
+		// Takes over the sound card whose ID is _card: the first port it publishes is linked to
+		// our MIDI port, the second to the PC Port. A one-port USB MIDI gadget (dummy_hcd +
+		// g_midi) beats snd-virmidi, which hard-codes sixteen subdevices per device and the name
+		// "Virtual Raw MIDI" and floods the DAW's list with them. The caller tries again while it
+		// fails: the card can be loaded after the emulator.
+		bool linkRawCard(const std::string& _card, const int _pcPort, const int _midiPort,
+			std::string& _log, std::string& _summary) override
+		{
+			const int card = cardNumber(_card);
+			if(card < 0)
+				return false;
+			const auto ports = findCardPorts(card);
+			if(ports.empty())
+				return false;
+			auto describePort = [card](const Port& _p, const char* _ours)
+			{
+				return std::string(_ours) + " <-> " + (_p.name.empty() ? "card " + std::to_string(card) : _p.name);
+			};
+			std::string done;
+			if(link(_midiPort, ports[0].client, ports[0].port))
+				done = describePort(ports[0], "MIDI");
+			if(ports.size() > 1 && link(_pcPort, ports[1].client, ports[1].port))
+				done += (done.empty() ? "" : ", ") + describePort(ports[1], "PC Port");
+			if(done.empty())
+				return false;
+			// The warning goes to the log only: the status bar has one line and this would wrap it.
+			_log += "raw MIDI: " + done + (ports.size() > 2
+				? " (this card publishes " + std::to_string(ports.size()) + " ports; every one of them clutters "
+				  "the DAW's MIDI list, see docs/bitwig-midi.md)" : "") + "\n";
+			_summary = done;
+			return true;
+		}
+
 	private:
+		// The number of the sound card whose ID is _id, or -1 if it is not loaded.
+		static int cardNumber(const std::string& _id)
+		{
+			if(_id.empty())
+				return -1;
+			std::error_code ec;
+			for(const auto& entry : std::filesystem::directory_iterator("/proc/asound", ec))
+			{
+				const auto name = entry.path().filename().string();
+				if(name.rfind("card", 0) != 0)
+					continue;
+				std::ifstream f(entry.path() / "id");
+				std::string line;
+				if(!std::getline(f, line) || line != _id)
+					continue;
+				try { return std::stoi(name.substr(4)); } catch(...) { return -1; }
+			}
+			return -1;
+		}
+
 		bool subscribe(const snd_seq_addr_t& _from, const snd_seq_addr_t& _to) const
 		{
 			snd_seq_port_subscribe_t* sub = nullptr;

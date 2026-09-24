@@ -135,7 +135,7 @@ namespace g1app
 		return valid() && m_impl->ports.size() == 2 && m_impl->connection != nullptr;
 	}
 
-	int WindowsMidi::addPort(const char* name)
+	int WindowsMidi::addPort(const char* name, const PortDevices&)
 	{
 		const int index = static_cast<int>(m_impl->ports.size());
 		m_impl->ports.push_back(std::make_shared<Impl::Port>(static_cast<uint8_t>(index)));
@@ -212,6 +212,12 @@ namespace g1app
 		}
 		});
 		return index;
+	}
+
+	std::string WindowsMidi::describe() const
+	{
+		return virtualPorts() ? "G1-Emu PC Port (editor) and G1-Emu MIDI"
+			: "Windows MIDI Services: " + error();
 	}
 
 	void WindowsMidi::poll(std::vector<std::vector<uint8_t>>& perPort)

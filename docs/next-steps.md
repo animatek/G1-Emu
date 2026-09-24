@@ -52,7 +52,7 @@ complete:
   and JUCE's own comment says it only worked on a Canary insider build when it was written. That
   comment is not useful on the affected Windows component: the owned endpoints do not appear.
 
-`JuceMidi::virtualPorts()` already reports whether the ports were created, and `EmuHost` puts it
+`JuceMidi::virtualPorts()` already reports whether the ports were created, and `MidiTransport::describe()` puts it
 in the status line. G1-Emu still defaults to owned ports like the hardware, with no silent
 fallback. The Windows MIDI Services experiment is blocked on Microsoft issue #1047 in component
 26100.8875, fixed for the November 2026 release; until then, Settings' manual MIDI device pairing
