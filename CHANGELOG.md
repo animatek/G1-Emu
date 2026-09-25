@@ -7,6 +7,12 @@ Older entries cite their commit by hand.
 
 ## 2026-09-25
 
+- **The upload test on a real Mac, written down (Claude, run by Javier and a Claude session on his
+  Mac).** On an Intel Mac with macOS 13.7.8, the `v0.1.0-alpha.4`
+  `g1run` and the NME 0.18.0 app, two uploads (one and two packets) arrive whole and get every
+  ACK, so #3 does not reproduce there; what differs from the reporter is Apple Silicon, macOS 26.7
+  and a source build of NME. Read from the `G1_MIDI_LOG=1` log of that run; NME's console was not
+  captured. In `docs/upload-timeouts.md`. Documentation only.
 - **A host command is no longer thrown away when its DSP has no idle gap (Claude, requested by
   Javier).** The last packet of nmedit's `korg.pch` got no ACK, so the
   upload timed out. The real G1 accepts that patch (Javier loaded it into slot A of the real synth

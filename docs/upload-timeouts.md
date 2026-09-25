@@ -126,6 +126,23 @@ backend, a copy of the flash), so the upload goes through `app/alsamidi.h` like 
   patch is not known.
 - Still not reproduced anywhere: #3 (a Mac, packet 0, so not a DSP problem). NME was not running in
   this pass, so nothing here used the editor itself.
+
+## On a real Mac (2026-09-25)
+
+Javier's Intel Mac, macOS 13.7.8, the prebuilt `v0.1.0-alpha.4` universal `g1run` with a scratch
+flash, and the Animatek NME 0.18.0 app. **Uploads work there.** Two patches: one packet to slot A
+(`f0 33 7c …`, 141 bytes, first and last) and two packets to slot B (`f0 33 75 …` and
+`f0 33 79 …`, 197 bytes each). Each arrived whole on `G1-Emu PC Port` and got its ACK (`36`, then
+`7f`), and NME then re-sent the knob assignments (cc `$25`), which it only does after "All packets
+sent and ACKed" (`replayPanelAssignments`). NME's own console was not captured; the MIDI log is
+enough. So CoreMIDI does not split or drop a 197-byte SysEx on Intel with macOS 13.
+
+What still separates this from #3: Apple Silicon (M4 Pro), macOS 26.7, and NME built from source
+(`94874fc`). Asked the reporter for their logs and for one of the failing patches (issue comments of
+2026-09-24 and 2026-09-25).
+
+Aside: `g1run` came up with no sound (`audio: no sound: No such device: default`). It appears to
+have read Javier's `settings.conf`, whose `default` device is the Linux one. Not related to #3.
 - Read in JUCE 8.0.12: the virtual-port input path (`juce_CoreMidi_mac.mm`, `MidiInput::Impl::consume`)
   returns without a word if its spin lock is contended (`ScopedTryLockType`). Nothing takes that
   lock in steady state, so it is noted and not a suspect.
