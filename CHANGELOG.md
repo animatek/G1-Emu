@@ -7,6 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-09-25
 
+- **Published `v0.1.0-alpha.5` pre-release (Claude, requested by Javier).** Annotated tag on
+  `a70b046`, after the CI of that commit was green on all five jobs (the previous commit's had
+  failed on arm64 and macOS, which is how the AArch64 LE bug was found). Tagged run 36127285397
+  completed on all five build jobs and the release job, and published five ROM-free packages:
+  Windows x86_64, macOS universal, Linux x86_64 native, Linux x86_64 JUCE and Linux arm64 native.
+  Downloaded the macOS archive: it holds `G1-Emu.app`, `g1run`, README and licence, both
+  executables are universal (x86_64 and arm64), and there is no ROM. Release:
+  <https://github.com/animatek/G1-Emu/releases/tag/v0.1.0-alpha.5>.
 - **LE on AArch64 was wrong in the same case as on x86-64 (Claude).** The CI of `c98886f` failed on
   Linux arm64 and macOS: `g1dspcheck`'s new "GT and LE with Z set" test. AArch64 computed
   `(N ^ V) + Z` and took LE only when that was exactly 1, so with Z = 1 and N != V (a sum of 2) it
