@@ -247,7 +247,11 @@ Applied to a build copy; the Gearmulator clone is never modified.
   made the saw sound, three did not, which is what pointed at state carried inside a block; the
   core is shared by x86-64 and AArch64, so the Mac had it too. The operand is now copied first.
 - **GT and LE on x86-64** (`jitops_decode_x64.cpp`) tested the parity of Z, N and V, which is right
-  except when Z = 1 and N != V. Now (N ^ V) | Z, as the AArch64 version already did. It did not
+  except when Z = 1 and N != V. Now (N ^ V) | Z. **LE on AArch64** (`jitops_decode_aarch64.cpp`)
+  had the same blind spot another way: it added (N ^ V) and Z and tested for exactly 1, so the sum
+  2 made LE false; now "not zero", like its GT. The x86 fix was first written believing AArch64
+  was right; `g1dspcheck`'s GT/LE test failing on the arm64 and macOS runners is what showed it
+  was not. It did not
   cause the silent saw (fixing it alone changed nothing there), but it is wrong, and `jitdiff`
   found it first.
 - The core's **interpreter** has the same LE mistake on IFcc and Bcc (Z = 1, N != V). Not fixed:

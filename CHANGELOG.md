@@ -7,6 +7,12 @@ Older entries cite their commit by hand.
 
 ## 2026-09-25
 
+- **LE on AArch64 was wrong in the same case as on x86-64 (Claude).** The CI of `c98886f` failed on
+  Linux arm64 and macOS: `g1dspcheck`'s new "GT and LE with Z set" test. AArch64 computed
+  `(N ^ V) + Z` and took LE only when that was exactly 1, so with Z = 1 and N != V (a sum of 2) it
+  was false. `cmake/Dsp56300.cmake` now tests "not zero", as its GT already did. The earlier entry
+  said AArch64 was right; it was right for GT only. **Checked:** the overlay applies and x86-64 is
+  unchanged (`g1dspcheck` passes); the AArch64 code can only run in CI, which is what confirms it.
 - **Release notes for `v0.1.0-alpha.5` (Claude, requested by Javier).** `docs/release-notes.md`,
   which the release job publishes, now describes alpha.5: the two upload fixes (idle DSP deadlock,
   dropped host command), the sawtooth (CMPM) and GT/LE fixes, the truncated-SysEx log line and the

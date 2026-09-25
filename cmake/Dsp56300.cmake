@@ -165,6 +165,15 @@ g1_dsp_replace(jitops_decode_x64.cpp
 				m_asm.or_(t.get().r32(), z.get().r32());
 				return asmjit::x86::CondCode::kNotZero;]=])
 
+# LE on AArch64 added (N ^ V) and Z and tested for exactly 1: with Z = 1 and N != V the sum is 2
+# and LE came out false. g1dspcheck's GT/LE test caught it on the arm64 runners. Not zero, as GT.
+g1_dsp_replace(jitops_decode_aarch64.cpp
+	[=[				m_asm.add(dst, dst, r.get());
+				m_asm.cmp(dst, asmjit::Imm(1));
+				return asmjit::arm::CondCode::kZero;]=]
+	[=[				m_asm.adds(dst, dst, r.get());	// (N ^ V) + Z is 0, 1 or 2: LE is "not 0"
+				return asmjit::arm::CondCode::kNotZero;]=])
+
 # An ESSI on the fine schedule (the links between DSPs) that sat idle owed the core every frame of
 # that time. The catch-up loop counts from fineLastClock, which only moves when the port is served or
 # its CRA is rewritten, so when a DSP with nothing to do (TX and RX off for seconds) woke up, it emitted
