@@ -237,7 +237,27 @@ Applied to a build copy; the Gearmulator clone is never modified.
   real port does not queue the frames of the time it was off, so an anchor more than 64 periods
   behind is put back at 64. Found by logging each TX frame's cycle count: a burst is many frames
   at the same one. `G1_THREADS=0` did not avoid it, which is what ruled the threading out.
-- `g1dspcheck` tests the JIT extensions and this idle port with synthetic programs (no ROM). The
+- **CMPM left |S| in its operand** (`jitops_alu.cpp`, `op_Cmpm_S1S2`). `alu_cmp` takes both absolute
+  values in place, and when the operand is an accumulator `decode_JJJ_read_56` returns the JIT's
+  cached register for it, not a copy. The rest of the block then read |a| for a, and if a was
+  already dirty |a| was written back. It silenced every sawtooth: `OscA`/`OscB` wave 2 and
+  `OscSlvC`. The waveform parameter rewrites a `jmp` in the oscillator (`P:$223` on DSP 0: `$26f`
+  for saw, `$2aa` for square), and the saw branch does `sub x1,b a1,a`, `cmpm a,b`, `tgt a,b`, so
+  its output froze at one value. Blocks of one or two instructions (`maxInstructionsPerBlock`)
+  made the saw sound, three did not, which is what pointed at state carried inside a block; the
+  core is shared by x86-64 and AArch64, so the Mac had it too. The operand is now copied first.
+- **GT and LE on x86-64** (`jitops_decode_x64.cpp`) tested the parity of Z, N and V, which is right
+  except when Z = 1 and N != V. Now (N ^ V) | Z, as the AArch64 version already did. It did not
+  cause the silent saw (fixing it alone changed nothing there), but it is wrong, and `jitdiff`
+  found it first.
+- The core's **interpreter** has the same LE mistake on IFcc and Bcc (Z = 1, N != V). Not fixed:
+  G1-Emu never runs it (`G1_INTERP` is unusable with the G1's main loop), and `jitdiff` says so.
+- `tools/jitdiff` finds this kind of bug: it runs instructions from a dump of P memory on the JIT
+  and on the interpreter from random states, or runs windows of K instructions as one JIT block
+  against the same JIT one instruction per block, and prints every register or memory word that
+  ends up different.
+- `g1dspcheck` tests the JIT extensions, CMPM, GT/LE and this idle port with synthetic programs (no
+  ROM). The
   idle-port test counts frames in a callback that never blocks, so without the fix it fails
   instead of hanging.
 

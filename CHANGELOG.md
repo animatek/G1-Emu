@@ -7,6 +7,21 @@ Older entries cite their commit by hand.
 
 ## 2026-09-25
 
+- **The sawtooth sounds again: the JIT's CMPM overwrote its operand (Claude, requested by Javier
+  after #4).** `OscA` and `OscB` on wave 2 (saw), and `OscSlvC`, gave a
+  constant instead of a wave. The saw branch of the oscillator does `cmpm a,b` then `tgt a,b`, and
+  the JIT took the absolute value for CMPM in the cached register it holds for `a`, so the next
+  instruction of the block read |a|. `cmake/Dsp56300.cmake` now copies the operand first. Found
+  with the new `tools/jitdiff`, which runs instructions dumped from the DSP on the JIT and on the
+  interpreter, or as one block against one per block, from random states; it also found that GT
+  and LE on x86-64 were wrong when Z = 1 and N != V (parity instead of `(N ^ V) | Z`), fixed too.
+  The same core runs on AArch64, so the Mac had the saw bug as well. **Checked** on Linux: all four
+  OscA waves measure −62 dBFS at 262 Hz and the recorded saw is a clean ramp; the module battery
+  gives 62 sound, 19 move, 11 fixed, 17 silent (61/19/12/17 before), the only change being
+  `OscSlvC`; `g1dspcheck` gains "CMPM keeps its operand" and "GT and LE with Z set", each failing
+  without its fix (checked by removing it) and passing with it; four reference patches measure the
+  same and `korg.pch` still uploads. Not checked on macOS or Windows. Also in `NOTES.md` and
+  `docs/module-battery.md`; the interpreter's own LE mistake is noted, not fixed.
 - **The upload test on a real Mac, written down (Claude, run by Javier and a Claude session on his
   Mac).** On an Intel Mac with macOS 13.7.8, the `v0.1.0-alpha.4`
   `g1run` and the NME 0.18.0 app, two uploads (one and two packets) arrive whole and get every

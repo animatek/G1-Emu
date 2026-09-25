@@ -110,6 +110,61 @@ g1_dsp_replace(dma.cpp
 	"		assert(false && \"DMA transfer mode not supported yet\");\n		return true;\n	}"
 	"		if(agmS == AddressGenMode::SingleCounterAnoUpdate && agmD == AddressGenMode::SingleCounterAnoUpdate)\n		{\n			memWrite(areaD, m_ddr, memRead(areaS, m_dsr));\n			if(isRequestTrigger() && m_dco)\n			{\n				--m_dco;\n				return false;\n			}\n			m_dco = m_dcomInit;\n			return true;\n		}\n\n		assert(false && \"DMA transfer mode not supported yet\");\n		return true;\n	}")
 
+# CMPM compares magnitudes, and alu_cmp takes the absolute value of its operand in place. When the
+# operand is an accumulator, decode_JJJ_read_56 hands over the JIT's cached register for it, not a
+# copy, so the rest of the block saw |a| instead of a, and if a was already dirty (`sub x1,b a1,a`
+# just before) |a| was even written back. It is what silenced every sawtooth (OscA/OscB wave 2,
+# OscSlvC): the saw branch does `cmpm a,b` then `tgt a,b`. Blocks of one instruction hid it. A copy.
+g1_dsp_replace(jitops_alu.cpp
+	[=[		const auto r = decode_JJJ_read_56(JJJ, !D);
+		alu_cmp(D, r64(r.get()), true);]=]
+	[=[		const auto r = decode_JJJ_read_56(JJJ, !D);
+		const RegGP v(m_block);
+		m_asm.mov(v, r64(r.get()));	// alu_cmp takes the absolute value in place: never on a cached register
+		alu_cmp(D, v, true);]=])
+
+# GT and LE on x86-64 tested the parity of Z, N and V: right in six of the eight cases, wrong when
+# Z = 1 and N != V, where GT came out true and LE false. The AArch64 version computes
+# (N ^ V) | Z and is right. Same here, in a scratch register.
+g1_dsp_replace(jitops_decode_x64.cpp
+	[=[				// (SRB_Z + (SRB_N != SRB_V)) == 0
+				ccrMaskTest(static_cast<CCRMask>(CCR_Z | CCR_N | CCR_V));
+				return asmjit::x86::CondCode::kParityEven;]=]
+	[=[				// (SRB_Z + (SRB_N != SRB_V)) == 0
+				constexpr auto mask = static_cast<CCRMask>(CCR_Z | CCR_N | CCR_V);
+				m_ccrRead |= mask;
+				updateDirtyCCR(mask);
+				const RegGP t(m_block);
+				const RegGP z(m_block);
+				const auto sr = m_dspRegs.getSR(JitDspRegs::Read).r32();
+				m_asm.mov(t.get().r32(), sr);
+				m_asm.shr(t.get().r32(), asmjit::Imm(CCRB_N - CCRB_V));	// N down to V's bit
+				m_asm.xor_(t.get().r32(), sr);							// that bit is N ^ V
+				m_asm.and_(t.get().r32(), asmjit::Imm(CCR_V));
+				m_asm.mov(z.get().r32(), sr);
+				m_asm.and_(z.get().r32(), asmjit::Imm(CCR_Z));
+				m_asm.or_(t.get().r32(), z.get().r32());				// ZF: (N ^ V) | Z == 0
+				return asmjit::x86::CondCode::kZero;]=])
+g1_dsp_replace(jitops_decode_x64.cpp
+	[=[				// (SRB_Z + (SRB_N != SRB_V)) == 1
+				ccrMaskTest(static_cast<CCRMask>(CCR_Z | CCR_N | CCR_V));
+				return asmjit::x86::CondCode::kParityOdd;]=]
+	[=[				// (SRB_Z + (SRB_N != SRB_V)) == 1
+				constexpr auto mask = static_cast<CCRMask>(CCR_Z | CCR_N | CCR_V);
+				m_ccrRead |= mask;
+				updateDirtyCCR(mask);
+				const RegGP t(m_block);
+				const RegGP z(m_block);
+				const auto sr = m_dspRegs.getSR(JitDspRegs::Read).r32();
+				m_asm.mov(t.get().r32(), sr);
+				m_asm.shr(t.get().r32(), asmjit::Imm(CCRB_N - CCRB_V));
+				m_asm.xor_(t.get().r32(), sr);
+				m_asm.and_(t.get().r32(), asmjit::Imm(CCR_V));
+				m_asm.mov(z.get().r32(), sr);
+				m_asm.and_(z.get().r32(), asmjit::Imm(CCR_Z));
+				m_asm.or_(t.get().r32(), z.get().r32());
+				return asmjit::x86::CondCode::kNotZero;]=])
+
 # An ESSI on the fine schedule (the links between DSPs) that sat idle owed the core every frame of
 # that time. The catch-up loop counts from fineLastClock, which only moves when the port is served or
 # its CRA is rewritten, so when a DSP with nothing to do (TX and RX off for seconds) woke up, it emitted

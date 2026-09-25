@@ -19,6 +19,12 @@ tools/battery/battery.py --only DrumSynth --verbose --param 4=100
 
 Run of 2026-09-20, 3 s per module: **61 sound**, **19 move** (a slow signal: LFOs, envelopes, sequencers), 12 hold a fixed level and 17 give nothing, out of 109.
 
+Run of 2026-09-25, after the JIT's CMPM fix: **62 sound**, 19 move, 11 hold a fixed level and 17
+give nothing. The one change is `OscSlvC` (the sawtooth slave), fixed level → sounds; every
+other verdict is the same. The battery runs each module with its default parameters, so `OscA`
+and `OscB` are measured on their default sine: their sawtooth (wave 2) was silent too and now
+measures −62 dBFS at 262 Hz, like the other three waves.
+
 ## What the verdicts mean
 
 - **sounds** — something at 20 Hz or more comes out.
@@ -154,7 +160,7 @@ Run of 2026-09-20, 3 s per module: **61 sound**, **19 move** (a slow signal: LFO
 | 106 | OscSineBank | Oscillator | 9/1 | sounds (-56 dBFS, 262 Hz) |
 | 14 | OscSlvA | Oscillator | 4/1 | sounds (-62 dBFS, 262 Hz) |
 | 10 | OscSlvB | Oscillator | 2/1 | sounds (-62 dBFS, 262 Hz) |
-| 11 | OscSlvC | Oscillator | 2/1 | fixed level (-68 dBFS) |
+| 11 | OscSlvC | Oscillator | 2/1 | sounds (-62 dBFS, 262 Hz) (2026-09-25; was a fixed level before the CMPM fix) |
 | 12 | OscSlvD | Oscillator | 2/1 | sounds (-62 dBFS, 262 Hz) |
 | 13 | OscSlvE | Oscillator | 3/1 | sounds (-64 dBFS, 523 Hz) |
 | 85 | OscSlvFM | Oscillator | 3/1 | sounds (-62 dBFS, 262 Hz) |

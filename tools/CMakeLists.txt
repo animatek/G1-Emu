@@ -11,3 +11,6 @@ add_test(NAME g1dspcheck COMMAND g1dspcheck)
 # whose binaries are EXCLUDE_FROM_ALL here and so are never built: ctest -L g1.
 set_tests_properties(g1dspcheck PROPERTIES TIMEOUT 30 LABELS g1)
 add_subdirectory(patchtest)
+
+add_executable(jitdiff jitdiff.cpp)
+target_link_libraries(jitdiff PRIVATE dsp56kEmu)

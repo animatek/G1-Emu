@@ -108,6 +108,7 @@ the four outputs and the links between DSPs; it also has probes for the panel (s
 | `tools/patchtest/` | `g1patchtest`: the test bench. |
 | `tools/battery/` | `battery.py`: one patch per module type, played and measured (`docs/module-battery.md`). |
 | `tools/dspdis.cpp` | DSP56300 disassembler (hex words on stdin). |
+| `tools/jitdiff.cpp` | Runs DSP instructions on the JIT and on the interpreter (or as one block against one per block) from random states and prints what differs. |
 
 **The plan and the pending ideas are in `ROADMAP.md`.**
 

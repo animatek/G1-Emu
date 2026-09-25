@@ -149,6 +149,39 @@ namespace
 	}
 }
 
+	// CMPM takes absolute values to compare; it must not leave them in the accumulator it read.
+	// The JIT did, on its cached copy, so the next instruction of the same block saw |a|: this is
+	// what silenced every sawtooth (the G1's saw does cmpm a,b then tgt a,b).
+	void cmpmKeepsOperand(uint32_t blockSize)
+	{
+		Machine m(blockSize);
+		// cmpm a,b; tfr a,b; jmp $102
+		m.program(0x100, {0x20000f, 0x200009, 0x0c0102});
+		const uint64_t a = 0xff80000000000000ull;	// negative, left-aligned
+		m.dsp.regs().a.var = a;
+		m.dsp.regs().b.var = 0x0010000000000000ull;
+		m.dsp.setPC(0x100);
+		m.until(0x102);
+		require(m.dsp.regs().a.var == a, "CMPM changes the accumulator it compares");
+		require(m.dsp.regs().b.var == a, "the instruction after CMPM reads |a| instead of a");
+	}
+
+	// GT is Z + (N ^ V) == 0, LE the opposite. The x86-64 JIT used the parity of Z, N and V,
+	// which is wrong exactly when Z = 1 and N != V.
+	void greaterThanWithZero(uint32_t blockSize)
+	{
+		Machine m(blockSize);
+		// tgt x1,a; add x0,a ifle; jmp $102
+		m.program(0x100, {0x027060, 0x202f40, 0x0c0102});
+		m.dsp.regs().x.var = 0x100000000001ull;	// x1 = $100000, x0 = $000001
+		m.dsp.regs().a.var = 0;
+		m.dsp.regs().sr.var = 0x0c;	// Z = 1, N = 1, V = 0: GT false, LE true
+		m.dsp.getJit().checkModeChange();
+		m.dsp.setPC(0x100);
+		m.until(0x102);
+		require(m.dsp.regs().a.var == 0x0000000100000000ull, "GT or LE wrong with Z set and N != V");
+	}
+
 	// An ESSI on the fine schedule (the links between DSPs) that sat idle owes nothing for that
 	// time. Without the overlay's cap the clock emitted every frame of the gap in one call: on a
 	// real patch (nmedit's korg.pch) DSP 0 woke up after 400 million cycles and pushed millions of
@@ -231,9 +264,11 @@ int main()
 			run("finite DO", [=] { finiteLoop(blockSize); });
 			run("nested finite DO", [=] { nestedFiniteLoop(blockSize); });
 			run("DO FOREVER with nested DO", [=] { nestedLoop(blockSize); });
+			run("CMPM keeps its operand", [=] { cmpmKeepsOperand(blockSize); });
+			run("GT and LE with Z set", [=] { greaterThanWithZero(blockSize); });
 			run("idle link port", [=] { idleLinkPort(); });
 		}
-		std::puts("OK: short MOVEM, JIT invalidation, DO FOREVER, IRQD, nested DO and an idle link port (blocks 1/32)");
+		std::puts("OK: short MOVEM, JIT invalidation, DO FOREVER, IRQD, nested DO, CMPM, GT/LE and an idle link port (blocks 1/32)");
 		return 0;
 	}
 	catch(const std::exception& error)
