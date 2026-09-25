@@ -52,6 +52,7 @@ for l in open(sys.argv[1], errors='replace'):
 msgs = re.findall(rb'\xf0[\x00-\x7f]*\xf7', bytes(out))
 acks = [m for m in msgs if len(m) > 6 and m[2] >> 2 == 0x16 and m[5] == 0x36]
 print("packets received by the emulator:", len(inn), inn)
-print("first-packet ACKs (0x36):", len(acks), "| SysEx messages sent back:", len(msgs))
+acks7 = [m for m in msgs if len(m) > 5 and m[2] >> 2 == 0x16 and m[5] == 0x7f]
+print("ACKs: first packet (0x36):", len(acks), "| the others (0x7f):", len(acks7), "| SysEx messages sent back:", len(msgs))
 EOF
 kill -INT $GP 2>/dev/null; sleep 2

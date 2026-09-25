@@ -97,16 +97,33 @@ backend, a copy of the flash), so the upload goes through `app/alsamidi.h` like 
   Checked after the fix: `korg.pch` uploads without hanging, `g1run` over ALSA exits on SIGINT,
   the other patches measure the same (SimpleOSC −61.8 dBFS at 262 Hz, `A Nucleo Duro` −78.4 dBFS at
   25 Hz, `Conexiones encadenadas` −59.5 dBFS at 262 Hz), and `ctest` passes.
-- **What is left with `korg.pch`: its last packet still gets no ACK**, not even after 8 emulated
-  seconds. The display shows the patch loaded (`kor…`, 11 voices) and the 68k spins in `$10c354`,
-  polling bit 0 of DSP 0's HI08 status (`$200000`, `RXDF`) after sending it a host command. DSP 0
-  never services vector `$76` ("send me a word"), which a healthy patch's DSP 0 does hundreds of
-  times. The DSPs of this patch spend almost all their time in the per-sample routine: sampling
-  their PC, the idle loop (`$016c`/`$016e`) takes 95 % of the samples for a small patch, about 6 %
-  for `progger` (which works) and under 5 % for `korg`. **A likely reading, not verified:** the host
-  command finds no gap. Whether that is an emulator that charges more cycles than the real DSP or a
-  patch that is too heavy for a real G1 is not known. #4 (several modules) could be this or the
-  deadlock above; the reporter's patch is not known.
+- **`korg.pch`'s last packet got no ACK: a host command was being dropped (found and fixed).** The
+  real G1 accepts this patch: Javier loaded it from NME into slot A of the real synth on 2026-09-25
+  and all four packets were ACKed (the packets NME sent are byte for byte the ones
+  `--dump-packets` writes, checked for three of the four). It then reports `VoiceCount 9 1 1 0`:
+  slot A got 9 voices because slots B and C already held patches; alone in the emulator it gets 11.
+  So the fault was ours. The display showed the patch loaded and the 68k spun in `$10c354`, polling
+  bit 0 of DSP 0's HI08 status (`$200000`, `RXDF`) after sending it host command `$76`. DSP 0 never
+  serviced it because `Dsp::hostCommand` had thrown it away: it waits up to 200,000 cycles for
+  `hasPendingInterrupts()` to go false and drops the command if it does not, and that predicate is
+  also true while the DSP is inside an interrupt. A DSP whose sample routine fills the block never
+  leaves it (the idle loop `$016c`/`$016e` takes 95 % of PC samples for a small patch, about 6 % for
+  `progger`, under 5 % for `korg`). Logging showed exactly one drop, `$76` on DSP 0, and none for
+  the healthy patches. Fix: wait only for the external interrupt queue (the 32 entries the wait was
+  there to protect) to empty, with `hasPendingExternalInterrupts()`.
+  Checked after the fix: all 71 sample patches upload with no missing reply (68 before), `korg.pch`
+  included; over ALSA against `g1run` its four packets get their ACKs (one `0x36`, three `0x7f`, as
+  on the real G1) and `g1run` exits on SIGINT; the five reference patches measure the same
+  (SimpleOSC −61.8 dBFS at 262 Hz among them); `ctest` passes.
+  It also explains what looked like a threshold: removing one module at a time (with its cables,
+  parameters and names; morphs untouched) made the last packet answer for 10 of the 14 voice-area
+  modules and for none of the six in the FX area, which fits a DSP that is only just full and gets
+  a gap when most modules go. Ruled out on the way, with copies of `korg.pch`: the voice count
+  (asks for 32, gets 11; 4, 8 and 10 fail the same way) and the size of the last packet. **Not
+  known:** whether a real DSP is also that close to full with this patch or the emulator charges
+  more cycles per module than the `cycles` in `modules.xml` says; the host command now gets through
+  either way. #4 (several modules) could be this, the deadlock above, or neither: the reporter's
+  patch is not known.
 - Still not reproduced anywhere: #3 (a Mac, packet 0, so not a DSP problem). NME was not running in
   this pass, so nothing here used the editor itself.
 - Read in JUCE 8.0.12: the virtual-port input path (`juce_CoreMidi_mac.mm`, `MidiInput::Impl::consume`)

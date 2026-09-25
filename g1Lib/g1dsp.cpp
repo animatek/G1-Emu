@@ -470,12 +470,15 @@ namespace g1
 		if(!m_booted)
 			return;
 		// The real DSP services each host command as soon as it arrives. Here it is allowed to run
-		// until it has dispatched what is pending: otherwise the external interrupt queue
-		// (32 entries) fills up and injectExternalInterrupt waits forever.
+		// until the external interrupt queue (32 entries) is empty: otherwise it fills up and
+		// injectExternalInterrupt waits forever. Only that queue: hasPendingInterrupts() also counts
+		// the DSP being inside an interrupt, and a DSP with almost no idle time (nmedit's korg.pch:
+		// its sample routine fills the block) never leaves it for the 200,000 cycles allowed, so the
+		// command was dropped, and the 68k polled the HI08 for an answer that never came.
 		const auto stop = m_dsp.getCycles() + g_waitClamp;
-		while(m_dsp.hasPendingInterrupts() && m_booted && m_dsp.getCycles() < stop)
+		while(m_dsp.hasPendingExternalInterrupts() && m_booted && m_dsp.getCycles() < stop)
 			runUntil(m_dsp.getCycles() + 16);
-		if(m_dsp.hasPendingInterrupts())
+		if(m_dsp.hasPendingExternalInterrupts())
 			return;	// the DSP does not service them (stopped): better to lose the command than hang
 		hdi08().writeHostCommand(_vector);
 		++m_hostCommands;

@@ -5,6 +5,25 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-09-25
+
+- **A host command is no longer thrown away when its DSP has no idle gap (Claude, requested by
+  Javier).** The last packet of nmedit's `korg.pch` got no ACK, so the
+  upload timed out. The real G1 accepts that patch (Javier loaded it into slot A of the real synth
+  and all four packets were ACKed), so the fault was ours: `Dsp::hostCommand` waited up to 200,000
+  cycles for `hasPendingInterrupts()` to go false and dropped the command otherwise, but that
+  predicate is also true while a DSP is inside an interrupt, and here the DSP's sample routine
+  fills the block. The `$76` sent to DSP 0 was lost and the 68k polled its HI08 status for ever.
+  It now waits only for the external interrupt queue (`hasPendingExternalInterrupts()`), which is
+  what the wait protected. **Checked** on Linux (native backend): logging showed exactly one drop
+  (`$76` on DSP 0) for `korg.pch` and none for the healthy patches; after the fix all 71 sample
+  patches upload with no missing reply (68 before), and over ALSA against `g1run` `korg.pch`'s four
+  packets get their ACKs (one `0x36`, three `0x7f`, like the real G1) and `g1run` exits on SIGINT;
+  five reference patches measure the same as before; `ctest` passes. `tools/upload-e2e.sh` now also
+  counts the `0x7f` ACKs. Not checked on macOS or Windows; NME was not running. It may or may not be
+  the reporter's case in #4, whose patch is not known. Detail in `docs/upload-timeouts.md` and
+  `NOTES.md`.
+
 ## 2026-09-24
 
 - **A DSP that sat idle no longer deadlocks the emulator, and a way to replay an upload over ALSA

@@ -126,6 +126,15 @@ At boot the emulated G1 announces itself on the PC PORT (`F0 33 50 06 00 07 08 0
 - Earlier emulator problems that blocked patch loading (all fixed): no PIT; `readIsr` letting the
   DSP run 200 000 cycles per status poll; host-command arbitration; a full interrupt queue; and
   IRQD injected while disabled in the IPRC (the emulator only checked SR).
+- **A host command must not wait for the DSP to be idle** (`Dsp::hostCommand`). It used to wait up to
+  200 000 cycles for `hasPendingInterrupts()` to go false and to drop the command otherwise, but
+  that predicate is also true while the DSP is inside an interrupt, and a DSP whose sample routine
+  fills the block never leaves it. With nmedit's `korg.pch` the `$76` ("send me a word") sent to
+  DSP 0 was thrown away, and the 68k polled `RXDF` of `$200000` forever: the upload's last packet
+  got no ACK. It now waits only for the external interrupt queue (`hasPendingExternalInterrupts()`),
+  the 32 entries the wait was protecting. The real G1 accepts `korg.pch` (loaded into slot A on
+  2026-09-25); the emulated DSPs sit almost without an idle gap with it, which may or may not be
+  how full a real one is.
 - **PIDs:** each upload gets a patch ID from the OS (ACK `$36`). `g1boot ... replay` rewrites the
   PID of Parameter (cc `$13`), PatchModification (cc `$17`, except `$41`) and PatchPacket (cc
   `$1C–$1F` without the command bit) messages with the one the OS gave, and redoes the checksum
