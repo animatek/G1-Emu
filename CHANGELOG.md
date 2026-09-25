@@ -7,8 +7,26 @@ Older entries cite their commit by hand.
 
 ## 2026-09-24
 
+- **A DSP that sat idle no longer deadlocks the emulator, and a way to replay an upload over ALSA
+  (Claude, requested by Javier).** Uploading nmedit's `korg.pch`
+  hung `g1patchtest` and `g1run` (which then ignored SIGINT): the main thread waited in the core's
+  TX write callback for room in a ring of 32768 frames, with every worker idle, also with
+  `G1_THREADS=0`. The ring was really full: after a 434-million-cycle gap in which DSP 0's ESSI
+  emitted nothing, the core's fine-schedule clock paid the whole debt in one call (4.5 million
+  frames). `cmake/Dsp56300.cmake` now puts an anchor more than 64 periods behind back at 64, as a
+  port that was off queues nothing; `g1dspcheck` gained "idle link port", which fails without it
+  (checked by removing the fix) and never blocks, as its callback only counts. Also
+  `g1patchtest --dump-packets DIR` and `tools/upload-e2e.sh`, which replays a patch's packets with
+  `aseqsend` against a running `g1run` on a copy of the flash. **Checked** on Linux (native
+  backend): `ctest` passes; `korg.pch` uploads without hanging and `g1run` exits on SIGINT; five
+  other patches measure the same as before (SimpleOSC −61.8 dBFS at 262 Hz among them); the 71 sample
+  patches upload, two of them (`future303`, `progger`) only needing more than the bench's 300
+  emulated ms. **Not fixed:** `korg.pch`'s last packet still gets no ACK (its DSPs have almost no idle
+  time and DSP 0 never services the host command; cause not established), and the macOS report (#3)
+  is not reproduced. Not checked on macOS or Windows; NME was not running. Detail in
+  `docs/upload-timeouts.md` and `NOTES.md`.
 - **The MIDI backends behind one interface, `MidiTransport` (Claude, requested by Javier; branch
-  `refactor/midi-transport`, not merged).** `AlsaMidi`, `JuceMidi` and `WindowsMidi` resembled each
+  `refactor/midi-transport`, merged into `main` as `12153eb`).** `AlsaMidi`, `JuceMidi` and `WindowsMidi` resembled each
   other by habit, with no declared interface, and `EmuHost` chose between them with `#ifdef`s and
   carried the status text of each. Now `app/miditransport.h` declares `MidiTransport` (`addPort`,
   `poll`, `send`, `describe`, and `linkRawCard` for the ALSA-only raw MIDI card), the three classes

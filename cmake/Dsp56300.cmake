@@ -110,6 +110,20 @@ g1_dsp_replace(dma.cpp
 	"		assert(false && \"DMA transfer mode not supported yet\");\n		return true;\n	}"
 	"		if(agmS == AddressGenMode::SingleCounterAnoUpdate && agmD == AddressGenMode::SingleCounterAnoUpdate)\n		{\n			memWrite(areaD, m_ddr, memRead(areaS, m_dsr));\n			if(isRequestTrigger() && m_dco)\n			{\n				--m_dco;\n				return false;\n			}\n			m_dco = m_dcomInit;\n			return true;\n		}\n\n		assert(false && \"DMA transfer mode not supported yet\");\n		return true;\n	}")
 
+# An ESSI on the fine schedule (the links between DSPs) that sat idle owed the core every frame of
+# that time. The catch-up loop counts from fineLastClock, which only moves when the port is served or
+# its CRA is rewritten, so when a DSP with nothing to do (TX and RX off for seconds) woke up, it emitted
+# them all at once: millions of frames, in one call, into a ring of 32768. The ring filled, the write
+# callback waits for room, and the only thread that can make room is the one waiting: a deadlock, seen
+# uploading nmedit's korg.pch (a 434-million-cycle gap on DSP 0). A real port does not queue the frames
+# of the time it was off, so an anchor more than 64 periods behind is put back at 64.
+g1_dsp_replace(esaiclock.cpp
+	[=[while (static_cast<uint64_t>(ic - e.fineLastClock) >= e.finePeriod)]=]
+	[=[const uint64_t g1MaxCatchUp = static_cast<uint64_t>(e.finePeriod) * 64u;
+					if (static_cast<uint64_t>(ic - e.fineLastClock) > g1MaxCatchUp)
+						e.fineLastClock = ic > g1MaxCatchUp ? ic - g1MaxCatchUp : 0;
+					while (static_cast<uint64_t>(ic - e.fineLastClock) >= e.finePeriod)]=])
+
 foreach(source IN LISTS g1_dsp_files)
 	get_filename_component(name "${source}" NAME)
 	configure_file("${g1_dsp_prepare}/${name}" "${g1_dsp_overlay}/${name}" COPYONLY)

@@ -1,6 +1,8 @@
 // Regression tests for the core G1-Emu uses. Synthetic programs, no ROM.
 #include "dsp56kEmu/dsp.h"
 #include "dsp56kEmu/memory.h"
+#include "dsp56kEmu/essi.h"
+#include "dsp56kEmu/esaiclock.h"
 #include "dsp56kEmu/peripherals.h"
 #include "dsp56kBase/logging.h"
 
@@ -147,6 +149,57 @@ namespace
 	}
 }
 
+	// An ESSI on the fine schedule (the links between DSPs) that sat idle owes nothing for that
+	// time. Without the overlay's cap the clock emitted every frame of the gap in one call: on a
+	// real patch (nmedit's korg.pch) DSP 0 woke up after 400 million cycles and pushed millions of
+	// frames into a ring of 32768, and the write callback waited for room forever. The callback
+	// here only counts, so a regression fails the test instead of hanging it.
+	void idleLinkPort()
+	{
+		dsp56k::DefaultMemoryValidator validator;
+		dsp56k::Memory memory{validator, 0x1000, 0x1000, 0x800};
+		dsp56k::Peripherals56303 periph;
+		dsp56k::PeripheralsNop nop;
+		dsp56k::DSP dsp{memory, &periph, &nop};
+
+		auto& clock = periph.getEssiClock();
+		clock.setClockSource(dsp56k::EsxiClock::ClockSource::Cycles);
+		clock.setSamplerate(96000 * 2);
+		clock.setCyclesPerSample(432);
+
+		auto& essi = periph.getEssi0();
+		essi.setFineLinkMode(true);
+		uint64_t frames = 0;
+		essi.setWriteTxCallback([&frames](uint64_t&, const dsp56k::Audio::TxFrame&) { ++frames; });
+		essi.setReadRxCallback([](uint64_t&, dsp56k::Audio::RxFrame& _frame) { _frame.resize(2); });	// the default waits for input
+		essi.writeCRA(0x181801);	// 96 cycles per word: the link between DSPs
+		essi.writeCRB(0x0328b0);	// transmitter on
+		require(essi.hasEnabledTransmitters() != 0, "the transmitter did not turn on");
+
+		// Running normally: a frame is two words, so one every 192 cycles: 50 in 100 word periods.
+		for(uint32_t i = 0; i < 100; ++i)
+		{
+			dsp.fastForward(0, 96);
+			clock.exec();
+		}
+		require(frames >= 48 && frames <= 52, "a port running normally must emit one frame per two word periods");
+
+		// Idle for 400 million cycles (nothing served the clock), then it wakes up.
+		frames = 0;
+		dsp.fastForward(0, 400000000);
+		clock.exec();
+		require(frames <= 64, "an idle port emitted the frames of its whole idle time at once");
+
+		// And it carries on at the normal rate afterwards.
+		frames = 0;
+		for(uint32_t i = 0; i < 100; ++i)
+		{
+			dsp.fastForward(0, 96);
+			clock.exec();
+		}
+		require(frames >= 48 && frames <= 52, "the port did not go back to its normal rate");
+	}
+
 int main()
 {
 	// The core reports JIT errors (bad encodings, blocks it could not emit) through its log, which
@@ -178,8 +231,9 @@ int main()
 			run("finite DO", [=] { finiteLoop(blockSize); });
 			run("nested finite DO", [=] { nestedFiniteLoop(blockSize); });
 			run("DO FOREVER with nested DO", [=] { nestedLoop(blockSize); });
+			run("idle link port", [=] { idleLinkPort(); });
 		}
-		std::puts("OK: short MOVEM, JIT invalidation, DO FOREVER, IRQD and nested DO (blocks 1/32)");
+		std::puts("OK: short MOVEM, JIT invalidation, DO FOREVER, IRQD, nested DO and an idle link port (blocks 1/32)");
 		return 0;
 	}
 	catch(const std::exception& error)

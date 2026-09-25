@@ -218,7 +218,19 @@ Applied to a build copy; the Gearmulator clone is never modified.
 - DMA from a fixed address to a fixed address (DAM `100 100`): no branch at all; used for the
   audio inputs.
 - DMA "block per request, DE not cleared" (DTM=100): ignored; DMA3 of DSP 0 uses it.
-- `g1dspcheck` tests the JIT extensions with synthetic programs (no ROM).
+- ESSI on the fine schedule, idle: the clock's catch-up loop (`EsxiClock::exec`,
+  `while(ic - fineLastClock >= finePeriod)`) counts from `fineLastClock`, which only moves when the
+  port is served or its CRA is rewritten. A DSP with nothing to do can leave both ESSIs off for
+  seconds; when it woke up the loop emitted every frame of the gap in one call. With nmedit's
+  `korg.pch` DSP 0 woke after 434 million cycles (4.5 million frames) into a TX ring of 32768; the
+  core's write callback (`Audio::Audio`, `m_audioOutputs.push_back`, a semaphore) waits for room,
+  and the thread that would make room is the one waiting: a deadlock, with all workers idle. A
+  real port does not queue the frames of the time it was off, so an anchor more than 64 periods
+  behind is put back at 64. Found by logging each TX frame's cycle count: a burst is many frames
+  at the same one. `G1_THREADS=0` did not avoid it, which is what ruled the threading out.
+- `g1dspcheck` tests the JIT extensions and this idle port with synthetic programs (no ROM). The
+  idle-port test counts frames in a callback that never blocks, so without the fix it fails
+  instead of hanging.
 
 ### The DSP JIT on ARM
 

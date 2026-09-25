@@ -1,6 +1,6 @@
 // g1patchtest: test bench for the emulated G1, with no window and no editor.
 //
-//   g1patchtest ROM patch.pch [--note 60] [--seconds 2] [--wav output.wav]
+//   g1patchtest ROM patch.pch [--note 60] [--seconds 2] [--wav output.wav] [--dump-packets dir]
 //
 // Boots the OS, greets like NME (IAm), uploads the patch with the same code NME uses
 // (PchFileIO -> PatchSerializer -> UploadPacketizer), packet by packet waiting for each
@@ -102,19 +102,21 @@ int main(int argc, char** argv)
 {
 	if(argc < 3)
 	{
-		std::fprintf(stderr, "usage: g1patchtest ROM patch.pch [--note N] [--seconds S] [--wav file.wav] [--input-sine Hz]\n");
+		std::fprintf(stderr, "usage: g1patchtest ROM patch.pch [--note N] [--seconds S] [--wav file.wav] [--input-sine Hz] [--dump-packets dir]\n");
 		return 2;
 	}
 	int note = 60;
 	double seconds = 2.0;
 	std::string wavPath;
 	double inputHz = 0;
+	std::string dumpDir;
 	for(int i = 3; i + 1 < argc; i += 2)
 	{
 		if(!std::strcmp(argv[i], "--note")) note = std::atoi(argv[i + 1]);
 		else if(!std::strcmp(argv[i], "--seconds")) seconds = std::atof(argv[i + 1]);
 		else if(!std::strcmp(argv[i], "--wav")) wavPath = argv[i + 1];
 		else if(!std::strcmp(argv[i], "--input-sine")) inputHz = std::atof(argv[i + 1]);
+		else if(!std::strcmp(argv[i], "--dump-packets")) dumpDir = argv[i + 1];
 	}
 
 	// The patch, with NME's module descriptions.
@@ -205,6 +207,14 @@ int main(int argc, char** argv)
 	for(size_t i = 0; i < packets.size(); ++i)
 	{
 		const auto msg = UploadPacketizer::frame(packets[i], i == 0, i + 1 == packets.size(), 0);
+		// --dump-packets: the exact SysEx NME would send, one file per packet, to replay it over
+		// a real MIDI port against g1run (docs/upload-timeouts.md).
+		if(!dumpDir.empty())
+		{
+			char name[32];
+			std::snprintf(name, sizeof(name), "packet-%02zu.syx", i);
+			std::ofstream(dumpDir + "/" + name, std::ios::binary).write(reinterpret_cast<const char*>(msg.data()), static_cast<std::streamsize>(msg.size()));
+		}
 		const auto before = mc.ucCycles();
 		const auto reply = transact(mc, msg, ackMs);
 		const auto ms = (mc.ucCycles() - before) / g_ms;

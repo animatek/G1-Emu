@@ -70,3 +70,46 @@ on their Mac, and can also send the three logs above.
   when a message reaches JUCE without its `F7`. That is the line to look for in the first row of the
   table above. Not seen firing yet: no tool here sends a SysEx without `F7`.
 
+## Second pass on Linux, over real ALSA ports (2026-09-24)
+
+`g1patchtest --dump-packets DIR` writes the exact SysEx NME would send, one file per packet, and
+`tools/upload-e2e.sh patch.pch` replays them with `aseqsend` against a running `g1run` (native
+backend, a copy of the flash), so the upload goes through `app/alsamidi.h` like NME's does.
+
+- The 71 `.pch` files under `../Nomad2026` were uploaded with `g1patchtest`: 68 finish. Packets are
+  197 bytes and the biggest patch is 17 packets. `future303` and `progger` seemed to lose packets 8
+  and 9 only because the bench waits 300 emulated ms for a reply; with `G1_ACKMS=15000` they finish,
+  and the slowest packet takes 812 ms (the OS loading code into the DSPs). NME waits 5 s per packet,
+  so the OS being slow is not what times out.
+- `D Trama Viva` (5 packets) over ALSA: all five arrive whole (197, 197, 197, 197 and 19 bytes) and
+  the OS answers each. The native backend does not lose a 197-byte SysEx.
+- **`nmedit/jMod/src/patches/korg.pch` deadlocked the emulator: found and fixed.** After packet 3
+  the OS answers `f0 33 50 06 01 05 0b 00 00 00 0a f7` (a `VoiceCount` NMInfo, 11 voices, not an
+  error) and packet 4 never got an answer. It happened in `g1patchtest`, and in `g1run` over ALSA,
+  which then ignored SIGINT and SIGTERM. Under gdb the main thread sat in `Hdi08::read8` →
+  `Dsp::readIsr` → `Dsp::runUntil` → `Essi::execTX` → the core's TX write callback, waiting on a
+  semaphore, while the three workers idled in `Microcontroller::workerLoop`. `G1_THREADS=0` hung
+  the same way, so it was not the threading. The TX ring (32768 frames) really was full: logging
+  the cycle count of every TX frame showed bursts of frames at one cycle count, after gaps of
+  335 thousand and then 434 million cycles in which DSP 0's ESSI emitted nothing. The clock's
+  catch-up loop paid all of that debt at once when the port woke up. Fix: `cmake/Dsp56300.cmake`
+  (`NOTES.md`, "DSP core fixes"), plus `g1dspcheck` "idle link port", which fails without it.
+  Checked after the fix: `korg.pch` uploads without hanging, `g1run` over ALSA exits on SIGINT,
+  the other patches measure the same (SimpleOSC −61.8 dBFS at 262 Hz, `A Nucleo Duro` −78.4 dBFS at
+  25 Hz, `Conexiones encadenadas` −59.5 dBFS at 262 Hz), and `ctest` passes.
+- **What is left with `korg.pch`: its last packet still gets no ACK**, not even after 8 emulated
+  seconds. The display shows the patch loaded (`kor…`, 11 voices) and the 68k spins in `$10c354`,
+  polling bit 0 of DSP 0's HI08 status (`$200000`, `RXDF`) after sending it a host command. DSP 0
+  never services vector `$76` ("send me a word"), which a healthy patch's DSP 0 does hundreds of
+  times. The DSPs of this patch spend almost all their time in the per-sample routine: sampling
+  their PC, the idle loop (`$016c`/`$016e`) takes 95 % of the samples for a small patch, about 6 %
+  for `progger` (which works) and under 5 % for `korg`. **A likely reading, not verified:** the host
+  command finds no gap. Whether that is an emulator that charges more cycles than the real DSP or a
+  patch that is too heavy for a real G1 is not known. #4 (several modules) could be this or the
+  deadlock above; the reporter's patch is not known.
+- Still not reproduced anywhere: #3 (a Mac, packet 0, so not a DSP problem). NME was not running in
+  this pass, so nothing here used the editor itself.
+- Read in JUCE 8.0.12: the virtual-port input path (`juce_CoreMidi_mac.mm`, `MidiInput::Impl::consume`)
+  returns without a word if its spin lock is contended (`ScopedTryLockType`). Nothing takes that
+  lock in steady state, so it is noted and not a suspect.
+
