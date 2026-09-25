@@ -7,6 +7,11 @@ Older entries cite their commit by hand.
 
 ## 2026-09-25
 
+- **Release notes for `v0.1.0-alpha.5` (Claude, requested by Javier).** `docs/release-notes.md`,
+  which the release job publishes, now describes alpha.5: the two upload fixes (idle DSP deadlock,
+  dropped host command), the sawtooth (CMPM) and GT/LE fixes, the truncated-SysEx log line and the
+  `%USERPROFILE%` fallback. It says plainly that the fixes were verified on Linux only. The Windows
+  quick start, ROM, signing and platform sections are kept from alpha.4. Documentation only.
 - **The sawtooth sounds again: the JIT's CMPM overwrote its operand (Claude, requested by Javier
   after #4).** `OscA` and `OscB` on wave 2 (saw), and `OscSlvC`, gave a
   constant instead of a wave. The saw branch of the oscillator does `cmpm a,b` then `tgt a,b`, and

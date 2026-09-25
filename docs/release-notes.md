@@ -1,25 +1,26 @@
-# G1-Emu v0.1.0-alpha.4
+# G1-Emu v0.1.0-alpha.5
 
-**This is the first pre-release verified end to end on Linux, macOS and Windows.** The same tag is
-built and DSP-tested in CI on Linux x86-64 (native and JUCE backends), Linux arm64, macOS universal
-and Windows x86-64. The window, audio and Animatek NME handshake have now also been exercised on
-real macOS and Windows machines; macOS has additionally completed patch uploads.
+**This pre-release fixes patch uploads that timed out and oscillators whose sawtooth was silent.**
+It is built and DSP-tested in CI on Linux x86-64 (native and JUCE backends), Linux arm64, macOS
+universal and Windows x86-64. The fixes were found and verified on Linux; they are in the DSP and
+68k emulation shared by every platform, but they have not been tried on a real Mac or Windows
+machine yet. If uploads still time out for you, please say so on
+[issue #3](https://github.com/animatek/G1-Emu/issues/3) or
+[issue #4](https://github.com/animatek/G1-Emu/issues/4) with the patch attached.
 
-## What alpha.4 adds
+## What alpha.5 fixes
 
-- Windows can manually pair each half of the **PC Port** and regular **MIDI** port with an existing
-  system MIDI device. This is the practical bridge to loopMIDI while Microsoft issue #1047 blocks
-  G1-Emu's application-owned Windows MIDI endpoints.
-- The Windows ZIP includes `WINDOWS.md`, a complete first-run guide: install loopMIDI, create the
-  two directional cables, configure G1-Emu and NME, restart after device changes, upload a patch
-  and diagnose a timeout from the byte counters.
-- Windows settings and flash now use `%APPDATA%\Animatek\G1-Emu` instead of accidentally following
-  the process's working directory. Opening the same executable from Explorer and a terminal no
-  longer creates two unrelated configurations.
-- The Windows audio settings list the real JUCE device types and devices, including WASAPI,
-  DirectSound and installed ASIO drivers.
-- The JUCE MIDI backend preserves fragmented SysEx replies, so NME receives the complete handshake
-  and larger PC Port messages.
+- **Uploads that timed out.** Two emulator bugs ended as `Upload timeout at packet N` in the
+  editor. A DSP that had been idle for a long time could deadlock the emulator when it woke up, and
+  a command to a DSP with a full sample routine was thrown away, so the last packet of some patches
+  was never acknowledged. Every one of 71 sample patches now uploads; one of them that failed
+  before is accepted by a real Nord Modular too.
+- **The sawtooth.** `OscA` and `OscB` on the saw waveform, and the sawtooth slave `OscSlvC`, gave
+  a constant level instead of a wave, on every platform. It was a bug in the DSP emulator's
+  just-in-time compiler, not in the patch: they now sound like the other waveforms.
+- **The upload log.** With `G1_MIDI_LOG=1` the JUCE MIDI backend (macOS and Windows) also reports a
+  SysEx that reached it truncated, which helps tell a MIDI problem from an emulator one.
+- On Windows, the ROM folder falls back to `%USERPROFILE%` when `HOME` is not set.
 
 ## Windows quick start
 
