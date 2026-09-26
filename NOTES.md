@@ -135,6 +135,16 @@ At boot the emulated G1 announces itself on the PC PORT (`F0 33 50 06 00 07 08 0
   the 32 entries the wait was protecting. The real G1 accepts `korg.pch` (loaded into slot A on
   2026-09-25); the emulated DSPs sit almost without an idle gap with it, which may or may not be
   how full a real one is.
+- **A busy DSP starved its host commands, and piled up IRQDs** (2026-09-26, #4's
+  `WavetableSynth.pch`). The core moves external interrupts (host commands) into its queue only in
+  `execPeripherals`, which runs only when no internal interrupt can be serviced; a DSP whose sample
+  routine fills the block finds the next IRQD pending at every RTI, so a host command waited for
+  ever, and `Dsp::hostCommand`, after 200 000 cycles, dropped the next one (`$76` behind a `$7e`).
+  And every IRQD injected while the last was still pending was queued: 83 071 on DSP 0 in a ring
+  of 1024. Two fixes: the core now collects external interrupts when it picks the next interrupt
+  (`cmake/Dsp56300.cmake`, `DSP::execInterrupts`), and `runUntil` injects an IRQD only when the last
+  one has been serviced, as a pin would (`m_irqdPending`, cleared in the serviced callback and in
+  `armBoot`). The latch alone was tried and did not get the ACK; the core fix alone was not tried.
 - **PIDs:** each upload gets a patch ID from the OS (ACK `$36`). `g1boot ... replay` rewrites the
   PID of Parameter (cc `$13`), PatchModification (cc `$17`, except `$41`) and PatchPacket (cc
   `$1C–$1F` without the command bit) messages with the one the OS gave, and redoes the checksum

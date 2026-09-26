@@ -136,6 +136,8 @@ namespace g1
 		{
 			++m_servicedVectors[_vba];
 			m_lastVector = _vba;
+			if(_vba == g_irqdVector)
+				m_irqdPending = false;
 		});
 
 		// HF0/HF1 flags from the CPU's ICR to the DSP's HSR.
@@ -171,6 +173,7 @@ namespace g1
 	void Dsp::armBoot()
 	{
 		m_booted = false;
+		m_irqdPending = false;
 
 		// What the CPU had already sent and the previous program did not read waits in the
 		// port: on the hardware the boot ROM reads it, so it is handed over in order.
@@ -235,8 +238,17 @@ namespace g1
 						tapBlock();
 					if(m_next)
 						tapLink(before / g_cyclesPerFrame);
-					m_dsp.injectInterrupt(g_irqdVector);	// like a peripheral: does not block
-					++m_irqdCount;
+					// IRQD is a pin: a request that arrives while the last one is still pending
+					// is the same request, not a second one. The core queues interrupts, so a DSP
+					// whose sample routine filled the block piled them up (83,071 on DSP 0 with
+					// #4's WavetableSynth.pch, in a ring of 1024), and a host command queued behind
+					// them was never reached.
+					if(!m_irqdPending)
+					{
+						m_dsp.injectInterrupt(g_irqdVector);	// like a peripheral: does not block
+						m_irqdPending = true;
+						++m_irqdCount;
+					}
 				}
 			}
 			if(m_interpreter)

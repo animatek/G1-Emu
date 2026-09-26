@@ -182,6 +182,27 @@ namespace
 		require(m.dsp.regs().a.var == 0x0000000100000000ull, "GT or LE wrong with Z set and N != V");
 	}
 
+	// A host command (an external interrupt) must be serviced even when the DSP always has another
+	// internal interrupt waiting. The core collected external interrupts only on the idle path, so a
+	// G1 DSP whose sample routine filled the block never saw its host command (#4, WavetableSynth).
+	void externalInterruptWhileBusy(uint32_t blockSize)
+	{
+		Machine m(blockSize);
+		m.program(0x16, {0, 0});			// the "IRQD": a fast interrupt that does nothing
+		m.program(0x76, {0x245500, 0});		// the host command: move #$55,x0 (x0 = $550000)
+		m.program(0x100, {0x0c0100});		// jmp $100
+		m.dsp.regs().x.var = 0;
+		m.dsp.setPC(0x100);
+		m.dsp.injectInterrupt(0x16);
+		m.dsp.injectExternalInterrupt(0x76);
+		for(unsigned i = 0; i < 200; ++i)
+		{
+			m.dsp.injectInterrupt(0x16);	// there is always another one pending
+			m.dsp.exec();
+		}
+		require((m.dsp.regs().x.var & 0xffffff) == 0x550000, "a host command starves while other interrupts keep coming");
+	}
+
 	// An ESSI on the fine schedule (the links between DSPs) that sat idle owes nothing for that
 	// time. Without the overlay's cap the clock emitted every frame of the gap in one call: on a
 	// real patch (nmedit's korg.pch) DSP 0 woke up after 400 million cycles and pushed millions of
@@ -266,9 +287,10 @@ int main()
 			run("DO FOREVER with nested DO", [=] { nestedLoop(blockSize); });
 			run("CMPM keeps its operand", [=] { cmpmKeepsOperand(blockSize); });
 			run("GT and LE with Z set", [=] { greaterThanWithZero(blockSize); });
+			run("host command while busy", [=] { externalInterruptWhileBusy(blockSize); });
 			run("idle link port", [=] { idleLinkPort(); });
 		}
-		std::puts("OK: short MOVEM, JIT invalidation, DO FOREVER, IRQD, nested DO, CMPM, GT/LE and an idle link port (blocks 1/32)");
+		std::puts("OK: short MOVEM, JIT invalidation, DO FOREVER, IRQD, nested DO, CMPM, GT/LE, a host command while busy and an idle link port (blocks 1/32)");
 		return 0;
 	}
 	catch(const std::exception& error)

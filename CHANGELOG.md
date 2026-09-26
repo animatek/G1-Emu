@@ -5,6 +5,24 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-09-26
+
+- **A DSP with a full sample routine no longer ignores the editor (Claude, requested by Javier
+  after #4).** #4's reporter still got an upload timeout with
+  alpha.5 and attached `WavetableSynth.pch`; the last of its six packets got no ACK. Two causes,
+  both where a busy DSP meets a host command. The core moves external interrupts into its queue
+  only when it has no internal interrupt to service, and a DSP whose sample routine fills the
+  block always has the next IRQD waiting, so the host command waited until G1-Emu dropped the next
+  one. And IRQDs were queued, not latched: 83,071 of them on DSP 0, in a ring of 1024. The core
+  now collects external interrupts when it picks the next interrupt (`cmake/Dsp56300.cmake`), and
+  `g1Lib/g1dsp.cpp` injects an IRQD only when the previous one has been serviced. `g1dspcheck`
+  gains "host command while busy", which fails without the core fix (checked) and passes with it.
+  `tools/upload-e2e.sh` now finds its own `g1run` by pid: it had picked the G1-Emu window that was
+  open, and sent it the upload. **Checked** on Linux: `WavetableSynth.pch` uploads over ALSA with
+  all six ACKs (one `0x36`, five `0x7f`); all 71 sample patches upload with no missing reply; the
+  module battery gives exactly yesterday's verdicts (62 sound, 19 move, 11 fixed, 17 silent);
+  `ctest` passes. Not checked on macOS or Windows.
+
 ## 2026-09-25
 
 - **Published `v0.1.0-alpha.5` pre-release (Claude, requested by Javier).** Annotated tag on

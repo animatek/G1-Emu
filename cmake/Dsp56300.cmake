@@ -110,6 +110,20 @@ g1_dsp_replace(dma.cpp
 	"		assert(false && \"DMA transfer mode not supported yet\");\n		return true;\n	}"
 	"		if(agmS == AddressGenMode::SingleCounterAnoUpdate && agmD == AddressGenMode::SingleCounterAnoUpdate)\n		{\n			memWrite(areaD, m_ddr, memRead(areaS, m_dsr));\n			if(isRequestTrigger() && m_dco)\n			{\n				--m_dco;\n				return false;\n			}\n			m_dco = m_dcomInit;\n			return true;\n		}\n\n		assert(false && \"DMA transfer mode not supported yet\");\n		return true;\n	}")
 
+# External interrupts (the HI08's host commands) reach the pending queue only in execPeripherals,
+# which runs only when no internal interrupt can be serviced. A DSP whose sample routine fills the
+# block finds the next IRQD pending at every RTI and services it straight away, so a host command
+# waited for ever and G1-Emu, after 200,000 cycles, dropped it: the 68k then polled for an answer
+# that never came (#4, WavetableSynth.pch). They are now also collected when the next interrupt is
+# picked, and queue behind what is already pending, as they would be arbitrated on the chip.
+g1_dsp_replace(dsp.cpp
+	[=[	void DSP::execInterrupts()
+	{]=]
+	[=[	void DSP::execInterrupts()
+	{
+		processExternalInterrupts();	// G1-Emu: host commands must not wait for an idle DSP
+]=])
+
 # CMPM compares magnitudes, and alu_cmp takes the absolute value of its operand in place. When the
 # operand is an accumulator, decode_JJJ_read_56 hands over the JIT's cached register for it, not a
 # copy, so the rest of the block saw |a| instead of a, and if a was already dirty (`sub x1,b a1,a`

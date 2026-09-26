@@ -24,9 +24,11 @@ echo "packets: $(ls "$W/pk" | wc -l)"
 cp ~/.local/share/Animatek/G1-Emu/flash.bin "$W/flash.bin" 2>/dev/null
 G1_AUDIO=no G1_RAWMIDI= G1_MIDI_LOG=1 "$ROOT/build/app/g1run" "$ROM" "$W/flash.bin" >"$W/g1run.log" 2>&1 &
 GP=$!
-for _ in $(seq 1 60); do aconnect -l | grep -q "G1-Emu" && break; sleep 1; done
+# Our own client, by pid: another G1-Emu (the window) may be running and must not get the upload.
+for _ in $(seq 1 60); do aconnect -l | grep -q "pid=$GP\]" && break; sleep 1; done
 sleep 8   # the OS boots
-PORT=$(aconnect -l | awk '/client [0-9]+: .G1-Emu/{c=$2} c && /PC Port/{sub(":","",c); print c":"$1; exit}')
+PORT=$(aconnect -l | awk -v pid="pid=$GP]" 'index($0, pid) {c=$2} c && /PC Port/{sub(":","",c); print c":"$1; exit}')
+[ -n "$PORT" ] || { echo "g1run's PC Port not found"; exit 1; }
 echo "PC Port = $PORT"
 aseqdump -p "$PORT" >"$W/dump.txt" 2>&1 &
 DP=$!

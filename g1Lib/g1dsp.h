@@ -128,6 +128,7 @@ namespace g1
 		uint64_t m_audioFrames = 0;
 		uint64_t m_hostWords = 0, m_hostCommands = 0, m_wordsToHost = 0;
 		uint64_t m_nextIrqd = 0, m_irqdCount = 0;
+		bool m_irqdPending = false;	// an IRQD injected and not serviced yet
 		std::map<uint32_t, uint64_t> m_servicedVectors;
 		uint32_t m_lastVector = 0;
 		std::map<uint32_t, uint64_t> m_pcWatch;	// PCs to watch (diagnostics only)
