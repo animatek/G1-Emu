@@ -88,6 +88,20 @@ At boot the emulated G1 announces itself on the PC PORT (`F0 33 50 06 00 07 08 0
 `F0 33 50 06 00 05 01 00 00 00 7F F7`) and answers NME's *IAm* (`F0 33 00 06 00 03 03 F7`) with
 `F0 33 00 06 01 03 03 3F 7F 7F 01 F7`: sender 1, version 3.3, serial number and device ID.
 
+**The editor's keyboard is one key** (found 2026-09-26, #4's "the keyboard floater stacks
+notes"). The editor's note message (cc `$17`, `56 onOff note`, handled at `$11b434`) does not
+play a note: it sets **one** virtual key, down with its note (`$1c3ab5`, `$1c3abc`) or up, without
+looking at which note is released. A routine run from the panel scan (`$117aae`) compares that
+key with its last state (`$1c3aed`) and only on a change queues a note-on or note-off of the one
+stored note (`$115c06`, the same queue MIDI IN uses). So two editor notes that overlap stick: the
+second press only changes the stored note, and the releases send a note-off for the wrong note or
+none. Two that arrive within one scan play as a single note. **The real G1 does the same**:
+checked on 2026-09-26 with a gate-only test patch (`tools/patches/PolyGateTest.pch`, 8 voices) and
+its ADSR gate LED, which stayed lit after 60 (10 s) and 64 (0.5 s, on top) were both released,
+and went out after a lone note. MIDI IN is polyphonic and not affected. The emulator reproduces it
+faithfully; the fix belongs in the editor, which must never send a second note-on before the
+first note-off. `g1patchtest` shows it with `G1_SEQ=+60,+64,-64,-60 G1_CHORD=1`.
+
 ## Booting the DSPs
 
 - **8 HI08 ports** at `$200000 + 8·n`: DSPs 0–3 on the main board, 4–7 on the expansion. The OS

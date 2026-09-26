@@ -1,6 +1,7 @@
 // g1patchtest: test bench for the emulated G1, with no window and no editor.
 //
 //   g1patchtest ROM patch.pch [--note 60] [--seconds 2] [--wav output.wav] [--dump-packets dir]
+//   (G1_CHORD / G1_SEQ: press and release notes through the editor's port, then measure)
 //
 // Boots the OS, greets like NME (IAm), uploads the patch with the same code NME uses
 // (PchFileIO -> PatchSerializer -> UploadPacketizer), packet by packet waiting for each
@@ -216,7 +217,24 @@ int main(int argc, char** argv)
 			std::ofstream(dumpDir + "/" + name, std::ios::binary).write(reinterpret_cast<const char*>(msg.data()), static_cast<std::streamsize>(msg.size()));
 		}
 		const auto before = mc.ucCycles();
-		const auto reply = transact(mc, msg, ackMs);
+		auto reply = transact(mc, msg, ackMs);
+		// Like NME, the next packet waits for the ACK ($36 or $7F), not for any reply: after a packet
+		// that makes the OS reload the DSPs it first reports the voice count, and it resets the PC
+		// Port receiver before it ACKs, which throws away a packet sent too early.
+		auto hasAck = [](const std::vector<uint8_t>& _r)
+		{
+			for(size_t k = 0; k + 5 < _r.size(); ++k)
+				if(_r[k] == 0xf0 && _r[k + 1] == 0x33 && (_r[k + 2] >> 2) == 0x16 && (_r[k + 5] == 0x36 || _r[k + 5] == 0x7f))
+					return true;
+			return false;
+		};
+		for(uint32_t t = 0; !hasAck(reply) && t < ackMs; ++t)
+		{
+			run(mc, g_ms);
+			std::vector<uint8_t> more;
+			mc.getPcPort().takeTx(more);
+			reply.insert(reply.end(), more.begin(), more.end());
+		}
 		const auto ms = (mc.ucCycles() - before) / g_ms;
 		if(ms > 200 && std::getenv("G1_VERBOSE"))
 			std::printf("  packet %zu took %llu ms\n", i + 1, static_cast<unsigned long long>(ms));
@@ -226,7 +244,7 @@ int main(int argc, char** argv)
 		for(size_t k = 0; k + 6 < reply.size(); ++k)
 			if(reply[k] == 0xf0 && reply[k + 1] == 0x33 && (reply[k + 2] >> 2) == 0x16 && reply[k + 5] == 0x36)
 				pid = reply[k + 6];
-		if(reply.empty())
+		if(!hasAck(reply))
 			std::printf("  packet %zu/%zu: NO REPLY\n", i + 1, packets.size());
 	}
 	std::printf("patch \"%s\" uploaded in %zu packets; pid=%d\n", patch->getName().toRawUTF8(), packets.size(), pid);
@@ -341,7 +359,55 @@ int main(int argc, char** argv)
 	// G1_MIDINOTE=channel (1-16) plays it through the MIDI IN port instead, which is not the
 	// same road: the editor's note goes straight to the slot, MIDI IN goes through the OS's
 	// keyboard handling (channels, octave shift, and so on).
-	if(const char* mn = std::getenv("G1_MIDINOTE"))
+	// G1_CHORD=60,64,67 presses those notes through the PC Port like the editor's keyboard, holds
+	// them 0.5 s, releases them, waits 0.5 s, and only then measures: what is left is a stuck note.
+	// G1_SEQ=+60,+64,-60,-64 plays that order instead (+ press, then 100 ms; - release, then
+	// G1_CHORD_MS). G1_CHORD_MS is the gap after each message (default 5 ms); G1_CHORD_MIDI=1 sends
+	// them through MIDI IN instead. The OS treats the editor's notes as one key (see NOTES.md, "The
+	// editor's keyboard is one key"), so overlapping notes stick on the real G1 as well.
+	if(const char* ch = std::getenv("G1_CHORD"))
+	{
+		capture = false;
+		const auto gap = static_cast<uint64_t>(std::getenv("G1_CHORD_MS") ? std::atoi(std::getenv("G1_CHORD_MS")) : 5);
+		const bool viaMidi = std::getenv("G1_CHORD_MIDI") && *std::getenv("G1_CHORD_MIDI") && *std::getenv("G1_CHORD_MIDI") != '0';
+		auto noteMsg = [&](const int _n, const bool _on)
+		{
+			if(viaMidi)
+				mc.getSci().write({static_cast<uint8_t>(_on ? 0x90 : 0x80), static_cast<uint8_t>(_n), static_cast<uint8_t>(_on ? 100 : 0)});
+			else
+				mc.getPcPort().receive(withChecksum({0xf0, 0x33, 0x5c, 0x06, static_cast<uint8_t>(pid), 0x56, static_cast<uint8_t>(_on ? 0 : 1), static_cast<uint8_t>(_n)}));
+			run(mc, gap * g_ms);
+		};
+		auto parse = [](const char* _s, auto _each)
+		{
+			for(const char* c = _s; *c; )
+			{
+				_each(c);
+				while(*c && *c != ',') ++c;
+				if(*c == ',') ++c;
+			}
+		};
+		if(const char* seq = std::getenv("G1_SEQ"))
+			parse(seq, [&](const char* _c)
+			{
+				const bool on = *_c == '+';
+				noteMsg(std::atoi(_c + 1), on);
+				if(on) run(mc, 100 * g_ms);
+			});
+		else
+		{
+			std::vector<int> notes;
+			parse(ch, [&](const char* _c) { notes.push_back(std::atoi(_c)); });
+			for(const auto n : notes) noteMsg(n, true);
+			run(mc, 500 * g_ms);
+			for(const auto n : notes) noteMsg(n, false);
+		}
+		run(mc, 500 * g_ms);
+		std::printf("notes pressed and released; measuring what is left\n");
+		blocks.clear();
+		capture = true;
+	}
+	else if(const char* mn = std::getenv("G1_MIDINOTE"))
 	{
 		const auto ch = static_cast<uint8_t>((std::atoi(mn) - 1) & 0x0f);
 		mc.getSci().write({static_cast<uint8_t>(0x90 | ch), static_cast<uint8_t>(note), 100});

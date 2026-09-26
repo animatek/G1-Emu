@@ -7,6 +7,25 @@ Older entries cite their commit by hand.
 
 ## 2026-09-26
 
+- **The editor keyboard's stuck notes are the G1's own, and a test patch that shows it (Claude,
+  requested by Javier).** #4 reported that the keyboard floater
+  stacks notes. The OS handles the editor's note messages as one virtual key with one stored note,
+  so overlapping notes stick: reproduced in the emulator, and on the real G1 with the new
+  `tools/patches/PolyGateTest.pch` (keyboard gate to an ADSR, 8 voices), whose gate LED stayed lit
+  after two overlapping notes were released and went out after a lone note. MIDI IN is not
+  affected. The emulator is faithful here; the fix belongs in the editor. Written up in `NOTES.md`,
+  "The editor's keyboard is one key". `g1patchtest` gains `G1_CHORD`, `G1_SEQ`, `G1_CHORD_MS` and
+  `G1_CHORD_MIDI` to press and release notes and measure what is left, and now waits for each
+  packet's ACK as NME does: sending on any reply had lost the last packet of #4's
+  `WavetableSynth.pch` to the receiver reset the OS makes after reloading the DSPs, which showed as
+  `Error` on the display. **Checked** on Linux: `WavetableSynth.pch` loads with 11 voices and
+  sounds; with the test patch a lone note leaves silence and two overlapping ones leave a note at
+  full level through the editor's port, not through MIDI IN; `ctest` passes.
+- **Published `v0.1.0-alpha.6` pre-release (Claude, requested by Javier).** Annotated tag on
+  `a1c5074`, whose CI was green on all five jobs. Tagged run 36234756317 completed on the five
+  build jobs and the release job and published five ROM-free packages. Downloaded the macOS archive:
+  `G1-Emu.app` and `g1run` are universal (x86_64 and arm64), with README and licence, and no ROM.
+  Release: <https://github.com/animatek/G1-Emu/releases/tag/v0.1.0-alpha.6>.
 - **Release notes for `v0.1.0-alpha.6` (Claude, requested by Javier).** `docs/release-notes.md`
   now describes alpha.6: the busy-DSP upload fix, with alpha.5's fixes listed as also included,
   and says the fix was verified on Linux only. The rest (Windows quick start, ROM, signing,

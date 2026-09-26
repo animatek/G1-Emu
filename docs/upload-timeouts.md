@@ -147,3 +147,17 @@ have read Javier's `settings.conf`, whose `default` device is the Linux one. Not
   returns without a word if its spin lock is contended (`ScopedTryLockType`). Nothing takes that
   lock in steady state, so it is noted and not a suspect.
 
+
+## #4's WavetableSynth.pch (2026-09-26)
+
+- With alpha.5 its last packet got no ACK. Cause: a DSP whose sample routine fills the block never
+  took the host command (see `NOTES.md`, "A busy DSP starved its host commands"). Fixed in
+  `v0.1.0-alpha.6`. The real G1 loads the patch with 11 voices and its envelopes gate.
+- Afterwards the emulated G1 showed `Error` and 1 voice with this patch, but only under
+  `g1patchtest`: the bench sent each packet as soon as the OS answered anything, and after the
+  fifth packet the OS first reports the voice count, then resets the PC Port receiver, then ACKs.
+  The sixth packet was thrown away by that reset, the upload stayed open (`$160caa` = 2), and the
+  next message was taken for a new upload (error 6, which prints `Error`). NME waits for the ACK,
+  and so does the bench now: the patch loads (`WavetableSnth`, 11 voices) and sounds.
+- `tools/upload-e2e.sh` still sends with a fixed pause, not waiting for ACKs, so a patch that makes
+  the OS reload the DSPs can lose a packet there too; read its result with that in mind.
