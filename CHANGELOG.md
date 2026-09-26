@@ -7,6 +7,10 @@ Older entries cite their commit by hand.
 
 ## 2026-09-26
 
+- **Release notes for `v0.1.0-alpha.6` (Claude, requested by Javier).** `docs/release-notes.md`
+  now describes alpha.6: the busy-DSP upload fix, with alpha.5's fixes listed as also included,
+  and says the fix was verified on Linux only. The rest (Windows quick start, ROM, signing,
+  platforms) is kept. Documentation only.
 - **A DSP with a full sample routine no longer ignores the editor (Claude, requested by Javier
   after #4).** #4's reporter still got an upload timeout with
   alpha.5 and attached `WavetableSynth.pch`; the last of its six packets got no ACK. Two causes,

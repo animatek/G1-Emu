@@ -1,26 +1,27 @@
-# G1-Emu v0.1.0-alpha.5
+# G1-Emu v0.1.0-alpha.6
 
-**This pre-release fixes patch uploads that timed out and oscillators whose sawtooth was silent.**
-It is built and DSP-tested in CI on Linux x86-64 (native and JUCE backends), Linux arm64, macOS
-universal and Windows x86-64. The fixes were found and verified on Linux; they are in the DSP and
-68k emulation shared by every platform, but they have not been tried on a real Mac or Windows
-machine yet. If uploads still time out for you, please say so on
-[issue #3](https://github.com/animatek/G1-Emu/issues/3) or
-[issue #4](https://github.com/animatek/G1-Emu/issues/4) with the patch attached.
+**This pre-release fixes an upload timeout that alpha.5 still had with heavier patches.** It is
+built and DSP-tested in CI on Linux x86-64 (native and JUCE backends), Linux arm64, macOS universal
+and Windows x86-64. The fix was found and verified on Linux, with the patch attached to
+[issue #4](https://github.com/animatek/G1-Emu/issues/4); it is in the DSP emulation shared by every
+platform, but has not been tried on a real Mac or Windows machine yet. If uploads still time out
+for you, please say so on #4 or [issue #3](https://github.com/animatek/G1-Emu/issues/3) with the
+patch attached.
 
-## What alpha.5 fixes
+## What alpha.6 fixes
 
-- **Uploads that timed out.** Two emulator bugs ended as `Upload timeout at packet N` in the
-  editor. A DSP that had been idle for a long time could deadlock the emulator when it woke up, and
-  a command to a DSP with a full sample routine was thrown away, so the last packet of some patches
-  was never acknowledged. Every one of 71 sample patches now uploads; one of them that failed
-  before is accepted by a real Nord Modular too.
-- **The sawtooth.** `OscA` and `OscB` on the saw waveform, and the sawtooth slave `OscSlvC`, gave
-  a constant level instead of a wave, on every platform. It was a bug in the DSP emulator's
-  just-in-time compiler, not in the patch: they now sound like the other waveforms.
-- **The upload log.** With `G1_MIDI_LOG=1` the JUCE MIDI backend (macOS and Windows) also reports a
-  SysEx that reached it truncated, which helps tell a MIDI problem from an emulator one.
-- On Windows, the ROM folder falls back to `%USERPROFILE%` when `HOME` is not set.
+- **Uploads of patches that keep a DSP busy.** When a patch fills a DSP's time, the emulated DSP
+  never got round to the editor's commands, so the last packet of the upload was never
+  acknowledged and the editor reported `Upload timeout at packet N`. The patch from #4 now uploads
+  completely, like the 71 sample patches used for testing.
+
+## Also in this build (from alpha.5)
+
+- Two other upload timeouts fixed: a deadlock after a DSP had been idle for a long time, and a
+  command to a busy DSP being thrown away.
+- The sawtooth of `OscA`, `OscB` and `OscSlvC` sounds again on every platform.
+- With `G1_MIDI_LOG=1` the JUCE MIDI backend (macOS and Windows) reports a SysEx that reached it
+  truncated.
 
 ## Windows quick start
 
