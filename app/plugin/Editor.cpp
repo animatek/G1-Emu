@@ -140,9 +140,49 @@ namespace g1plugin
 		juce::MessageManager::callAsync([e = juce::Component::SafePointer<Editor>(this)] { if(e) e->m_processor.restart(); });
 	}
 
-	void Editor::showSettings(juce::Component* _parent)
+	namespace
 	{
-		juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, "G1-Emu",
-			juce::String(m_processor.describe()) + "\n\n" + g1gui::disclaimerText(), "OK", _parent);
+		// What Settings shows in the plugin, on the panel's card: this instance (its ROM, latency,
+		// where its patches came from, its PC Port and direct link) and the notice, as the About
+		// card shows its text. Nothing to set: the host and the project decide.
+		class InstanceView : public juce::Component
+		{
+		public:
+			explicit InstanceView(const juce::String& _instance)
+			{
+				m_text.setMultiLine(true, true);
+				m_text.setReadOnly(true);
+				m_text.setScrollbarsShown(true);
+				m_text.setCaretVisible(false);
+				m_text.setPopupMenuEnabled(false);
+				m_text.setColour(juce::TextEditor::backgroundColourId, juce::Colours::transparentBlack);
+				m_text.setColour(juce::TextEditor::outlineColourId, juce::Colours::transparentBlack);
+				m_text.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colours::transparentBlack);
+				auto section = [this](const juce::String& _heading, const juce::String& _body)
+				{
+					m_text.setFont(juce::FontOptions(g1gui::overlay::HeadingSize, juce::Font::bold));
+					m_text.setColour(juce::TextEditor::textColourId, juce::Colours::white);
+					m_text.insertTextAtCaret(_heading + "\n");
+					m_text.setFont(juce::FontOptions(g1gui::overlay::TextSize));
+					m_text.setColour(juce::TextEditor::textColourId, g1gui::overlay::NoteText);
+					m_text.insertTextAtCaret(_body + "\n\n");
+				};
+				section("This instance", _instance);
+				section("Notice", g1gui::disclaimerText());
+				m_text.moveCaretToTop(false);
+				addAndMakeVisible(m_text);
+				setSize(Width, Height);
+			}
+			void resized() override { m_text.setBounds(-6, 0, getWidth() + 12, getHeight() - g1gui::CardView::CloseH - 10); }
+
+		private:
+			static constexpr int Width = 760, Height = 380;
+			juce::TextEditor m_text;
+		};
+	}
+
+	std::unique_ptr<juce::Component> Editor::createSettings()
+	{
+		return std::make_unique<InstanceView>(juce::String(m_processor.describe()));
 	}
 }

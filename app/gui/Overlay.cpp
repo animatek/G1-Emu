@@ -143,6 +143,86 @@ namespace g1gui
 {
 	namespace
 	{
+		constexpr int g_cardGap = 12, g_cardBottom = 18;	// between the title's rule and the content; below the content
+	}
+
+	CardView::CardView()
+	{
+		setWantsKeyboardFocus(true);
+		m_close.onClick = [this] { close(); };
+		addAndMakeVisible(m_close);
+	}
+
+	void CardView::open(juce::Component& _behind, const int _faceHeight, const juce::Rectangle<int> _space, const juce::String& _title,
+		std::unique_ptr<juce::Component> _content)
+	{
+		m_backdrop = overlay::backdrop(_behind);
+		m_faceHeight = _faceHeight;
+		m_space = _space;
+		m_title = _title.toUpperCase();
+		m_content = std::move(_content);
+		if(m_content)
+			addAndMakeVisible(*m_content);
+		setBounds(_behind.getLocalBounds());
+		resized();
+		setVisible(true);
+		toFront(true);
+		m_close.toFront(false);
+		grabKeyboardFocus();
+	}
+
+	void CardView::close()
+	{
+		setVisible(false);
+		m_backdrop = {};
+		m_content.reset();	// it goes with the card: its timers and windows too
+		if(onClose)
+			onClose();
+	}
+
+	// Around the content at its own size, or as the space allows on a small panel.
+	juce::Rectangle<int> CardView::card() const
+	{
+		const auto space = m_space.isEmpty() ? getLocalBounds() : m_space;
+		const int w = (m_content ? m_content->getWidth() : 0) + 2 * overlay::Margin;
+		const int h = overlay::TitleRuleY + g_cardGap + (m_content ? m_content->getHeight() : 0) + g_cardBottom;
+		return juce::Rectangle<int>(std::min(w, space.getWidth() - 16), std::min(h, space.getHeight() - 16)).withCentre(space.getCentre());
+	}
+
+	void CardView::paint(juce::Graphics& _g)
+	{
+		overlay::paintCard(_g, getLocalBounds(), m_backdrop, m_faceHeight, card(), m_title);
+	}
+
+	void CardView::resized()
+	{
+		const auto c = card();
+		const int m = overlay::Margin;
+		const int top = c.getY() + overlay::TitleRuleY + g_cardGap, bottom = c.getBottom() - g_cardBottom;
+		if(m_content)
+			m_content->setTopLeftPosition(c.getX() + m, top);
+		m_close.setBounds(c.getRight() - m - CloseW, bottom - CloseH, CloseW, CloseH);
+	}
+
+	void CardView::mouseDown(const juce::MouseEvent& _e)
+	{
+		if(!card().contains(_e.getPosition()))
+			close();
+	}
+
+	bool CardView::keyPressed(const juce::KeyPress& _key)
+	{
+		if(_key != juce::KeyPress::escapeKey)
+			return false;
+		close();
+		return true;
+	}
+}
+
+namespace g1gui
+{
+	namespace
+	{
 		constexpr int g_aboutW = 640, g_aboutH = 470;
 
 		struct AboutSection

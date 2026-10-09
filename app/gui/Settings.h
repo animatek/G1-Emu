@@ -1,16 +1,16 @@
 #pragma once
 
-// The settings window: which ROM the G1 runs, which audio driver and device it uses, its output
-// level, whether its
-// outputs 1/2 connect themselves to the sound card, which snd-virmidi card it takes over for
-// programs that read raw MIDI devices (docs/bitwig-midi.md), the manual MIDI device pairing used
-// as a patch on Windows while it cannot own ports (docs/windows-build.md), and the notice about
-// Clavia, ROMs and support, which lives here instead of stopping every startup.
+// The settings, on a card over the panel (CardView): which ROM the G1 runs, which audio driver and
+// device it uses, its output level, whether its outputs 1/2 connect themselves to the sound card,
+// which snd-virmidi card it takes over for programs that read raw MIDI devices
+// (docs/bitwig-midi.md), the manual MIDI device pairing used as a patch on Windows while it cannot
+// own ports (docs/windows-build.md), and the notice about Clavia, ROMs and support, which lives
+// here instead of stopping every startup.
 //
 // It writes EmuHost::Options to the settings file next to the flash, which the console front end
 // reads too. Only the level takes effect while it plays: everything else opens a driver, and the
-// audio callback runs on the DSP thread, so it is applied on the next start and the window says
-// so. The G1_* environment variables win over the file, and the window says that too.
+// audio callback runs on the DSP thread, so it is applied on the next start and the card says so.
+// The G1_* environment variables win over the file, and the card says that too.
 
 #include "emuhost.h"
 
@@ -35,15 +35,14 @@ namespace g1gui
 		juce::Component& m_window;
 	};
 
+	// Sized by itself, in two columns (the ROM and audio, the MIDI ports), what is in use and the
+	// notice below; the card's Close goes in its bottom row's right corner (CardView::CloseSpace).
 	class SettingsView : public juce::Component, private juce::Timer
 	{
 	public:
 		explicit SettingsView(g1app::EmuHost& _host);
 		void paint(juce::Graphics& _g) override;
 		void resized() override;
-
-		// Opens it (or brings it to the front) as a window of its own.
-		static void show(g1app::EmuHost& _host, juce::Component* _parent);
 
 	private:
 		void timerCallback() override;
@@ -71,12 +70,10 @@ namespace g1gui
 		juce::ToggleButton m_rawEnabled{"Take over a card, so raw MIDI programs see the G1"};
 		juce::TextEditor m_rawCard;
 		juce::ToggleButton m_disclaimer{"Show the notice at startup"};
-		juce::TextButton m_noticeToggle;	// folds the notice's text away; folded, the window is shorter
+		juce::TextButton m_noticeToggle;	// shows the notice's text in place of the settings, and back
 		juce::TextEditor m_notice;
 		bool m_noticeOpen = false;
-		int noticeShift() const;			// how far up what is below the notice moves while it is folded
 		void setNoticeOpen(bool _open);
 		juce::Label m_running, m_note;
-		juce::TextButton m_close{"Close"};
 	};
 }

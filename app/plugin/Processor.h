@@ -109,7 +109,7 @@ namespace g1plugin
 		int generation() const { return m_generation.load(); }
 		g1app::HostStats stats();
 		const std::string& romProblem() const { return m_romProblem; }
-		std::string describe();		// for the Settings box: ROM, latency, where the banks came from
+		std::string describe();		// for the Emulator Settings card: ROM, latency, where the banks came from
 
 		// The ROM picked by hand: remembered in the settings file, like the standalone does.
 		void useRom(const juce::File& _file);

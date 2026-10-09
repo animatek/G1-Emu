@@ -942,7 +942,7 @@ namespace g1plugin
 				 "They are saved in the DAW project, never in the standalone's flash, and so is the last\n"
 				 "Program Change of each channel, sent again when the project opens (the G1 does not\n"
 				 "remember what each slot had).\n";
-		d += "Notes and controllers come from the track.\n";
+		d += "Notes and controllers come from the track.\n\n";
 		if(!m_pcPort)
 			d += "PC Port: " + m_pcProblem + ".";
 		else if(m_pcPort->virtualPorts())

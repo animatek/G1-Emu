@@ -21,8 +21,8 @@
 
 namespace g1gui
 {
-	// The panel's view of EmuHost: its preferences go to the settings file, and Settings opens
-	// the settings window.
+	// The panel's view of EmuHost: its preferences go to the settings file, and Settings shows the
+	// settings on a card over the panel.
 	class WindowHost : public PanelHost
 	{
 	public:
@@ -44,7 +44,7 @@ namespace g1gui
 		float panelScale() const override { return m_host.options().panelScale; }
 		void setPanelScale(const float _scale) override { m_host.options().panelScale = _scale; }	// saved when the window closes
 		juce::String settingsTooltip() const override { return "Audio driver, output level and raw MIDI"; }
-		void showSettings(juce::Component* _parent) override { SettingsView::show(m_host, _parent); }
+		std::unique_ptr<juce::Component> createSettings() override { return std::make_unique<SettingsView>(m_host); }
 		g1app::SynthSettingsLink& synthSettings() override { return m_host.synthSettings(); }
 		g1app::PresetsLink& presets() override { return m_host.presets(); }
 		bool canRestart() const override { return true; }
@@ -255,7 +255,7 @@ namespace g1gui
 			m_flash = args.size() > 1 ? args[1] : juce::String();
 			// No settings file means this is the first run on this machine: the notice is shown
 			// once, and answering it writes the file, so it does not come back unless it is
-			// turned on again in the settings window.
+			// turned on again in Settings.
 			m_firstRun = !m_host.options().load(g1app::EmuHost::defaultSettingsPath());
 			tryStart();
 		}
@@ -340,7 +340,7 @@ namespace g1gui
 			});
 		}
 
-		// The notice, shown on the first run and afterwards only if the settings window asks
+		// The notice, shown on the first run and afterwards only if Settings asks
 		// for it. It is always readable there, so there is no "don't show this again" to tick:
 		// closing it is enough, and the answer is written to the settings file.
 		void showDisclaimer(const bool _firstRun)

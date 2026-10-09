@@ -26,7 +26,7 @@
 namespace g1gui
 {
 	// The notice about Clavia, ROMs and support. It is the same text as the README's "Please read
-	// this first", shown in the settings window and, the first time G1-Emu runs, at startup; the plugin shows it
+	// this first", shown in Settings and, the first time G1-Emu runs, at startup; the plugin shows it
 	// in its Settings.
 	const char* disclaimerText();
 
@@ -59,7 +59,7 @@ namespace g1gui
 		virtual float panelScale() const = 0;			// the window's size, as PanelView keeps it
 		virtual void setPanelScale(float _scale) = 0;
 		virtual juce::String settingsTooltip() const = 0;
-		virtual void showSettings(juce::Component* _parent) = 0;
+		virtual std::unique_ptr<juce::Component> createSettings() = 0;	// what Settings shows, on a card over the panel (CardView), at its own size
 		virtual g1app::SynthSettingsLink& synthSettings() = 0;	// the OS's, for the extras' overlay
 		virtual g1app::PresetsLink& presets() = 0;				// the OS's banks, for the Presets page
 		// Switching the G1 off and on, where the host can: the panel shows its Restart button only
@@ -364,7 +364,7 @@ namespace g1gui
 		void shiftAsideForKnobs(std::function<void()> _turn);	// Shift let go for the OS, then _turn
 		void randomizeKnobs();
 		void showKnobMenu(size_t _knob);	// right click: Exclude from Random, or Include
-		void showPanelMenu();				// right click anywhere else: GUI Scale, Settings, About
+		void showPanelMenu();				// right click anywhere else: GUI Scale, Emulator Settings, About
 		bool hasOwnRightClick(const juce::Component* _c) const;	// a control that answers a right click itself
 		void showMenu(juce::PopupMenu& _menu);		// on the glass, at the mouse
 		void updateRandomExcluded();		// the knobs' marks and hover tooltips, from the host
@@ -458,6 +458,7 @@ namespace g1gui
 		PresetsView m_presetsView;		// the same place
 		ConfirmView m_confirm;			// the same, for a question (Restart)
 		AboutView m_aboutView;			// and for About
+		CardView m_settingsCard;		// and for Settings, holding what the host gives it
 		juce::Random m_rng;
 		// A right click on a knob opens its menu; the slider still gets the click, which does not
 		// turn it.

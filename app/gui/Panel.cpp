@@ -1225,7 +1225,7 @@ namespace g1gui
 		// Not on the hardware: what the host lets the user choose (in the window, the audio driver,
 		// the level and the raw MIDI card instead of only the G1_* variables).
 		m_settings.setTooltip(m_host.settingsTooltip());
-		m_settings.onClick = [this] { m_host.showSettings(this); };
+		m_settings.onClick = [this] { m_settingsCard.open(*this, FaceHeight, juce::Rectangle<int>(0, 0, getWidth(), FaceHeight), "Emulator Settings", m_host.createSettings()); };
 		addAndMakeVisible(m_settings);
 
 		// Also not on the hardware: a new GitHub issue with what we always have to ask for.
@@ -1326,6 +1326,8 @@ namespace g1gui
 		m_drawer.addAndMakeVisible(m_about);
 		m_aboutView.onClose = [this] { grabKeyboardFocus(); };
 		addChildComponent(m_aboutView);
+		m_settingsCard.onClose = [this] { grabKeyboardFocus(); };
+		addChildComponent(m_settingsCard);
 		m_synthView.onClose = [this]
 		{
 			m_settingsLed.setOn(false);
@@ -1786,7 +1788,7 @@ namespace g1gui
 		menu.addSeparator();
 		// The emulator's settings (the gear: audio, MIDI...) and About (the extras drawer's): the
 		// same as pressing them.
-		menu.addItem("Settings", [this] { m_settings.onClick(); });
+		menu.addItem("Emulator Settings", [this] { m_settings.onClick(); });
 		menu.addItem("About", [this] { m_about.onClick(); });
 		showMenu(menu);
 	}

@@ -7,6 +7,18 @@ Older entries cite their commit by hand.
 
 ## 2026-10-09
 
+- [GUI] **Settings on a card over the panel, like About (Mike Fiction, Claude).** **Touches the
+  plugin:** `app/plugin/Editor.*` and the text of `Processor::describe()`. The Settings button
+  and the panel's right-click menu (now Emulator Settings) opened a window of its own in the
+  standalone and a message box in the plugin; both now show on a card over the panel titled
+  EMULATOR SETTINGS, in the About card's look: the synth darkened and blurred behind it, Close at
+  the bottom right, Escape or a click beside it to leave. The standalone's settings sit in two
+  columns (the ROM and the audio, the MIDI ports), what is in use and the notes below, and "Read
+  the notice" shows the notice in their place. The plugin's card shows this instance (with a
+  blank line before its PC Port) and the notice. `CardView` (`app/gui/Overlay.*`) holds what the
+  host gives it: `PanelHost::showSettings()` became `createSettings()`. Checked by Mike Fiction in the
+  standalone and the plugin.
+
 - [Docs] **Agent instructions: the shared CODE changelog is written with `cambios apuntar` (Claude, asked by
   Javier).** `AGENTS.md` now says to log in the maintainer's workspace changelog through that command and never
   by editing the file, which three times turned its symlink into a loose copy. Docs only, nothing to check.

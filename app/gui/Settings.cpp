@@ -1,5 +1,6 @@
 #include "Settings.h"
 
+#include "Overlay.h"
 #include "Panel.h"
 
 #include "romfinder.h"
@@ -41,52 +42,20 @@ namespace g1gui
 
 	namespace
 	{
-		constexpr int g_labelW = 150, g_rowH = 28, g_gap = 10, g_margin = 18;
+		// Two columns: the ROM and the audio at the left, the MIDI ports at the right; below them,
+		// what is in use and the notes, and the notice's row at the bottom, the card's Close at its
+		// right. In the card's pixels.
+		constexpr int g_labelW = 110, g_rowH = 28, g_gap = 10, g_headingH = 22;
+		constexpr int g_colW = 430, g_colGap = 40, g_width = 2 * g_colW + g_colGap;
+		constexpr int g_rightX = g_colW + g_colGap;
+		constexpr int g_audioY = 108, g_belowY = 284, g_bottomY = 372, g_height = g_bottomY + g_rowH;
 		// The manual MIDI pairing patch (Windows, until Windows MIDI Services can own ports;
-		// jucemidi.h) adds four device rows to the MIDI section, so the window grows to fit them.
+		// jucemidi.h) adds four device rows to the MIDI column, under a longer note.
 #if defined(_WIN32) && defined(G1_BACKEND_JUCE) && !defined(G1_WINDOWS_MIDI)
-		constexpr bool g_manualMidiUi = true;
+		constexpr int g_midiInfoH = 92;
 #else
-		constexpr bool g_manualMidiUi = false;
+		constexpr int g_midiInfoH = 76;
 #endif
-		constexpr int g_midiInfoH = g_manualMidiUi ? 92 : 76;
-		constexpr int g_midiRowsH = g_manualMidiUi ? 4 * (g_rowH + g_gap) : 0;
-		constexpr int g_midiExtra = (g_midiInfoH - 76) + g_midiRowsH + (g_manualMidiUi ? 10 : 0);
-		constexpr int g_width = 560, g_height = 790 + g_midiExtra;
-		constexpr int g_noticeH = 128;	// the notice's text and the gap above it, folded away by default
-
-		// The window holding one SettingsView. There is at most one, kept here so a second
-		// click brings the same one to the front instead of opening another.
-		class SettingsWindow : public juce::DocumentWindow
-		{
-		public:
-			SettingsWindow(g1app::EmuHost& _host)
-				: DocumentWindow("G1-Emu settings", juce::Colour(0xff1c1c20), DocumentWindow::closeButton)
-			{
-				setUsingNativeTitleBar(true);
-				setContentOwned(new SettingsView(_host), true);
-				setResizable(false, false);
-				centreWithSize(getWidth(), getHeight());
-				m_titleBar = std::make_unique<NativeTitleBarTheme>(*this);	// before it shows, or it flashes light
-				setVisible(true);
-			}
-			void closeButtonPressed() override { s_open.reset(); }
-
-			static std::unique_ptr<SettingsWindow> s_open;
-		private:
-			std::unique_ptr<NativeTitleBarTheme> m_titleBar;	// light or dark, as Windows is
-		};
-
-		std::unique_ptr<SettingsWindow> SettingsWindow::s_open;
-	}
-
-	// The same text as the README's "Please read this first".
-	void SettingsView::show(g1app::EmuHost& _host, juce::Component*)
-	{
-		if(SettingsWindow::s_open)
-			SettingsWindow::s_open->toFront(true);
-		else
-			SettingsWindow::s_open = std::make_unique<SettingsWindow>(_host);
 	}
 
 	SettingsView::SettingsView(g1app::EmuHost& _host) : m_host(_host)
@@ -292,30 +261,26 @@ namespace g1gui
 			addAndMakeVisible(*l);
 		}
 		m_note.setText("The level applies now; the rest, on the next start.\n"
-			"Environment variables win over this window.\n"
+			"Environment variables win over these settings.\n"
 			"Saved in " + juce::String(g1app::EmuHost::defaultSettingsPath()), juce::dontSendNotification);
-
-		m_close.onClick = [] { SettingsWindow::s_open.reset(); };
-		addAndMakeVisible(m_close);
+		m_note.setTooltip(g1app::EmuHost::defaultSettingsPath());
 
 		updateEnabled();
 		timerCallback();
 		startTimerHz(4);
+		setSize(g_width, g_height);
 		setNoticeOpen(false);
 	}
 
-	int SettingsView::noticeShift() const { return m_noticeOpen ? 0 : g_noticeH; }
-
 	// The notice about Clavia, ROMs and support is there to be read once, not every time the
-	// settings open: its text folds away, and the window shrinks to fit (its DocumentWindow
-	// follows the content's size).
+	// settings open: its text takes the settings' place while it is read.
 	void SettingsView::setNoticeOpen(const bool _open)
 	{
 		m_noticeOpen = _open;
 		m_notice.setVisible(_open);
-		m_noticeToggle.setButtonText(_open ? "Hide the notice" : "Read the notice");
-		setSize(g_width, g_height - noticeShift());
-		resized();
+		if(_open)
+			m_notice.toFront(false);
+		m_noticeToggle.setButtonText(_open ? "Back to the settings" : "Read the notice");
 		repaint();
 	}
 
@@ -437,65 +402,68 @@ namespace g1gui
 			m_running.setText(text, juce::dontSendNotification);
 	}
 
+	// The card paints the background; this, the headings and the rules between the parts. While the
+	// notice is read, it covers them.
 	void SettingsView::paint(juce::Graphics& _g)
 	{
-		_g.fillAll(juce::Colour(0xff1c1c20));
-		_g.setColour(juce::Colour(0xff35353c));
-		const auto below = static_cast<float>(g_midiExtra - noticeShift());
-		for(const float y : {100.0f, 286.0f, 400.0f + g_midiExtra, 600.0f + below})
-			_g.drawLine(static_cast<float>(g_margin), y, static_cast<float>(g_width - g_margin), y);
+		if(m_noticeOpen)
+			return;
+		_g.setColour(overlay::Rule);
+		_g.drawLine(0.0f, g_audioY - 8.0f, static_cast<float>(g_colW), g_audioY - 8.0f);
+		_g.drawLine(0.0f, static_cast<float>(g_belowY), static_cast<float>(g_width), static_cast<float>(g_belowY));
 		_g.setColour(juce::Colours::white);
 		_g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
-		_g.drawText("ROM", g_margin, g_margin - 4, 200, 20, juce::Justification::centredLeft);
-		_g.drawText("Audio", g_margin, 108, 200, 20, juce::Justification::centredLeft);
+		auto heading = [&](const char* _text, const int _x, const int _y) { _g.drawText(_text, _x, _y, g_colW, g_headingH - 2, juce::Justification::centredLeft); };
+		heading("ROM", 0, 0);
+		heading("Audio", 0, g_audioY);
 #ifdef G1_BACKEND_JUCE
-		_g.drawText("MIDI ports", g_margin, 294, 200, 20, juce::Justification::centredLeft);
+		heading("MIDI ports", g_rightX, 0);
 #else
-		_g.drawText("Raw MIDI", g_margin, 294, 200, 20, juce::Justification::centredLeft);
+		heading("Raw MIDI", g_rightX, 0);
 #endif
-		_g.drawText("Notice", g_margin, 408 + g_midiExtra, 200, 20, juce::Justification::centredLeft);
-		_g.drawText("In use now", g_margin, 608 + g_midiExtra - noticeShift(), 200, 20, juce::Justification::centredLeft);
+		heading("In use now", 0, g_belowY + 8);
 	}
 
 	void SettingsView::resized()
 	{
-		int y = g_margin + 22;
-		auto row = [&](juce::Label& _label, juce::Component& _c, const int _w)
+		// A row: its label at _x, the control after it, as wide as the column allows.
+		auto row = [](juce::Label& _label, juce::Component& _c, const int _x, int& _y)
 		{
-			_label.setBounds(g_margin, y, g_labelW, g_rowH);
-			_c.setBounds(g_margin + g_labelW + g_gap, y, _w, g_rowH);
-			y += g_rowH + g_gap;
+			_label.setBounds(_x, _y, g_labelW, g_rowH);
+			_c.setBounds(_x + g_labelW + g_gap, _y, g_colW - g_labelW - g_gap, g_rowH);
+			_y += g_rowH + g_gap;
 		};
-		row(m_romLabel, m_romPath, g_width - g_margin * 2 - g_labelW - g_gap);
-		m_romChoose.setBounds(g_margin + g_labelW + g_gap, y - 2, 100, 26);
-		m_romFolder.setBounds(g_margin + g_labelW + g_gap + 110, y - 2, 170, 26);
 
-		y = 108 + 22;
-		row(m_audioLabel, m_audio, g_width - g_margin * 2 - g_labelW - g_gap);
-		row(m_deviceLabel, m_device, g_width - g_margin * 2 - g_labelW - g_gap);
-		row(m_gainLabel, m_gain, g_width - g_margin * 2 - g_labelW - g_gap);
-		m_jackConnect.setBounds(g_margin + g_labelW + g_gap, y, g_width - g_margin - g_labelW - g_gap, g_rowH);
+		int y = g_headingH;
+		row(m_romLabel, m_romPath, 0, y);
+		m_romChoose.setBounds(g_labelW + g_gap, y - 2, 100, 26);
+		m_romFolder.setBounds(g_labelW + g_gap + 110, y - 2, 170, 26);
 
-		y = 294 + 26;
-		m_rawEnabled.setBounds(g_margin, y, g_width - g_margin * 2, g_rowH);
+		y = g_audioY + g_headingH;
+		row(m_audioLabel, m_audio, 0, y);
+		row(m_deviceLabel, m_device, 0, y);
+		row(m_gainLabel, m_gain, 0, y);
+		m_jackConnect.setBounds(g_labelW + g_gap, y, g_colW - g_labelW - g_gap, g_rowH);
+
+		y = g_headingH;
+		m_rawEnabled.setBounds(g_rightX, y, g_colW, g_rowH);
 		y += g_rowH + g_gap;
-		row(m_rawLabel, m_rawCard, 160);
-		m_midiInfo.setBounds(g_margin, 320, g_width - g_margin * 2, g_midiInfoH);
+		row(m_rawLabel, m_rawCard, g_rightX, y);
+		m_midiInfo.setBounds(g_rightX, g_headingH, g_colW, g_midiInfoH);
 #if defined(_WIN32) && defined(G1_BACKEND_JUCE) && !defined(G1_WINDOWS_MIDI)
-		y = 320 + g_midiInfoH + 6;
-		row(m_pcOutLabel, m_pcOutDevice, g_width - g_margin * 2 - g_labelW - g_gap);
-		row(m_pcInLabel, m_pcInDevice, g_width - g_margin * 2 - g_labelW - g_gap);
-		row(m_midiOutLabel, m_midiOutDeviceBox, g_width - g_margin * 2 - g_labelW - g_gap);
-		row(m_midiInLabel, m_midiInDeviceBox, g_width - g_margin * 2 - g_labelW - g_gap);
+		y = g_headingH + g_midiInfoH + 6;
+		row(m_pcOutLabel, m_pcOutDevice, g_rightX, y);
+		row(m_pcInLabel, m_pcInDevice, g_rightX, y);
+		row(m_midiOutLabel, m_midiOutDeviceBox, g_rightX, y);
+		row(m_midiInLabel, m_midiInDeviceBox, g_rightX, y);
 #endif
 
-		m_disclaimer.setBounds(g_margin, 432 + g_midiExtra, g_width - g_margin * 2 - 150, g_rowH);
-		m_noticeToggle.setBounds(g_width - g_margin - 140, 432 + g_midiExtra + 1, 140, 26);
-		m_notice.setBounds(g_margin, 432 + g_midiExtra + g_rowH + 4, g_width - g_margin * 2, 124);
+		m_running.setBounds(0, g_belowY + 8 + g_headingH, g_colW, 52);
+		m_note.setBounds(g_rightX, g_belowY + 8 + g_headingH, g_colW, 52);
 
-		const int below = g_midiExtra - noticeShift();
-		m_running.setBounds(g_margin, 632 + below, g_width - g_margin * 2, 68);
-		m_note.setBounds(g_margin, 704 + below, g_width - g_margin * 2 - 110, 52);
-		m_close.setBounds(g_width - g_margin - 90, 728 + below, 90, 26);
+		// The notice's text takes everything above its row.
+		m_notice.setBounds(0, 0, g_width, g_bottomY - g_gap);
+		m_disclaimer.setBounds(0, g_bottomY, 230, g_rowH);
+		m_noticeToggle.setBounds(240, g_bottomY + 1, 170, 26);
 	}
 }
