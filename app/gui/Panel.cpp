@@ -1033,11 +1033,39 @@ namespace g1gui
 		if(_tip == m_tip)
 			return;
 		m_tip = _tip;
+		if(_tip.isEmpty() && m_text.isNotEmpty() && isShowing())
+		{
+			// The mouse left: what it showed stays a moment, then fades out.
+			m_leftAt = -1.0;
+			m_leaving.emplace(this, [this](const double _now) { leave(_now); });
+			return;
+		}
+		m_leaving.reset();
+		m_shown = 1.0f;
 		m_text = _tip.upToFirstOccurrenceOf("\t", false, false).trimEnd();
 		m_value = _tip.fromFirstOccurrenceOf("\t", false, false).trim();
 		m_scroll = m_ticks = 0;
 		updateTimer();
 		repaint();
+	}
+
+	void TipDisplay::leave(const double _now)
+	{
+		if(m_leftAt < 0)
+			m_leftAt = _now;
+		const double ms = (_now - m_leftAt) * 1000.0 - LingerMs;
+		if(ms <= 0)
+			return;
+		m_shown = static_cast<float>(std::max(0.0, 1.0 - ms / FadeMs));
+		if(m_shown <= 0.0f)
+		{
+			m_text = m_value = {};
+			m_shown = 1.0f;
+			updateTimer();
+		}
+		repaint();
+		if(m_text.isEmpty())
+			m_leaving.reset();	// last: this callback belongs to it
 	}
 
 	bool TipDisplay::scrolls() const
@@ -1088,7 +1116,13 @@ namespace g1gui
 	{
 		const auto r = spriteArea(*this);
 		const float dot = g_tipDot * r.getWidth() / g_tipW, cell = dot * 6.0f;
+		// Fading out after the mouse left (not a flash, which blinks over it at full strength).
+		const bool fading = m_shown < 1.0f && m_flashSteps == 0;
+		if(fading)
+			_g.beginTransparencyLayer(m_shown);
 		drawLcdText(_g, line(), r.getCentreX() - cell * g_tipCols * 0.5f, r.getCentreY() - dot * 3.5f, cell, dot);
+		if(fading)
+			_g.endTransparencyLayer();
 	}
 
 	void KnobDisplay::set(const g1::KnobInfo& _info, const bool _hz)

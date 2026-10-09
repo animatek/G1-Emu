@@ -7,6 +7,11 @@ Older entries cite their commit by hand.
 
 ## 2026-10-09
 
+- [GUI] **The display below the knobs lets a name linger (Mike Fiction, Claude).** When the mouse
+  leaves a control, its name and value stay on that display for half a second, then fade out in
+  60 ms, instead of going blank at once. Moving straight onto another control changes it at once.
+  Checked: builds on Windows.
+
 - [Docs] **Agent instructions: the shared CODE changelog is written with `cambios apuntar` (Claude, asked by
   Javier).** `AGENTS.md` now says to log in the maintainer's workspace changelog through that command and never
   by editing the file, which three times turned its symlink into a loose copy. Docs only, nothing to check.

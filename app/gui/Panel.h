@@ -311,10 +311,12 @@ namespace g1gui
 
 	// The display below the knobs, in the knob displays' dots: the name of the synth's control
 	// under the mouse (setLcdTip), and its value at the right, after a tab. What is too long for it
-	// scrolls through and starts over.
+	// scrolls through and starts over. When the mouse leaves the control, its name stays a moment
+	// (LingerMs) and fades out quickly (FadeMs); another control's name comes at once, never faded in.
 	class TipDisplay : public juce::Component, private juce::Timer
 	{
 	public:
+		static constexpr double LingerMs = 500.0, FadeMs = 60.0;
 		TipDisplay() { setInterceptsMouseClicks(false, false); }
 		void set(const juce::String& _tip);
 		void flash(const juce::String& _text);	// shown twice, blinking, over the tip (Shift + Find: Panic)
@@ -322,11 +324,15 @@ namespace g1gui
 	private:
 		void timerCallback() override;	// a step of the flash or of the scrolling
 		void updateTimer();
+		void leave(double _now);		// each frame after the mouse left: linger, then fade
 		bool scrolls() const;
 		juce::String line() const;		// what shows now
-		juce::String m_tip, m_text, m_value, m_flash;
+		juce::String m_tip, m_text, m_value, m_flash;	// m_text and m_value stay while they linger
 		int m_scroll = 0, m_ticks = 0;
 		int m_flashSteps = 0;			// left of the flash
+		float m_shown = 1.0f;			// how visible the name is: below 1 while it fades out
+		double m_leftAt = -1.0;			// when the mouse left, in VBlank time; -1 before the next frame
+		std::optional<juce::VBlankAttachment> m_leaving;	// while it lingers and fades
 	};
 
 	class Panel : public juce::Component, private juce::Timer
