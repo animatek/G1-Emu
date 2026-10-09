@@ -730,6 +730,10 @@ int main(int _argc, char** _argv)
 	Voice c;
 	c.plugin = load(formats, path);
 	c.plugin->setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+	// A reopened project holds its notes back while its slots and synth settings go back in (#46),
+	// about 3.8 s of the G1's time: past this first play's note, so that one is let go, and with no
+	// message loop running, as some hosts render, the plugin has to finish it by itself.
+	play({&c}, 5.5);
 	play({&c}, 5.5);
 	std::printf("restored into C: latency %d frames, %.1f dBFS after the note (no Program Change sent)\n",
 		c.plugin->getLatencySamples(), db(c.peakAfter));

@@ -7,6 +7,67 @@ Older entries cite their commit by hand.
 
 ## 2026-10-09
 
+- [Fix] **A reopened project lets its notes in when rendered offline (Mike Fiction, Claude, issue
+  #46).** **Touches the plugin:** `app/plugin/Processor.*` and `tools/vst3check`. The notes held
+  back while a project's slots and synth settings go back in were only let in, and the settings
+  only written, from the plugin's timer, on the message thread: a host rendering a project right
+  after opening it with no message loop running (as `g1vst3check` does) kept them held, and the
+  restored instance was silent. `processBlock` now moves the restore on too (`restoreStep`), with
+  a `try_lock` that never waits. `g1vst3check` plays the reopened instance once before measuring
+  it, past the hold (about 3.8 s of the G1's time, past its note at 3 s). It failed on #46's
+  commits and passes now; without the `processBlock` step it still fails.
+
+- [New] **A project keeps the System menu's patch settings (Mike Fiction, Claude, issue #46).**
+  **Touches the plugin:** `app/plugin/Processor.*` and `app/slotkeeper.*`. Voices, Bend Range,
+  Keyb Range and the rest of the System menu's Patch side are now recalled with the DAW project.
+  They change the active slot's patch, but the OS tells no one, so the `SlotKeeper` had no reason
+  to read the slot again: the plugin now asks it to every 2 s while the System menu is open (its
+  LED lit) and once after (`SlotKeeper::reread()`). The keeper also no longer takes the synth
+  settings' read and write going by for a change of slot A, which had it read the slot again for
+  nothing. `g1slotkeepertest` gets a step (Bend Range changed on the emulated panel's menu: the
+  keeper has the new header once asked) and `g1synthsettingstest` a check (the keeper stays
+  settled through a settings write; it failed before). Checked by Mike Fiction in Bitwig: Bend
+  Range, Vel Range and Portamento time come back with the project.
+
+- [New] **A project keeps the synth settings (Mike Fiction, Claude, issue #46).** **Touches the
+  plugin:** `app/plugin/Processor.*`, `app/slotkeeper.*` and `app/synthsettings.*`. With the
+  Synth Settings page, the settings it shows (MIDI channels, clock, tune and the rest) are now
+  recalled with the DAW project, with no need to store them through the OS's Save Synth Settings
+  (Shift + Store), however they were changed: on the page, on the OS's own System menu or from an
+  editor. Shift + Store now only sets what the standalone and a new instance start with. It works
+  on the factory OS too, which never loads stored settings at power-on. The OS keeps a change in
+  its memory only, so the plugin reads the settings every 2 s and saves the last reading in the
+  project, and on reopening writes them back once the `SlotKeeper` has put the slots back, then
+  checks that the OS took them. The project's settings win over those stored in the flash. While
+  the slots and settings go back in (about 3.8 s), the track's notes are held back, so none can
+  hang on a slot whose MIDI channel is about to change. `SlotKeeper::settled()`, which this waits
+  on, treated the gap between two slot uploads as settled and now waits for the restored slots
+  not yet sent; the comment in `synthsettings.h` said the OS keeps written settings in its flash.
+  `g1synthsettingstest` gets a step: a restart loses what was written, and writing it back after
+  a slot restored into A brings it back (factory OS and the 3.03b update). Checked by Mike
+  Fiction in Bitwig: a MIDI channel set on the page or on the System menu, and the pedal
+  polarity, come back with the project, and the notes start about 3.4 s after the plugins have
+  loaded.
+
+- [Fix] **The Synth Settings page's change is taken after slot A gets a new patch (Mike Fiction,
+  Claude).** **Touches the plugin and `EmuHost`:** `app/synthsettings.cpp`, the link both use. A
+  settings write carries the pid of slot A's patch, and the OS drops one with an old pid without a
+  word. The link knew the pid from its last read, so once a patch had gone into slot A since (an
+  upload, as when a project's slots go back in), the next change on the page was dropped. The
+  link now reads first before every write, without showing that read on the page (it flashed the
+  old value). The new `g1synthsettingstest` step writes right after a slot is restored into A; it
+  failed before.
+
+- [Fix] **A project keeps the knobs turned on the panel (Mike Fiction, Claude, issue #46).**
+  **Touches the plugin:** `app/slotkeeper.cpp` (`SlotKeeper::g1Sent`). After reopening a
+  project, a knob turned on the panel was back where it was, or with Knob Follows Patch off, in
+  place but with the patch's sound: the slot came back as stored. The OS reports a panel knob as
+  an Info message ($14 $01 $40, then section, module, parameter and value), not as the Parameter
+  message the `SlotKeeper` listened for, so it never read the slot again. It now hears both.
+  `g1slotkeepertest` gets a step: knob 1 turned on the panel, slot A read again (fails without
+  the fix; passes on the factory OS and on the 3.03b update). Checked by Mike Fiction in Bitwig:
+  knob turns come back with the project, Knob Follows Patch on or off.
+
 - [Docs] **Agent instructions: the shared CODE changelog is written with `cambios apuntar` (Claude, asked by
   Javier).** `AGENTS.md` now says to log in the maintainer's workspace changelog through that command and never
   by editing the file, which three times turned its symlink into a loose copy. Docs only, nothing to check.

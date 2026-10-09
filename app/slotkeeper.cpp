@@ -31,6 +31,7 @@ namespace g1app
 		// 7 MorphMap, 8 KnobMap, 9 ControlMap, 10-11 NameDump, 12 NoteDump.
 		constexpr uint8_t g_replyTypes[RequestCount] = {33, 74, 74, 82, 82, 77, 77, 101, 98, 96, 90, 90, 105};
 		constexpr size_t HeaderBytes = 11;			// type (8 bits) + Header (80 bits): no padding
+		constexpr uint8_t SettingsSection = 3;		// the synth settings' section (synthsettings.h)
 
 		bool isGetPatch(const uint8_t _sc)
 		{
@@ -261,12 +262,21 @@ namespace g1app
 		m_hasRestore = true;
 	}
 
+	void SlotKeeper::reread(const size_t _slot)
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if(_slot < SlotCount)
+			m_dirty[_slot] = true;
+	}
+
 	bool SlotKeeper::settled() const
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		if(m_hasRestore || m_state != State::Idle)
 			return false;
-		return std::none_of(m_dirty.begin(), m_dirty.end(), [](const bool _d) { return _d; });
+		// Restored slots still to be sent count too: between two uploads the keeper is idle.
+		const auto any = [](const auto& _flags) { return std::any_of(_flags.begin(), _flags.end(), [](const bool _f) { return _f; }); };
+		return !any(m_dirty) && !any(m_uploadPending);
 	}
 
 	// ____________________________________________________________________________________________
@@ -322,8 +332,18 @@ namespace g1app
 					if(changes)
 						slot = static_cast<uint8_t>(_m[6] & 3);
 				}
+				else if(_m[4] == 0x44)
+					changes = false;	// the synth settings (RequestSynthSettings): no slot's patch
 				else
 					changes = !isGetPatch(_m[5]);	// a patch modification, not a read
+			}
+			// Nor is the synth settings section (type 3) sent back in one packet, as an editor (or
+			// the SynthSettingsLink) writes them: it would have the keeper read slot A for nothing.
+			if(cc == 0x1f && _m.size() > 8)
+			{
+				const auto raw = unpack7(std::vector<uint8_t>(_m.begin() + 5, _m.end() - 2));
+				if(!raw.empty() && raw[0] == SettingsSection)
+					changes = false;
 			}
 			if(changes)
 			{
@@ -353,8 +373,9 @@ namespace g1app
 				if(cc == CcIAm && m_state == State::Greeting)
 					hide = true;
 				// The G1 reporting a change of its own: a panel knob or MIDI moved a parameter, a
-				// patch came into a slot from the panel or a Program Change.
-				if(cc == CcParameter && _m[4] == 0x40)
+				// patch came into a slot from the panel or a Program Change. A panel knob comes as an
+				// Info message ($14 $01 $40, section, module, parameter, value), not as a Parameter.
+				if((cc == CcParameter && _m[4] == 0x40) || (cc == CcInfo && _m.size() > 6 && _m[4] == 0x01 && _m[5] == 0x40))
 				{
 					std::lock_guard<std::mutex> lock(m_mutex);
 					m_dirty[slot] = true;
@@ -495,11 +516,15 @@ namespace g1app
 			for(size_t s = 0; s < SlotCount; ++s)
 				if(m_uploadPending[s])
 				{
-					m_uploadPending[s] = false;
+					{
+						// Together, so settled() never sees the slot neither waiting nor uploading.
+						std::lock_guard<std::mutex> lock(m_mutex);
+						m_uploadPending[s] = false;
+						m_state = State::Uploading;
+					}
 					m_slot = s;
 					m_upload = uploadMessages(m_slots[s].sections, static_cast<uint8_t>(s));
 					m_step = 0;
-					m_state = State::Uploading;
 					m_deadline = 0;
 					return tick(_nowMs, _toG1);
 				}

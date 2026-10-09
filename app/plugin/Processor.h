@@ -28,6 +28,7 @@
 #include <cmath>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -176,6 +177,8 @@ namespace g1plugin
 		// The knobs something other than the host turned: (index, value) for the host, VolumeIndex
 		// for the volume. Under m_lifecycle; the host is told after (tellHost).
 		void knobsToHost(g1::Microcontroller& _mc, std::vector<std::pair<size_t, float>>& _edits);
+		void restoreStep();			// m_lifecycle held
+		void writePendingSettings();	// m_lifecycle held
 		void tellHost(const std::vector<std::pair<size_t, float>>& _edits);
 		void startFromStandalone(g1app::Engine& _engine);
 
@@ -201,6 +204,28 @@ namespace g1plugin
 		std::unique_ptr<g1app::Runner> m_runner;
 		std::unique_ptr<g1app::SlotKeeper> m_keeper;	// what each slot holds; lives as long as m_engine
 		g1app::SynthSettingsLink m_synthSettings;	// the OS's synth settings, for the panel's overlay
+		// What a project keeps besides the flash and the slots (#46). m_lifecycle guards all of it
+		// but m_restoring, which processBlock reads.
+		static constexpr int SettingsTries = 5;
+		static constexpr juce::uint32 SettingsCheckMs = 1500;	// after a write, how long to wait for it to be read back
+		static constexpr juce::uint32 PollMs = 2000;			// how often the OS's settings are read for the project
+		static constexpr juce::uint32 RestoreHoldMs = 15000;	// the longest the notes are held back
+		static constexpr uint32_t SystemLedRow = 3, SystemLedBit = 4;	// the System key's LED
+		// The project's synth settings, written once the keeper has put the slots back (a write in
+		// the middle of a slot's upload breaks it: the OS shows "Error"). Kept until the OS reads
+		// them back, and written again up to SettingsTries times if it does not.
+		std::optional<g1app::SynthSettings> m_pendingSettings;
+		int m_settingsTries = 0;
+		juce::uint32 m_settingsWrittenAt = 0;	// 0: not written yet (or to be written again)
+		uint64_t m_settingsRevision = 0;		// the link's revision before the write: a later one is its reading back
+		juce::uint32 m_polledAt = 0;			// when the OS's settings were last asked for
+		bool m_systemMenu = false;				// the System key's LED was lit at the last look
+		// A project's state going back in (slots, then synth settings): the track's notes are left
+		// out meanwhile, so none is played on a slot whose MIDI channel is about to change and then
+		// hangs, its note off arriving on the channel the slot no longer hears. At most
+		// RestoreHoldMs, in case the keeper never settles.
+		std::atomic<bool> m_restoring{false};
+		juce::uint32 m_restoreStart = 0;
 		g1app::PresetsLink m_presets;				// the OS's banks, for the panel's Presets page
 		std::vector<uint8_t> m_os;				// HostOptions::os, if set: the OS to run instead of the ROM's
 		std::atomic<int> m_generation{0};

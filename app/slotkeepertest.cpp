@@ -8,7 +8,9 @@
 //      header's last 3 bits and the cables' order aside) and the other three empty.
 //   3. An editor uploads the patch into slot B through the keeper: it gets its ACKs, and the
 //      keeper reads slot B afterwards.
-//   4. pack()/unpack() keep the slots as they are.
+//   4. Knob 1 is turned on the panel: the keeper reads slot A again (#46).
+//   5. Bend Range is changed on the System menu: the keeper reads slot A again when asked (reread()).
+//   6. pack()/unpack() keep the slots as they are.
 //
 // Exit code 77 (skipped) without a ROM, 1 on any failure.
 
@@ -16,6 +18,7 @@
 #include "hostconfig.h"
 #include "romfinder.h"
 #include "slotkeeper.h"
+#include "g1Lib/g1knobs.h"
 
 #include <algorithm>
 #include <cmath>
@@ -263,7 +266,56 @@ int main()
 		check(samePatch(g_simpleOsc, second.slots()[1].sections, why), "the keeper reads slot B after the editor's upload" + (why.empty() ? std::string() : " (" + why + ")"));
 	}
 
-	// 4. Project bytes.
+	// 4. A panel knob turned on slot A: the OS reports it as an Info message, not a Parameter,
+	//    and the keeper must read slot A again so a project keeps the turn (issue #46).
+	{
+		auto& mc = engine.mc();
+		g1::KnobMap knobs(mc);
+		check(knobs.read(0).assigned, "knob 1 moves a parameter of slot A");
+		const auto before = second.slots()[0].sections;
+		const auto adc = g1::KnobMap::KnobAdc[0];
+		for(int p = 0; p < 100; ++p)
+		{
+			mc.setAdc(adc, static_cast<uint8_t>(20 + p));
+			bench.run(4);
+		}
+		check(bench.runUntilSettled(10000), "the keeper settles after the turn");
+		std::printf("     knob 1 now gives %d\n", knobs.read(0).value);
+		check(second.slots()[0].sections != before, "the keeper reads slot A again after a panel knob turn");
+	}
+
+	// 5. Bend Range changed on the System menu's Patch side: the OS tells no one, so the keeper
+	//    keeps slot A as it was; asked to read it again (reread(), as the plugin does after the
+	//    menu), it has the new header (#46).
+	{
+		auto& mc = engine.mc();
+		auto press = [&](const uint32_t _row, const uint32_t _bit)
+		{
+			mc.setButton(_row, _bit, true);
+			bench.run(150);
+			mc.setButton(_row, _bit, false);
+			bench.run(300);
+		};
+		bench.keeper = &second;
+		const auto before = second.slots()[0].sections;
+		press(0, 7);	// System
+		press(1, 7);	// Right: PATCH
+		for(int i = 0; i < 9 && mc.getLcd().line(0, 16).find("BEND RANGE") == std::string::npos; ++i)
+			press(1, 6);	// Down
+		check(mc.getLcd().line(0, 16).find("BEND RANGE") != std::string::npos, "the System menu shows BEND RANGE");
+		mc.turnDial(5);
+		bench.run(500);
+		std::printf("     display [%s|%s]\n", mc.getLcd().line(0, 16).c_str(), mc.getLcd().line(1, 16).c_str());
+		press(1, 3);	// Patch/Load: out of the menu
+		bench.runUntilSettled(10000);
+		check(second.slots()[0].sections == before, "the OS tells no one: the keeper still has slot A as it was");
+		second.reread(0);
+		check(bench.runUntilSettled(10000), "asked to read slot A again, the keeper settles");
+		const auto after = second.slots()[0].sections;
+		check(after.size() > 1 && before.size() > 1 && after[1] != before[1], "slot A's header has the new Bend Range");
+	}
+
+	// 6. Project bytes.
 	g1app::SlotKeeper::Slots back;
 	check(g1app::SlotKeeper::unpack(g1app::SlotKeeper::pack(got), back) && back == got, "pack/unpack keep the slots");
 	check(!g1app::SlotKeeper::unpack({1, 2, 3}, back), "unpack refuses what is not its format");
