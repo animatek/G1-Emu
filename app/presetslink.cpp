@@ -211,6 +211,14 @@ namespace g1app
 				m_readWanted[static_cast<size_t>(m_bank)] = true;
 				finish(_nowMs);
 			}
+			// The editor stores a patch (StorePatch: $41 $0B, slot, bank, position): the OS tells no
+			// one, so a bank already read is read again once the editor is quiet, to show it.
+			if(isClavia(_m) && ccOf(_m) == CcPatch && _m.size() >= 11 && _m[4] == 0x41 && _m[5] == 0x0b && _m[7] < Banks)
+			{
+				std::lock_guard<std::mutex> lock(m_mutex);
+				if(m_known[_m[7]])
+					m_readWanted[_m[7]] = true;
+			}
 		});
 	}
 

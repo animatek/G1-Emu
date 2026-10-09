@@ -7,6 +7,13 @@ Older entries cite their commit by hand.
 
 ## 2026-10-09
 
+- [Fix] **A patch stored from NME shows on the Presets page (Mike Fiction, Claude).** The OS tells
+  no one of a store, so a patch NME stored appeared on the page only after leaving it and coming
+  back. The link that reads the banks now sees NME's store go by and reads that bank again once
+  NME is quiet. Touches `app/presetslink.cpp` only (`PresetsLink::editorSent`), outside the GUI.
+  Checked by Mike Fiction in the standalone: a patch stored from NME into the bank shown appears
+  without leaving the page.
+
 - [Docs] **Agent instructions: the shared CODE changelog is written with `cambios apuntar` (Claude, asked by
   Javier).** `AGENTS.md` now says to log in the maintainer's workspace changelog through that command and never
   by editing the file, which three times turned its symlink into a loose copy. Docs only, nothing to check.
