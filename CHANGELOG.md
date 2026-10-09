@@ -7,6 +7,13 @@ Older entries cite their commit by hand.
 
 ## 2026-10-09
 
+- [GUI] **The parameter displays fade on and off (Mike Fiction, Claude).** A parameter display
+  that lights up or goes dark (another patch or slot, a module added or removed) now fades between
+  its lit and dark glass in 60 ms, its words with it, instead of switching at once: a companion to
+  the knobs turning into place, and closer to how an LCD really looks turning on and off. Ticking
+  Parameter Displays on or off in the extras fades them and the knob LEDs into each other in the
+  same time. Checked by Mike Fiction in the standalone.
+
 - [Docs] **Agent instructions: the shared CODE changelog is written with `cambios apuntar` (Claude, asked by
   Javier).** `AGENTS.md` now says to log in the maintainer's workspace changelog through that command and never
   by editing the file, which three times turned its symlink into a loose copy. Docs only, nothing to check.

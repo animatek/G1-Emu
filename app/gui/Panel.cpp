@@ -1104,12 +1104,39 @@ namespace g1gui
 			m_switchable = switchable;
 			setTooltip(switchable ? "Click: Toggle Pitch / Hz" : juce::String());
 		}
-		if(t == m_top && bottom == m_bottom && _info.assigned == m_assigned)
+		const bool snap = std::exchange(m_snap, !isShowing());
+		if(_info.assigned != m_assigned || snap)
+		{
+			m_assigned = _info.assigned;
+			if(!snap)
+			{
+				m_fadeLast = -1.0;
+				if(!m_fade)
+					m_fade.emplace(this, [this](const double _now) { fade(_now); });
+			}
+			else
+			{
+				m_fade.reset();
+				m_lit = m_assigned ? 1.0f : 0.0f;
+			}
+			repaint();
+		}
+		if(!_info.assigned || (t == m_top && bottom == m_bottom))
 			return;
 		m_top = t;
 		m_bottom = bottom;
-		m_assigned = _info.assigned;
 		repaint();
+	}
+
+	void KnobDisplay::fade(const double _now)
+	{
+		const double dt = m_fadeLast < 0 ? 1.0 / 60.0 : std::clamp(_now - m_fadeLast, 0.0, 0.1);
+		m_fadeLast = _now;
+		const float step = static_cast<float>(dt / FadeSeconds);
+		m_lit = m_assigned ? std::min(1.0f, m_lit + step) : std::max(0.0f, m_lit - step);
+		repaint();
+		if(m_lit == (m_assigned ? 1.0f : 0.0f))
+			m_fade.reset();
 	}
 
 	void KnobDisplay::mouseUp(const juce::MouseEvent& _e)
@@ -1121,15 +1148,23 @@ namespace g1gui
 	void KnobDisplay::paint(juce::Graphics& _g)
 	{
 		const auto r = spriteArea(*this);
-		(m_assigned ? skin().smallLcd : skin().smallLcdDark).draw(_g, 0, r);
-		if(!m_assigned)
+		if(m_lit < 1.0f)
+			skin().smallLcdDark.draw(_g, 0, r);
+		if(m_lit <= 0.0f)
 			return;	// unlit: the knob moves nothing
+		// Lit, or on its way: the light and its words over the dark glass, as bright as it is lit.
+		const bool fading = m_lit < 1.0f;
+		if(fading)
+			_g.beginTransparencyLayer(m_lit);
+		skin().smallLcd.draw(_g, 0, r);
 		const auto glass = r.withSizeKeepingCentre(r.getWidth() * g_knobLcdGlassW / g_knobLcdW, r.getHeight() * g_knobLcdGlassH / g_knobLcdH);
 		const float cellW = glass.getWidth() / g_knobLcdCols, cellH = glass.getHeight() / g_knobLcdRows;
 		const float dot = g_knobLcdDot * r.getWidth() / g_knobLcdW;
 		const juce::String lines[g_knobLcdRows] = {m_top, m_bottom};
 		for(int row = 0; row < g_knobLcdRows; ++row)
 			drawLcdText(_g, lines[row].substring(0, g_knobLcdCols), glass.getX(), glass.getY() + static_cast<float>(row) * cellH + (cellH - dot * 7.0f) * 0.5f, cellW, dot);
+		if(fading)
+			_g.endTransparencyLayer();
 	}
 
 	Panel::Panel(PanelHost& _host) : m_host(_host), m_mc(_host.mc()), m_lcd(_host.mc().getLcd()), m_dial(_host.mc()), m_synthView(_host.synthSettings()), m_presetsView(_host.presets(), [this] { return activeSlot(); }), m_knobMap(_host.mc())
@@ -1600,11 +1635,31 @@ namespace g1gui
 	void Panel::setKnobDisplays(const bool _on)
 	{
 		m_displaysToggle.setToggleState(_on, juce::dontSendNotification);
-		for(auto& d : m_knobDisplays)
-			d.setVisible(_on);
-		// A display takes its knob's LED's place: lit or dark, it says what the LED would.
+		// A display takes its knob's LED's place: lit or dark, it says what the LED would. Ticked
+		// in the extras, the displays and the LEDs fade into each other, as a display lights up.
+		const bool animate = isShowing();
+		auto& animator = juce::Desktop::getInstance().getAnimator();
+		const int ms = juce::roundToInt(KnobDisplay::FadeSeconds * 1000.0);
+		const auto show = [&](juce::Component& _c, const bool _show)
+		{
+			if(!animate)
+				_c.setVisible(_show);
+			else if(_show)
+				animator.fadeIn(&_c, ms);
+			else
+				animator.fadeOut(&_c, ms);	// hidden at once, a picture of it fades
+		};
+		for(size_t k = 0; k < m_knobDisplays.size(); ++k)
+		{
+			show(m_knobDisplays[k], _on);
+			if(_on && animate)	// what it says now, not what it said when it was last shown
+			{
+				const auto info = m_knobMap.read(static_cast<uint32_t>(k));
+				m_knobDisplays[k].set(info, showsHz(info));
+			}
+		}
 		for(auto* led : m_knobLeds)
-			led->setVisible(!_on);
+			show(*led, !_on);
 	}
 
 	// A page button: the settings fade in over the knobs, or out to show them again.

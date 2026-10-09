@@ -198,17 +198,25 @@ namespace g1gui
 	};
 
 	// A small display above a knob, in the colours of the G1's own: the module and value on
-	// top, the parameter below, as the OS names them. Blank when the knob has nothing.
+	// top, the parameter below, as the OS names them. Blank when the knob has nothing. It lights
+	// up and goes dark in a short fade, as the knobs turn into place.
 	class KnobDisplay : public juce::Component, public juce::SettableTooltipClient
 	{
 	public:
+		static constexpr double FadeSeconds = 0.06;
 		void set(const g1::KnobInfo& _info, bool _hz);	// _hz: a pitch with a Hz reading shows it
 		void paint(juce::Graphics& _g) override;
 		void mouseUp(const juce::MouseEvent& _e) override;
+		void visibilityChanged() override { m_snap = true; }
 		std::function<void()> onClick;	// a click on a pitch that reads as a note or in Hz
 	private:
-		juce::String m_top, m_bottom;
+		void fade(double _now);
+		bool m_snap = true;	// just shown: what it says first is there at once, not faded in
+		juce::String m_top, m_bottom;	// kept while it goes dark, so its last words fade with it
 		bool m_assigned = false, m_switchable = false;
+		float m_lit = 0.0f;	// 0 dark, 1 lit; moves toward m_assigned
+		double m_fadeLast = -1.0;
+		std::optional<juce::VBlankAttachment> m_fade;	// while it fades
 	};
 
 	// A button that also answers a double click (Random: back to the patch's values). The double
