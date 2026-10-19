@@ -7,6 +7,12 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Docs] Claude: **an improvement plan from a code review** (`docs/improvement-plan.md`, asked by
+  Javier): the Presets page's uploads not protected from the editor's bytes as the keeper's are
+  (#75's failure, to be reproduced first in `g1pchtest`), the host-port trace and the panel's
+  "unknown" logging out of the hot path, PIT registers written by byte, the DSP workers' wake-up
+  ordering, a measurement of ticking only the ports with a DSP, and one coordinator for the PC Port
+  links (only if asked). Step by step, for whoever carries it out; no code changed.
 - [Tools] Claude: `g1patchtest`'s `G1_WATCH_PC` takes **`G1_WATCH_FROM=S`**, the G1's seconds
   (boot included) to start watching from: its eight hits otherwise all land in the boot. Used to
   find G1-Mods' Note Out bug.
