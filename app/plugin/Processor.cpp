@@ -449,6 +449,7 @@ namespace g1plugin
 			m_pcPort && m_pcPort->virtualPorts() ? m_pcPort.get() : nullptr, m_pcIndex, m_keeper.get(),
 			&m_synthSettings, m_link.listening() ? &m_link : nullptr, &m_presets);
 		m_runner->setSelectedControllers(m_selectedControllers);
+		m_runner->setOctaveShift(m_octaveShift);
 		m_unstarted = false;
 		if(std::exchange(m_engineFresh, false))
 			replayPrograms();
@@ -687,6 +688,7 @@ namespace g1plugin
 		xml.setAttribute("knobFollowsPatch", m_knobFollowsPatch);
 		xml.setAttribute("model", m_expanded ? "expanded" : "regular");
 		xml.setAttribute("midiCcSelectedSlots", m_selectedControllers);
+		xml.setAttribute("octaveShift", m_octaveShift);
 		xml.setAttribute("randomExclude", juce::String(g1app::knobListToString(m_randomExclude)));
 		xml.setAttribute("programs", juce::String(programsToString()));
 		xml.setAttribute("gainDb", static_cast<double>(m_gainParam->get()));
@@ -705,6 +707,7 @@ namespace g1plugin
 		m_gainParam->setValueNotifyingHost(m_gainParam->convertTo0to1(
 			static_cast<float>(_xml.getDoubleAttribute("gainDb", GainParameter::LegacyDb))));
 		m_selectedControllers = _xml.getBoolAttribute("midiCcSelectedSlots", false);	// the project's alone
+		m_octaveShift = _xml.getBoolAttribute("octaveShift", false);	// a project from before plays as a rack
 		if(_xml.hasAttribute("randomExclude"))
 			m_randomExclude = g1app::knobListFromString(_xml.getStringAttribute("randomExclude").toStdString());
 	}
@@ -1007,6 +1010,18 @@ namespace g1plugin
 				return;
 			if(m_runner)
 				m_runner->setSelectedControllers(_on);
+		}
+		stateChanged();
+	}
+
+	void Processor::setOctaveShift(const bool _on)
+	{
+		{
+			std::lock_guard<std::mutex> lock(m_lifecycle);
+			if(std::exchange(m_octaveShift, _on) == _on)
+				return;
+			if(m_runner)
+				m_runner->setOctaveShift(_on);
 		}
 		stateChanged();
 	}

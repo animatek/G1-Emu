@@ -127,6 +127,8 @@ namespace g1plugin
 	bool Editor::lastController(int& _channel, int& _cc, uint32_t& _serial) { return m_processor.lastController(_channel, _cc, _serial); }
 	bool Editor::selectedControllers() const { return m_processor.selectedControllers(); }
 	void Editor::setSelectedControllers(const bool _on) { m_processor.setSelectedControllers(_on); }
+	bool Editor::octaveShift() const { return m_processor.octaveShift(); }
+	void Editor::setOctaveShift(const bool _on) { m_processor.setOctaveShift(_on); }
 	void Editor::setExtrasOpen(const bool _open) { m_processor.setExtrasOpen(_open); }
 	bool Editor::knobDisplays() const { return m_processor.knobDisplays(); }
 	void Editor::setKnobDisplays(const bool _on) { m_processor.setKnobDisplays(_on); }

@@ -35,7 +35,7 @@ namespace g1app
 	}
 
 
-	MidiRouting::Layout MidiRouting::layout(const SynthSettingsLink* _settings, const bool _selectedControllers)
+	MidiRouting::Layout MidiRouting::layout(const SynthSettingsLink* _settings, const bool _selectedControllers, const bool _octaveShift)
 	{
 		SynthSettings s;
 		uint64_t revision = 0;
@@ -45,6 +45,7 @@ namespace g1app
 		l.channels = s.midiChannel;
 		l.selectedSlots = s.keyboardMode == 1;
 		l.selectedControllers = _selectedControllers;
+		l.octaveShift = _octaveShift;
 		return l;
 	}
 
@@ -197,7 +198,7 @@ namespace g1app
 			for(int i = 0; i < n; ++i)
 			{
 				const auto& t = to[static_cast<size_t>(i)];
-				const int moved = note + (t.slot < 0 ? 0 : 12 * shift(_mc, static_cast<size_t>(t.slot)));
+				const int moved = note + (t.slot < 0 || !_layout.octaveShift ? 0 : 12 * shift(_mc, static_cast<size_t>(t.slot)));
 				if(moved < 0 || moved > 127)
 					continue;
 				now.channel[static_cast<size_t>(now.count)] = t.channel;

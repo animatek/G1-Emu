@@ -40,6 +40,7 @@ namespace g1app
 		bool knobDisplays = false;			// a display above each knob with what it is assigned to
 		bool knobFollowsPatch = false;		// the knobs show the patch's values, not where they were turned
 		bool selectedControllers = false;	// MIDI CC Mode on Selected Slots: controllers go to every selected slot (MidiRouting)
+		bool octaveShift = false;			// Octave Shift On: the notes moved by their slot's shift, and the panel's OCT SHIFT keys (MidiRouting); Off, as a rack
 		uint32_t randomExclude = 0;			// the knobs Random leaves alone: bit k for knob k + 1
 		bool tooltips = true;				// the window's tooltips beside the mouse
 		bool presetsHideEmpty = true;		// the Presets page lists only the positions that hold a patch

@@ -85,6 +85,7 @@ namespace g1app
 	{
 		m_options.load(defaultSettingsPath());
 		m_selectedControllers = m_options.selectedControllers;
+		m_octaveShift = m_options.octaveShift;
 
 		// The environment wins over whatever the window asked for: the scripts and the test bench
 		// are driven that way and must keep working with the settings file in place.
@@ -544,7 +545,7 @@ namespace g1app
 				logMidi("in ", "MIDI", incoming[m_midiPort]);
 				// Each note moved by its slot's octave shift, which the OS keeps but does not apply.
 				routed.clear();
-				m_midiRouting.apply(mc, MidiRouting::layout(&m_synthSettings, m_selectedControllers), incoming[m_midiPort].data(), incoming[m_midiPort].size(), routed);
+				m_midiRouting.apply(mc, MidiRouting::layout(&m_synthSettings, m_selectedControllers, m_octaveShift), incoming[m_midiPort].data(), incoming[m_midiPort].size(), routed);
 				mc.getSci().write(routed);
 				// A note on with a velocity, the way it arrives (running status aside).
 				const auto& in = incoming[m_midiPort];

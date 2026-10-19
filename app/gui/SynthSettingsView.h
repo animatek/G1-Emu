@@ -92,10 +92,14 @@ namespace g1gui
 		void open(juce::Rectangle<int> _frame);
 		void close(bool _under = false);
 		bool isOpen() const { return m_open; }	// still drawn for a moment after closing under the other page
+		void octaveShiftChanged();	// set elsewhere (the panel's OCT SHIFT menu): the box shows it
 		std::function<void()> onClose;
-		// MIDI CC Mode is the host's own setting, not the OS's: read on opening, set at once.
+		// MIDI CC Mode and Octave Shift are the host's own settings, not the OS's: read on opening, set
+		// at once.
 		std::function<bool()> selectedControllers;
 		std::function<void(bool)> setSelectedControllers;
+		std::function<bool()> octaveShift;
+		std::function<void(bool)> setOctaveShift;
 
 		void paint(juce::Graphics& _g) override;
 		void resized() override;
@@ -130,6 +134,18 @@ namespace g1gui
 		juce::Label m_keyboardModeLabel;	// the frame has no label for it yet: drawn as Name's is
 		juce::ComboBox m_midiCc;			// Active Slot, or Selected Slots: controllers layered too (selectedControllers)
 		juce::Label m_midiCcLabel;			// as Keyboard Mode's
+		// A box like the others, but a click flips it: with two choices a list is one click too many.
+		struct FlipBox : juce::ComboBox
+		{
+			// On the press alone: a ComboBox opens its list on the press and on the release too.
+			void mouseDown(const juce::MouseEvent& _e) override { if(isEnabled() && !_e.mods.isPopupMenu()) flip(); }
+			void mouseUp(const juce::MouseEvent&) override {}
+			void mouseDrag(const juce::MouseEvent&) override {}
+			void showPopup() override { flip(); }	// from the keyboard
+			void flip() { setSelectedId(getSelectedId() == 1 ? 2 : 1); }
+		};
+		FlipBox m_octaveShift;				// Enabled, or Disabled: the notes as the rack plays them (octaveShift)
+		juce::Label m_octaveShiftLabel;		// as Keyboard Mode's
 		ValueBox m_velMin{0, 127}, m_velMax{0, 127};
 		juce::Label m_note;
 		juce::TextButton m_close{"Close"};

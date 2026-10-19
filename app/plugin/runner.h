@@ -84,6 +84,8 @@ namespace g1app
 		// MIDI CC Mode on Selected Slots: a controller on a selected slot's channel goes to every selected
 		// slot (MidiRouting). Any thread.
 		void setSelectedControllers(const bool _on) { m_selectedControllers = _on; }
+		// Octave Shift: On moves each note by its slot's shift, Off plays it as the rack does. Any thread.
+		void setOctaveShift(const bool _on) { m_octaveShift = _on; }
 		double rate() const { return m_rate; }
 
 		// Audio thread. First the block's MIDI (offsets within the block), then the block itself.
@@ -124,6 +126,7 @@ namespace g1app
 		SpscQueue<Event, 1024> m_events;
 		MidiRouting m_midiRouting;		// the worker's: the track's notes, by each slot's octave shift
 		std::atomic<bool> m_selectedControllers{false};	// MIDI CC Mode on Selected Slots (setSelectedControllers)
+		std::atomic<bool> m_octaveShift{false};			// Octave Shift On (setOctaveShift)
 		std::vector<uint8_t> m_routed;
 		std::vector<uint8_t> m_editorHeld;	// worker thread: the editor's bytes, held while the keeper uploads a slot
 

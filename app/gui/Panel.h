@@ -69,6 +69,11 @@ namespace g1gui
 		// channel to every selected slot. The host's own setting, kept where it keeps its others.
 		virtual bool selectedControllers() const = 0;
 		virtual void setSelectedControllers(bool _on) = 0;
+		// Octave Shift on the Synth Settings page: On moves the notes by each slot's shift, as the
+		// keyboard model does; Off plays them as the rack does, the OCT SHIFT keys and LEDs greyed
+		// out. The host's own setting, as MIDI CC Mode.
+		virtual bool octaveShift() const = 0;
+		virtual void setOctaveShift(bool _on) = 0;
 		// Switching the G1 off and on, where the host can: the panel shows its Restart button only
 		// then. The host deletes this panel and makes a new one, so it must do it later, not inside
 		// the call.
@@ -383,6 +388,7 @@ namespace g1gui
 		void setKnobTurning(size_t _knob, int _position);	// Random and its reset: set at once, drawn turning
 		void updateLcdTips(const std::array<g1::KnobInfo, 18>& _info);
 		void updateStatus();	// the status bar and the MIDI LED
+		void showOctaveShift();	// the OCT SHIFT art, keys and LEDs greyed out or not, as the host's Octave Shift has them
 		void updateHeldKeys();
 		PanelButton& addButton(const juce::String& _name, MatrixBit _bit, PanelButton::Shape _shape = PanelButton::Shape::Wide);
 		LedView& addLed(MatrixBit _bit);
@@ -403,6 +409,8 @@ namespace g1gui
 		void learned(int _cc);
 		void askToReassign(int _cc, const g1app::PresetsLink::Control& _other);
 		void askToReassign(const g1::KnobInfo& _param, int _cc, const g1app::PresetsLink::Control& _other, std::function<void()> _yes);
+		void showOctaveMenu();				// right click on OCT SHIFT: Enable (Key Mode), Disable (Rack Mode)
+		juce::Rectangle<int> octaveArea() const;	// OCT SHIFT, its keys and LEDs, in the panel's pixels
 		void showPanelMenu();				// right click anywhere else: GUI Scale, Emulator Settings, About
 		bool hasOwnRightClick(const juce::Component* _c) const;	// a control that answers a right click itself
 		void showMenu(juce::PopupMenu& _menu);		// on the glass, at the mouse
@@ -451,6 +459,7 @@ namespace g1gui
 		PanelButton* m_octDown = nullptr;
 		PanelButton* m_octUp = nullptr;
 		std::array<LedView*, 5> m_octLeds{};	// -2 to +2: the active slot's octave shift
+		bool m_octaveShown = true;				// the OCT SHIFT art, keys and LEDs not greyed out: the host's Octave Shift On
 		std::array<PanelButton*, 4> m_modeButtons{};	// Store, System, Edit, Patch/Load
 		std::array<LedView*, 4> m_modeLeds{};
 		std::array<PanelButton*, 4> m_slotButtons{};	// A-D

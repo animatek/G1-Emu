@@ -23,6 +23,20 @@ Older entries cite their commit by hand.
 
 ## 2026-10-18
 
+- [Feature] **Octave Shift Enabled / Disabled (Mike Fiction, Claude, asked by Javier).** A rack
+  ignores the octave shift a patch carries; the keyboard model plays it. Disabled, the default,
+  plays the notes as sent, as the rack does: the OCT SHIFT label, keys and LEDs are greyed out and
+  the keys do nothing, but the LEDs still show the shift the patch carries, so a patch made on a
+  keyboard G1 that sounds an octave away from what someone expects shows why. Enabled, each slot's
+  notes are moved by its shift, as before (`MidiRouting::Layout::octaveShift`). Set on the Synth
+  Settings page (OCT SHIFT, a box a click flips; placed and labelled in code for now) or with a
+  right click on OCT SHIFT, its keys or its LEDs: Enable (Key Mode), Disable (Rack Mode). G1-Emu's
+  own setting, not the OS's: `octaveShift` in `settings.conf` and in the plugin's state; a project
+  from before opens Disabled. Touches the plugin and `EmuHost` (`app/plugin/*`, `app/emuhost.*`);
+  no latency reported from it. Checked: a new `g1slotkeepertest` step (Disabled, a note plays as
+  sent); `ctest` passes but `g1presetstest` (fails on `main` too with this `flash.bin`);
+  `g1vst3check --settings` and `--buffer-change` all good, plain `g1vst3check` fails only "the
+  octave shift as a parameter", as on `main`; tried in the standalone.
 - [Docs] **Release notes for v0.1.0-alpha.22 (Claude, asked by Javier).** `docs/release-notes.md`:
   Regular or Expanded (#39), G1-Emu FX (#76), and the two #75 fixes (the slots on and active come
   back with a project; a heavy slot A no longer broken by NME connecting while it opens).

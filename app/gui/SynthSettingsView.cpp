@@ -347,7 +347,8 @@ namespace g1gui
 		choices(m_program, {"Off", "Receive", "Send", "Send and receive"});
 		choices(m_leds, {"Active", "Off"});
 		choices(m_keyboardMode, {"Active Slot", "Selected Slots"});
-		m_keyboardMode.setTooltip("Selected Slots: a note on a selected slot's channel plays every selected slot, each on its own channel and in its own octave");
+		m_keyboardMode.setTooltip("Selected Slots: a note on a selected slot's channel plays every selected slot, each on its own channel "
+			"(and in its own octave, with Octave Shift Enabled)");
 		label(m_keyboardModeLabel, "KEYB MODE");
 		choices(m_midiCc, {"Active Slot", "Selected Slots"});
 		m_midiCc.setTooltip("Selected Slots: a controller on a selected slot's channel goes to every selected slot, each on its own channel. "
@@ -359,6 +360,17 @@ namespace g1gui
 			lcdTips();
 		};
 		label(m_midiCcLabel, "MIDI CC MODE");
+		choices(m_octaveShift, {"Enabled", "Disabled"});
+		m_octaveShift.setTooltip("Enabled: each slot's notes are moved by the octave shift its patch carries, as on the keyboard model, "
+			"and the OCT SHIFT keys change it. Disabled: the notes play as sent, as on the rack, which ignores the shift; the LEDs still show it. "
+			"Kept by G1-Emu, not by the G1");
+		m_octaveShift.onChange = [this]
+		{
+			if(setOctaveShift)
+				setOctaveShift(m_octaveShift.getSelectedId() == 1);
+			lcdTips();
+		};
+		label(m_octaveShiftLabel, "OCT SHIFT");
 		for(auto* v : {&m_velMin, &m_velMax})
 		{
 			v->onChange = [this] { apply(); };
@@ -385,10 +397,17 @@ namespace g1gui
 		setLookAndFeel(nullptr);
 	}
 
+	void SynthSettingsView::octaveShiftChanged()
+	{
+		m_octaveShift.setSelectedId(octaveShift && octaveShift() ? 1 : 2, juce::dontSendNotification);
+		lcdTips();
+	}
+
 	void SynthSettingsView::open(const juce::Rectangle<int> _frame)
 	{
 		m_link.read();
 		m_midiCc.setSelectedId(selectedControllers && selectedControllers() ? 2 : 1, juce::dontSendNotification);
+		m_octaveShift.setSelectedId(octaveShift && octaveShift() ? 1 : 2, juce::dontSendNotification);
 		setBounds(_frame);
 		m_open = true;
 		juce::Desktop::getInstance().getAnimator().fadeIn(this, g_fadeMs);
@@ -458,6 +477,7 @@ namespace g1gui
 			row(1, _y, _control);
 			_label.setBounds(_control.getX() - 4 - g_labelW, _control.getY(), g_labelW, g_rowH);
 		};
+		labelled(g_velocityY - g_rowStep, m_octaveShift, m_octaveShiftLabel);
 		labelled(g_velocityY, m_midiCc, m_midiCcLabel);
 		labelled(g_velocityY + g_rowStep, m_keyboardMode, m_keyboardModeLabel);
 		// The knob under the MIDI channels' boxes, centred on them, in its disk (paint); its value
@@ -568,6 +588,7 @@ namespace g1gui
 		const auto slots = [](const juce::ComboBox& _c) { return _c.getSelectedId() == 2 ? juce::String("Sel.Slots") : _c.getText(); };
 		tip(m_keyboardMode, "Keyboard Mode", slots(m_keyboardMode));
 		tip(m_midiCc, "MIDI CC Mode", slots(m_midiCc));
+		tip(m_octaveShift, "Octave Shift", m_octaveShift.getText());
 		tip(m_velMin, "Velocity Min", juce::String(m_velMin.getValue()));
 		tip(m_velMax, "Velocity Max", juce::String(m_velMax.getValue()));
 	}

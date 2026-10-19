@@ -15,7 +15,7 @@
 //   5. Bend Range is changed on the System menu: the keeper reads slot A again when asked (reread()).
 //   6. Oct Up on the panel: the patch carries the shift, and MidiRouting moves the notes; with
 //      Keyboard Mode on Selected Slots it layers them on the selected slots, and with MIDI CC
-//      Mode on Selected Slots the controllers too.
+//      Mode on Selected Slots the controllers too. With Octave Shift Off the notes are not moved.
 //   7. pack()/unpack() keep the slots as they are.
 //
 // Exit code 77 (skipped) without a ROM, 1 on any failure.
@@ -377,6 +377,7 @@ int main()
 
 		g1app::MidiRouting shifter;
 		g1app::MidiRouting::Layout layout;	// channels 1 to 4, Keyboard Mode: Active Slot
+		layout.octaveShift = true;			// Octave Shift Enabled: the keyboard model's way
 		std::vector<uint8_t> out;
 		auto send = [&](std::initializer_list<uint8_t> _in) { out.clear(); const std::vector<uint8_t> in(_in); shifter.apply(mc, layout, in.data(), in.size(), out); return out; };
 		const auto up = static_cast<uint8_t>(60 + 12 * (start + 1));
@@ -388,6 +389,10 @@ int main()
 		while(g1app::MidiRouting::shift(mc, 0) < g1app::MidiRouting::MaxShift)
 			press(2, 5);
 		check(send({0x90, 120, 100}).empty() && send({0x80, 120, 0}).empty(), "a note moved off the keyboard is not played, on or off");
+		layout.octaveShift = false;	// the rack's way: the shift is kept but moves nothing
+		check(send({0x90, 120, 100}) == std::vector<uint8_t>{0x90, 120, 100} && send({0x80, 120, 0}) == std::vector<uint8_t>{0x80, 120, 0},
+			"with Octave Shift Off, a note plays as sent");
+		layout.octaveShift = true;
 		while(g1app::MidiRouting::shift(mc, 0) > start)
 			press(2, 4);
 

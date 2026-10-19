@@ -86,6 +86,10 @@ namespace g1app
 		// slot (MidiRouting). Kept in the options, for the window to save.
 		bool selectedControllers() const { return m_selectedControllers; }
 		void setSelectedControllers(const bool _on) { m_options.selectedControllers = _on; m_selectedControllers = _on; }
+		// Octave Shift: On moves each note by its slot's shift, as the keyboard model's keys do; Off
+		// plays them as the rack does (MidiRouting). Kept in the options, for the window to save.
+		bool octaveShift() const { return m_octaveShift; }
+		void setOctaveShift(const bool _on) { m_options.octaveShift = _on; m_octaveShift = _on; }
 
 		Stats stats();
 
@@ -118,6 +122,7 @@ namespace g1app
 		PresetsLink m_presets;
 		MidiRouting m_midiRouting;	// the notes from the MIDI port, by each slot's octave shift
 		std::atomic<bool> m_selectedControllers{false};	// m_options's, for the thread that runs the G1
+		std::atomic<bool> m_octaveShift{false};			// as m_selectedControllers
 		bool m_rawMidiBound = false;
 		std::string m_romProblem;
 		std::vector<uint8_t> m_rom;		// kept for a restart

@@ -53,6 +53,8 @@ namespace g1plugin
 		bool lastController(int& _channel, int& _cc, uint32_t& _serial) override;
 		bool selectedControllers() const override;
 		void setSelectedControllers(bool _on) override;
+		bool octaveShift() const override;
+		void setOctaveShift(bool _on) override;
 		bool canRestart() const override { return true; }
 		void restart() override;
 		juce::String restartNote() const override

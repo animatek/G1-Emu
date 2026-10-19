@@ -335,6 +335,7 @@ namespace g1gui
 
 	void LedView::paint(juce::Graphics& _g)
 	{
+		_g.setOpacity(isEnabled() ? 1.0f : 0.5f);	// greyed out as a disabled button is
 		skin().led.draw(_g, m_on ? 1 : 0, spriteArea(*this));
 	}
 
@@ -1331,6 +1332,7 @@ namespace g1gui
 			b->setLatchable(false);	// a step each press: held, it does nothing more
 		for(auto& led : m_octLeds)
 			led = &addLed({});	// lit by the window from the active slot's shift (timerCallback)
+		showOctaveShift();
 
 		const char* modes[] = {"Store", "System", "Edit", "Patch/Load"};
 		const MatrixBit modeBits[] = {g_btnStore, g_btnSystem, g_btnEdit, g_btnPatchLoad};
@@ -1494,6 +1496,8 @@ namespace g1gui
 		addChildComponent(m_settingsCard);
 		m_synthView.selectedControllers = [this] { return m_host.selectedControllers(); };
 		m_synthView.setSelectedControllers = [this](const bool _on) { m_host.setSelectedControllers(_on); };
+		m_synthView.octaveShift = [this] { return m_host.octaveShift(); };
+		m_synthView.setOctaveShift = [this](const bool _on) { m_host.setOctaveShift(_on); showOctaveShift(); };
 		m_synthView.onClose = [this]
 		{
 			m_settingsLed.setOn(false);
@@ -1621,7 +1625,9 @@ namespace g1gui
 		_g.fillAll(g_face);
 		const auto& s = *m_skin;
 		s.background.draw(_g, 0, {0.0f, 0.0f, static_cast<float>(Width), 1238.0f * SkinScale});
+		_g.setOpacity(m_octaveShown ? 1.0f : 0.5f);
 		s.octaveShift.draw(_g, 0, skf(g_octaveShiftX, g_octaveShiftY, 235, 99));
+		_g.setOpacity(1.0f);
 		s.dialShadow.draw(_g, 0, skf(g_dialX - 136.5f, g_dialY + 8.0f - 124.5f, 289, 289));
 		// Under each knob, the shadow's disk under the cap: only its soft edge shows, down and right.
 		const auto shadowAt = [&](const Centre _c) { s.knobShadow.draw(_g, 0, skf(_c.x - 33, _c.y - 33, 100, 101)); };
@@ -2253,6 +2259,32 @@ namespace g1gui
 		showMenu(menu);
 	}
 
+	// OCT SHIFT, its keys and its LEDs: where a right click turns Octave Shift on or off.
+	juce::Rectangle<int> Panel::octaveArea() const
+	{
+		auto area = sk(g_octaveShiftX, g_octaveShiftY, 235, 99).getUnion(m_octDown->getBounds()).getUnion(m_octUp->getBounds());
+		for(const auto* led : m_octLeds)
+			area = area.getUnion(led->getBounds());
+		return area;
+	}
+
+	// The same switch as Octave Shift on the Synth Settings page.
+	void Panel::showOctaveMenu()
+	{
+		const bool on = m_host.octaveShift();
+		const auto set = [this](const bool _on)
+		{
+			m_host.setOctaveShift(_on);
+			showOctaveShift();
+			m_synthView.octaveShiftChanged();
+		};
+		juce::PopupMenu menu;
+		menu.addSectionHeader("Octave Shift");
+		menu.addItem("Enable (Key Mode)", true, on, [set] { set(true); });
+		menu.addItem("Disable (Rack Mode)", true, !on, [set] { set(false); });
+		showMenu(menu);
+	}
+
 	// What takes a right click for its own: a knob (its menu), a key that latches, and the
 	// controls JUCE gives a right click to (a button clicks, a box or a slider opens or drags).
 	bool Panel::hasOwnRightClick(const juce::Component* _c) const
@@ -2383,7 +2415,10 @@ namespace g1gui
 		if(_e.mods.isPopupMenu() && !hasOwnRightClick(_e.eventComponent) && _e.eventTime != m_menuClickAt)
 		{
 			m_menuClickAt = _e.eventTime;
-			showPanelMenu();
+			if(octaveArea().contains(_e.getEventRelativeTo(this).getPosition()))
+				showOctaveMenu();
+			else
+				showPanelMenu();
 		}
 	}
 
@@ -2419,8 +2454,28 @@ namespace g1gui
 		const auto octave = g1app::MidiRouting::shift(m_mc, static_cast<size_t>(activeSlot()));
 		for(size_t i = 0; i < m_octLeds.size(); ++i)
 			m_octLeds[i]->setOn(static_cast<int>(i) - g1app::MidiRouting::MaxShift == octave);
+		showOctaveShift();	// a project's state may have changed it
 		updateLearn();
 		updateStatus();
+	}
+
+	// With Octave Shift Off, OCT SHIFT, its keys and its LEDs are greyed out and the keys do
+	// nothing; the LEDs still show the shift the patch carries, so a patch made on the keyboard
+	// model shows why it plays an octave away there.
+	void Panel::showOctaveShift()
+	{
+		const bool on = m_host.octaveShift();
+		if(on == m_octaveShown && m_octDown->isEnabled() == on)
+			return;
+		m_octaveShown = on;
+		m_octDown->setEnabled(on);
+		m_octUp->setEnabled(on);
+		for(auto* led : m_octLeds)
+		{
+			led->setEnabled(on);
+			led->repaint();	// a Button repaints itself on it, a plain Component does not
+		}
+		repaint(sk(g_octaveShiftX, g_octaveShiftY, 235, 99));
 	}
 
 	namespace

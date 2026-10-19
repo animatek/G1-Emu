@@ -222,9 +222,10 @@ namespace g1app
 			{
 				if(e->frame > produced)
 					break;
-				// Each note moved by its slot's octave shift, which the OS keeps but does not apply.
+				// Each note moved by its slot's octave shift, which the OS keeps but does not apply
+				// (with Octave Shift On).
 				m_routed.clear();
-				m_midiRouting.apply(mc, MidiRouting::layout(m_settings, m_selectedControllers), e->bytes, e->size, m_routed);
+				m_midiRouting.apply(mc, MidiRouting::layout(m_settings, m_selectedControllers, m_octaveShift), e->bytes, e->size, m_routed);
 				for(const auto b : m_routed)
 					mc.getSci().write(b);
 				m_midiIn += e->size;

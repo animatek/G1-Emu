@@ -50,6 +50,8 @@ namespace g1gui
 		bool lastController(int& _channel, int& _cc, uint32_t& _serial) override { return m_host.lastController(_channel, _cc, _serial); }
 		bool selectedControllers() const override { return m_host.selectedControllers(); }
 		void setSelectedControllers(const bool _on) override { m_host.setSelectedControllers(_on); save(); }
+		bool octaveShift() const override { return m_host.octaveShift(); }
+		void setOctaveShift(const bool _on) override { m_host.setOctaveShift(_on); save(); }
 		bool canRestart() const override { return true; }
 		void restart() override { if(onRestart) onRestart(); }
 		juce::String restartNote() const override

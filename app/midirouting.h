@@ -10,7 +10,8 @@
 // they give the G1: a note on a slot's MIDI channel is moved by that slot's shift, its note off
 // follows it wherever the shift has gone since, and a note moved off the keyboard (0-127) is not
 // played. Two slots on one channel take the active slot's shift: from outside the OS a note
-// cannot be split between them.
+// cannot be split between them. Octave Shift, the hosts' own setting, Off leaves the notes as the
+// rack plays them: a patch made on the keyboard model with a shift plays as on the rack.
 //
 // Keyboard Mode set to Selected Slots (the synth settings), which on the keyboard model layers
 // the selected slots on its own keys and on the rack only the editor's Keyboard Floater: a note
@@ -52,15 +53,16 @@ namespace g1app
 
 		// What the synth settings say about where notes go: the slots' MIDI channels (0-15, 16 =
 		// off) and Keyboard Mode. layout() has them as _settings last read them from the OS (its
-		// defaults, channels 1 to 4 and Active Slot, until then or without it), and MIDI CC Mode, the
-		// host's own setting (no OS has it).
+		// defaults, channels 1 to 4 and Active Slot, until then or without it), and MIDI CC Mode and
+		// Octave Shift, the host's own settings (no OS has them).
 		struct Layout
 		{
 			std::array<int, 4> channels{0, 1, 2, 3};
 			bool selectedSlots = false;			// Keyboard Mode: Selected Slots
 			bool selectedControllers = false;	// MIDI CC Mode: Selected Slots
+			bool octaveShift = false;			// Octave Shift: On, the notes moved by their slot's shift
 		};
-		static Layout layout(const SynthSettingsLink* _settings, bool _selectedControllers);
+		static Layout layout(const SynthSettingsLink* _settings, bool _selectedControllers, bool _octaveShift);
 
 		// _in, on its way to the G1's MIDI IN, into _out with each note moved by its slot's shift,
 		// and with Selected Slots, played by each selected slot.
