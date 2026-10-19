@@ -7,6 +7,19 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Fix] **The plugin went silent for good when the G1 ran slower than real time (Claude, found by
+  Javier in Bitwig and by Waltercalling on a laptop, #75).** Switched to Expanded on a machine that
+  cannot quite keep up, every frame came late; the runner owed each one and dropped it as late, the
+  debt grew with every block and nothing ever came out, not even dropouts in the log (it counted
+  them only after a first full block). Now a debt larger than what the worker may be ahead by is
+  given up: the worker's timeline moves back by it (skew), so the G1 breaks up instead of falling
+  silent, and the events still land where they should against what is heard. Dropouts count from
+  the first frame out. `g1runnertest --realtime` prints the peak per half second and fails if it
+  is silent where the offline render has sound. Checked: Expanded with the CPUs cut to 4 threads
+  (`taskset -c 0-3`, about 0.3x real time) was silent from start to end and now sounds, breaking
+  up; with 5 and 6 threads both versions sound; `ctest -L g1` passes (14 tests, both runner tests
+  among them); `g1vst3check` fails the same way with and without the change here (PC Ports taken
+  and an empty program 1 in this machine's standalone banks).
 - [Fix] **Factory banks... was empty banks: now Banks..., with Restore (Claude, found by Javier).**
   The G1's factory patches were never in the ROM (they came in each synth's flash and as Clavia's
   files), so starting the flash over leaves the banks empty, not the factory's. The button is now

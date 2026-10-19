@@ -135,7 +135,8 @@ namespace g1app
 
 		std::atomic<uint64_t> m_consumed{0};	// frames the host has taken (audio thread writes)
 		uint64_t m_debt = 0;					// frames owed: put out as silence, not yet arrived
-		bool m_primed = false;					// the first full block has gone out
+		bool m_primed = false;					// the first frames have gone out
+		std::atomic<uint64_t> m_forgiven{0};	// debt given up by the audio thread, for the worker's skew
 		std::atomic<const std::atomic<bool>*> m_restoreFlag{nullptr};
 		std::atomic<size_t> m_discard{0};		// the raced frames still queued, for the audio thread to drop
 		std::atomic<bool> m_raceEnded{false};	// for the audio thread: drop those and forgive m_debt
