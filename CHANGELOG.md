@@ -7,6 +7,15 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Fix] **The plugin silent after the fast boot when the boot is slower than real time (Claude,
+  found by Javier in Bitwig).** On the Expanded on this machine the race of #78 runs slower than
+  real time: the host had taken 50176 frames when the worker had made 29438, the audio thread owed
+  the other 21010 as silence (`m_debt`), and the skew lined the worker up with what was queued, not
+  with what was owed, so the debt ate everything after it, for good. At the race's end the audio
+  thread now forgives the debt as it drops the raced frames (`m_raceEnded`). Checked: the VST3 in a
+  host paced in real time (an experiment on `g1vst3check`, not committed), a note a second: silent
+  throughout before, sound from 1 s on the Expanded and from 0.5 s on the Regular now (1 s with
+  `G1_FAST_BOOT=0`); `ctest -L g1` passes; `g1vst3check --buffer-change` and `--settings` all good.
 - [Docs] **Release notes for v0.1.0-alpha.23 (Claude, asked by Javier).** `docs/release-notes.md`:
   the faster start (#78) and Octave Shift Enabled / Disabled (#77), both by Mike Fiction, and the
   octave shift a reopened project lost (21176fd).

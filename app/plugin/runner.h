@@ -138,6 +138,7 @@ namespace g1app
 		bool m_primed = false;					// the first full block has gone out
 		std::atomic<const std::atomic<bool>*> m_restoreFlag{nullptr};
 		std::atomic<size_t> m_discard{0};		// the raced frames still queued, for the audio thread to drop
+		std::atomic<bool> m_raceEnded{false};	// for the audio thread: drop those and forgive m_debt
 
 		std::mutex m_engineMutex;
 		std::thread m_thread;

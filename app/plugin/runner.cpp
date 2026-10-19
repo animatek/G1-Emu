@@ -92,8 +92,14 @@ namespace g1app
 
 	void Runner::process(float* const* _outs, const size_t _numOuts, const float* const* _ins, const size_t _numIns, const size_t _frames, const bool _offline)
 	{
-		if(const auto stale = m_discard.exchange(0))
-			m_bridge.skip(stale);	// the raced frames: nobody waited for them
+		if(m_raceEnded.exchange(false))
+		{
+			m_bridge.skip(m_discard.exchange(0));	// the raced frames: nobody waited for them
+			// Nor for those owed: a race slower than real time (the Expanded on a slower machine)
+			// leaves a debt that would eat what comes after it, the skew lining the worker up with
+			// what is queued, not with what is owed.
+			m_debt = 0;
+		}
 		size_t done = 0;
 		while(done < _frames)
 		{
@@ -193,7 +199,9 @@ namespace g1app
 				raced = false;
 				const auto queued = m_bridge.queued();
 				m_discard.store(queued > m_ahead ? queued - m_ahead : 0);
+				// Wraps, as it is meant to, when the race was slower than real time.
 				skew = m_bridge.produced() - m_consumed.load(std::memory_order_acquire) - std::min<uint64_t>(queued, m_ahead);
+				m_raceEnded.store(true);
 			}
 			raced |= racing;
 			const uint64_t target = racing ? UINT64_MAX : m_consumed.load(std::memory_order_acquire) + m_ahead + skew;
