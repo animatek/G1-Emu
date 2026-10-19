@@ -37,6 +37,34 @@ Older entries cite their commit by hand.
   came out of the MIDI OUT: with a patch whose knobs move constants assigned to CC 1-18, knob 1
   gives `B0 01 xx` as it turns, on the factory OS and on the 3.03b. Checked: `g1midiouttest` (new,
   no ROM), `g1runnertest`, and by Javier in Bitwig: the knobs' CC reach another track.
+- [Release] **v0.1.0-alpha.24: the Expanded holds (Claude, decided with Javier).** Release notes
+  in `docs/release-notes.md`: the two Expanded fixes below and what came since alpha.23 (one
+  settings file, Banks..., a run's own ROM).
+- [Fix] **Fewer dropouts on the Expanded: the CPU runs a late DSP itself, and the emulation's
+  threads at a high priority (Claude, found by Javier in Bitwig, 2026-10-18).** When the CPU had
+  to wait for a DSP whose worker had not started it yet (busy with its other DSP, or not woken),
+  it waited; now whoever claims the job first runs it (`DspJob::claimed`, `waitDsp`), the same
+  work either way. And `keepThreadAtFullSpeed` raises each emulation thread's priority as
+  Gearmulator does (`dsp56k::ThreadTools`, Highest: nice -10 on Linux where RLIMIT_NICE allows it,
+  time-critical on Windows, user-interactive on macOS); at the normal priority a DAW's other
+  threads took the emulation's turn with the load well below 100 %. `g1patchtest --bench` prints
+  how often the CPU ran a DSP (`cpu_ran_dsp_s`). Checked: `golden.sh check` byte-identical for
+  the ten bench patches on both models (threaded, serial, reference); `ctest -L g1` passes;
+  `g1runnertest --realtime --seconds 30` on an Expanded cut to 5 threads (`taskset -c 0-4`):
+  1967 dropouts at 91 % load before, 4 at 59 % after.
+- [Fix] **The plugin went silent for good when the G1 ran slower than real time (Claude, found by
+  Javier in Bitwig and by Waltercalling on a laptop, #75).** Switched to Expanded on a machine that
+  cannot quite keep up, every frame came late; the runner owed each one and dropped it as late, the
+  debt grew with every block and nothing ever came out, not even dropouts in the log (it counted
+  them only after a first full block). Now a debt larger than what the worker may be ahead by is
+  given up: the worker's timeline moves back by it (skew), so the G1 breaks up instead of falling
+  silent, and the events still land where they should against what is heard. Dropouts count from
+  the first frame out. `g1runnertest --realtime` prints the peak per half second and fails if it
+  is silent where the offline render has sound. Checked: Expanded with the CPUs cut to 4 threads
+  (`taskset -c 0-3`, about 0.3x real time) was silent from start to end and now sounds, breaking
+  up; with 5 and 6 threads both versions sound; `ctest -L g1` passes (14 tests, both runner tests
+  among them); `g1vst3check` fails the same way with and without the change here (PC Ports taken
+  and an empty program 1 in this machine's standalone banks).
 - [Fix] **Factory banks... was empty banks: now Banks..., with Restore (Claude, found by Javier).**
   The G1's factory patches were never in the ROM (they came in each synth's flash and as Clavia's
   files), so starting the flash over leaves the banks empty, not the factory's. The button is now

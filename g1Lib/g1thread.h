@@ -14,7 +14,10 @@ namespace g1
 
 	// For a thread that has to keep up with the audio: on Windows 11 a thread of a process in the
 	// background, or on battery or a power-saving plan, can be put under EcoQoS, which runs it slower
-	// and, on a hybrid CPU, on the efficiency cores. This opts the calling thread out. Elsewhere,
-	// nothing.
+	// and, on a hybrid CPU, on the efficiency cores. This opts the calling thread out. And everywhere
+	// it raises the thread's priority as Gearmulator raises its emulation threads' (dsp56k::ThreadTools,
+	// Highest): nice -10 on Linux, where the system allows it (RLIMIT_NICE), user-interactive QoS on
+	// macOS, time-critical on Windows. At the normal priority a DAW's other plugins and threads took
+	// the emulation's turn and it dropped out with the load well below 100 % (Bitwig, 2026-10-18).
 	void keepThreadAtFullSpeed();
 }

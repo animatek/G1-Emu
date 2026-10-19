@@ -117,6 +117,15 @@ namespace g1app
 					g1::preciseSleep(std::chrono::microseconds(50));
 			}
 
+			// A debt the worker cannot pay is given up: the G1 slower than real time (an Expanded on a
+			// machine that cannot keep up) would otherwise owe more with every block, every frame it
+			// made would be dropped as late, and it went silent for good instead of breaking up. Beyond
+			// what it may be ahead by, the worker's timeline moves back by the debt instead (skew).
+			if(m_debt > m_ahead)
+			{
+				m_forgiven.fetch_add(m_debt, std::memory_order_relaxed);
+				m_debt = 0;
+			}
 			if(m_debt)
 				m_debt -= m_bridge.skip(m_debt);
 			const size_t got = m_debt ? 0 : m_bridge.pull(_outs, _numOuts, done, n);
@@ -129,7 +138,7 @@ namespace g1app
 				if(m_primed)
 					++m_xruns;
 			}
-			else
+			if(got)
 				m_primed = true;
 
 			// Only now may the worker go further, so the events queued for this block are all in.
@@ -198,12 +207,14 @@ namespace g1app
 				// raced ahead are skipped.
 				raced = false;
 				const auto queued = m_bridge.queued();
+				m_forgiven.store(0);	// the new skew takes in whatever was owed
 				m_discard.store(queued > m_ahead ? queued - m_ahead : 0);
 				// Wraps, as it is meant to, when the race was slower than real time.
 				skew = m_bridge.produced() - m_consumed.load(std::memory_order_acquire) - std::min<uint64_t>(queued, m_ahead);
 				m_raceEnded.store(true);
 			}
 			raced |= racing;
+			skew -= m_forgiven.exchange(0, std::memory_order_relaxed);	// wraps too, as it is meant to
 			const uint64_t target = racing ? UINT64_MAX : m_consumed.load(std::memory_order_acquire) + m_ahead + skew;
 			uint64_t produced = m_bridge.produced();
 

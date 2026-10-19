@@ -248,6 +248,10 @@ int main(int _argc, char** _argv)
 		const auto c = render(setup, seconds, 256, true);
 		std::printf("real time, blocks of 256:  %llu dropouts, worker load %.0f%%, %.2f cores, after the note %.1f dBFS\n",
 			static_cast<unsigned long long>(c.xruns), c.load, c.cores, dbfs(c.out[0], noteOn, c.out[0].size()));
+		std::printf("  peak per half second (dBFS):");
+		for(size_t w = 0; w + 24000 <= c.out[0].size(); w += 24000)
+			std::printf(" %.0f", dbfs(c.out[0], w, w + 24000));
+		std::printf("\n");
 		// A dropout while the G1 is silent anyway (loading a patch mutes it, and loading is when
 		// the emulator runs slower than real time) hides nothing. One over sound is a failure.
 		size_t audible = 0;
@@ -256,6 +260,13 @@ int main(int _argc, char** _argv)
 			const auto at = static_cast<size_t>(t * g_rate);
 			if(dbfs(a.out[0], at, at + 256) > -120.0 || dbfs(a.out[1], at, at + 256) > -120.0)
 				++audible;
+		}
+		// Slower than real time it may break up, but never go quiet: it did, for good, when every late
+		// frame was owed and dropped (an Expanded on a machine that could not keep up).
+		if(dbfs(a.out[0], noteOn, a.out[0].size()) > -120.0 && dbfs(c.out[0], noteOn, c.out[0].size()) <= -120.0)
+		{
+			std::printf("  SILENT in real time, with sound offline\n");
+			failed = 1;
 		}
 		if(!c.xrunAt.empty())
 			std::printf("  dropouts from %.2f s to %.2f s, %zu of them over sound\n", c.xrunAt.front(), c.xrunAt.back(), audible);
