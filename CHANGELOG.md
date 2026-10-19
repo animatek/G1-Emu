@@ -5,6 +5,22 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-10-19
+
+- [Fix] **A reopened project keeps slot A's octave shift again (Claude, asked by Javier; found by
+  Mike Fiction).** Since the slots on and active came back with a project (#75), writing its
+  settings means three messages (the settings, SlotsSelected, SlotActivated) at 300 ms of G1 time
+  each before the reading back, and `SettingsCheckMs` (1500 ms) ran out first: the plugin wrote
+  them again and again, never taken, and SlotActivated, sent each time, set the active slot's
+  shift back to 0. Now 3000 ms, and the shifts the restored patches carried are taken before the
+  write and put back after it. Checked: plain `g1vst3check` on the Regular, "the octave shift as a
+  parameter" +1 in a project reopened (was +0); `--settings` and `--buffer-change` all good; `ctest
+  -L g1` passes. On the Expanded, on this machine, the offline restore still runs out its 15 s
+  before slot A is back, so the check still says +0 there.
+- [CI] **The build with four jobs (Claude).** A bare `--parallel` is `make -j` with no limit: with
+  LTO and two plugins the Linux runners ran out of memory and were shut down (both main pushes of
+  2026-10-18). `--parallel 4`, the runners' cores (0f9452c).
+
 ## 2026-10-18
 
 - [Docs] **Release notes for v0.1.0-alpha.22 (Claude, asked by Javier).** `docs/release-notes.md`:

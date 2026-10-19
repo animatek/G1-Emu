@@ -257,7 +257,10 @@ namespace g1plugin
 		// What a project keeps besides the flash and the slots (#46). m_lifecycle guards all of it
 		// but m_restoring, which processBlock reads.
 		static constexpr int SettingsTries = 5;
-		static constexpr juce::uint32 SettingsCheckMs = 1500;	// after a write, how long to wait for it to be read back
+		// After a write, how long to wait for it to be read back: the settings, SlotsSelected and
+		// SlotActivated take 300 ms of G1 time each before the reading (1500 ms was too short: written
+		// again and again, never taken).
+		static constexpr juce::uint32 SettingsCheckMs = 3000;
 		static constexpr juce::uint32 PollMs = 2000;			// how often the OS's settings are read for the project
 		static constexpr juce::uint32 RestoreHoldMs = 15000;	// the longest the notes are held back
 		static constexpr uint32_t SystemLedRow = 3, SystemLedBit = 4;	// the System key's LED
@@ -268,6 +271,9 @@ namespace g1plugin
 		int m_settingsTries = 0;
 		juce::uint32 m_settingsWrittenAt = 0;	// 0: not written yet (or to be written again)
 		uint64_t m_settingsRevision = 0;		// the link's revision before the write: a later one is its reading back
+		// The slots' octave shifts as the restored patches left them, taken before the write: the
+		// SlotActivated it sends can set the active slot's back to 0, so they go back in after it.
+		std::optional<std::array<int, 4>> m_restoredShifts;
 		juce::uint32 m_polledAt = 0;			// when the OS's settings were last asked for
 		bool m_systemMenu = false;				// the System key's LED was lit at the last look
 		std::array<int, 4> m_octaves{};		// each slot's octave shift at the last look

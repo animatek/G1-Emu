@@ -386,6 +386,7 @@ namespace g1plugin
 		m_pendingSettings.reset();
 		m_settingsTries = 0;
 		m_settingsWrittenAt = 0;
+		m_restoredShifts.reset();
 		m_systemMenu = false;
 		m_octaves = {};
 		for(size_t s = 0; s < m_octaveParams.size(); ++s)
@@ -1022,6 +1023,13 @@ namespace g1plugin
 				return;
 			g1app::SynthSettings os;
 			m_synthSettings.settings(os, m_settingsRevision);
+			if(m_engine && !m_restoredShifts)
+			{
+				std::array<int, 4> shifts{};
+				for(size_t s = 0; s < shifts.size(); ++s)
+					shifts[s] = g1app::MidiRouting::shift(m_engine->mc(), s);
+				m_restoredShifts = shifts;
+			}
 			m_synthSettings.write(*m_pendingSettings, true);	// and the slots on and active (#75)
 			m_settingsWrittenAt = std::max<juce::uint32>(now, 1);
 			++m_settingsTries;
@@ -1082,6 +1090,18 @@ namespace g1plugin
 	// sets is let be: the restored patches carry the shifts, and they win once they are in.
 	void Processor::octavesToAndFromHost(g1::Microcontroller& _mc, std::vector<std::pair<size_t, int>>& _edits)
 	{
+		// The shifts the restored patches carried, back in once the project's settings are: their
+		// SlotActivated can set the active slot's back to 0.
+		if(m_restoredShifts && !m_restoring)
+		{
+			std::unique_lock<std::mutex> engineLock;
+			if(m_runner)
+				engineLock = m_runner->lockEngine();
+			for(size_t s = 0; s < m_restoredShifts->size(); ++s)
+				if(g1app::MidiRouting::shift(_mc, s) != (*m_restoredShifts)[s])
+					g1app::MidiRouting::setShift(_mc, s, (*m_restoredShifts)[s]);
+			m_restoredShifts.reset();
+		}
 		for(size_t s = 0; s < m_octaveParams.size(); ++s)
 		{
 			const int param = m_octaveParams[s]->get();
