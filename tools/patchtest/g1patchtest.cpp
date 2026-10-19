@@ -71,7 +71,9 @@ namespace
 	{
 		static const uint32_t at = std::getenv("G1_WATCH_PC") ? static_cast<uint32_t>(std::strtoul(std::getenv("G1_WATCH_PC"), nullptr, 16)) : 0;
 		static int hits = 0;
-		if(!at || _mc.getPC() != at || hits >= 8)
+		// G1_WATCH_FROM=S: only from S seconds of the G1's time on (boot included)
+		static const uint64_t from = std::getenv("G1_WATCH_FROM") ? static_cast<uint64_t>(std::atof(std::getenv("G1_WATCH_FROM")) * g1::g_ucClock) : 0;
+		if(!at || _mc.getPC() != at || hits >= 8 || _mc.ucCycles() < from)
 			return;
 		++hits;
 		std::printf("  [watch $%06x] #%d D0=%08x D1=%08x D2=%08x A0=%06x A1=%06x A2=%06x SP=%06x stack:", at, hits,

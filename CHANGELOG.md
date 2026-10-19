@@ -7,6 +7,9 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Tools] Claude: `g1patchtest`'s `G1_WATCH_PC` takes **`G1_WATCH_FROM=S`**, the G1's seconds
+  (boot included) to start watching from: its eight hits otherwise all land in the boot. Used to
+  find G1-Mods' Note Out bug.
 - [Docs] Claude: **the loader's key combinations named** (`NOTES.md`, "Boot and memory map"):
   read from the loader's code and tried by Javier on his real G1: Shift + Store enters the MIDI
   update mode, Navigator up + Find the production test, Navigator up + Panel Split the RAM test;
