@@ -110,7 +110,7 @@ namespace g1plugin
 
 		const juce::String getName() const override { return JucePlugin_Name; }	// "G1-Emu" or "G1-Emu FX"
 		bool acceptsMidi() const override { return true; }
-		bool producesMidi() const override { return false; }
+		bool producesMidi() const override { return true; }	// the G1's MIDI OUT
 		bool isMidiEffect() const override { return false; }
 		double getTailLengthSeconds() const override { return 0.0; }
 

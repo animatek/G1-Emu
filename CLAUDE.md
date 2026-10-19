@@ -128,7 +128,10 @@ clap-juce-extensions; `clap-validator` passes it. The design is
   and Nuendo answer a latency change, which a new buffer size is, by deactivating and reactivating
   the plugin from inside that call (#66). `g1vst3check plugin.vst3 --buffer-change` checks it.
 - Known: a patch load runs slower than real time (host-port syncs), ~0.3 s of dropouts at the
-  Program Change while the G1 is muted anyway. The G1's MIDI OUT still goes nowhere.
+  Program Change while the G1 is muted anyway.
+- **The G1's MIDI OUT** (the SCI) is the plugin's MIDI output: the worker puts its bytes back
+  into messages (`midioutparser.h`, no SysEx) at the host frame its sound plays at, and
+  `processBlock` swaps the track's MIDI in the buffer for them (`Runner::takeMidiOut`).
 
 ## Two backends for audio and MIDI
 

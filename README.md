@@ -240,7 +240,9 @@ Then:
    G1 has no OS to run and waits for one. Your banks are not touched.
 2. Run the updater (`wine "Nord Modular OS v3.03b Update.exe"`) and choose **G1-Emu's PC Port** as
    its MIDI output and input. Follow its steps. The G1's display counts the percentage received
-   and ends with `Update completed`. If the updater complains before the G1 is done, let the G1
+   and ends with `Update completed`. Tick **Safe (Slower)** on the ports page: without it the
+   updater sends faster than the G1 takes it in, and ends with "Dump error" while the G1 is still
+   working (harmless, but confusing). If the updater complains before the G1 is done, let the G1
    finish: what counts is its display.
 3. Close G1-Emu. The OS that came in is kept in the data folder (`os/received-….bin`) and set as
    `os =` in the settings, so the window, the console and the plugin all run it from then on.
@@ -288,6 +290,10 @@ VST3 is built.
   the panel. VST3 carries no Program Change as MIDI, so the plugin also has 128 programs: a host
   that sends Program Changes to a VST3 sets those, and they reach the G1 on channel 1. The G1 does not remember what each slot had, so the plugin remembers the last Program
   Change of each channel and sends it again when the project opens.
+- **The G1's MIDI OUT is the plugin's MIDI output:** what the G1 sends there (the CC of a knob
+  turned on the panel, and whatever the OS sends) comes out of the track, on the sample where the
+  G1's own sound has it, for the DAW to record or route to another instrument. SysEx is not passed
+  on. The standalone sends the same to its `MIDI` port.
 - **Latency** is one host block plus about 5.5 ms, and it is reported to the DAW, which
   compensates for it: notes land on the exact sample the DAW put them on, whatever the block size.
 - **The Presets page** works here too: the banks, a click to load, and Load .pch (see

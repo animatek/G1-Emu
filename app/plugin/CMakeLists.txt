@@ -25,7 +25,7 @@ function(g1_add_plugin _target _name _code _fx)
 		PRODUCT_NAME "${_name}"
 		IS_SYNTH ${isSynth}
 		NEEDS_MIDI_INPUT TRUE
-		NEEDS_MIDI_OUTPUT FALSE
+		NEEDS_MIDI_OUTPUT TRUE	# the G1's MIDI OUT (Runner::takeMidiOut)
 		IS_MIDI_EFFECT FALSE
 		VST3_CATEGORIES ${categories}
 		COPY_PLUGIN_AFTER_BUILD FALSE
@@ -71,6 +71,12 @@ add_executable(g1hostclocktest hostclocktest.cpp hostclock.h)
 target_include_directories(g1hostclocktest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME g1hostclocktest COMMAND g1hostclocktest)
 set_tests_properties(g1hostclocktest PROPERTIES TIMEOUT 60 LABELS g1)
+
+# The G1's MIDI OUT put back into messages for the host: no ROM, no DAW.
+add_executable(g1midiouttest midiouttest.cpp midioutparser.h)
+target_include_directories(g1midiouttest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME g1midiouttest COMMAND g1midiouttest)
+set_tests_properties(g1midiouttest PROPERTIES TIMEOUT 60 LABELS g1)
 
 # The runner without a DAW: blocks of any size, notes at exact frames, offline and in real time.
 # Needs a ROM, so without one it reports itself skipped.

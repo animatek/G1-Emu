@@ -9,7 +9,7 @@
 // What it uses is in Options: the window sets them from its settings panel and g1run leaves them
 // at their defaults. The G1_* environment variables still win over both, so scripts and the test
 // bench keep working: G1_AUDIO (jack, alsa, an ALSA device or no), G1_GAIN_DB (+36 by default),
-// G1_JACK_CONNECT=0, G1_RAWMIDI (the ID of the snd-virmidi card to take over, G1Emu by default;
+// G1_JACK_CONNECT=0, G1_RAWMIDI (the ID of the raw MIDI card to take over, G1 by default;
 // 0 disables it), G1_RECORD=seconds (4-channel WAV next to the flash), G1_PCPORT_OUT/G1_PCPORT_IN/
 // G1_MIDI_OUT/G1_MIDI_IN (manual MIDI device names, see Options::pcPortOutDevice). G1_THREADS and
 // G1_INTERP are debugging knobs of the emulator core and stay environment-only.

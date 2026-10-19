@@ -7,6 +7,36 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Tools] Claude: `g1patchtest`'s `G1_WATCH_PC` takes **`G1_WATCH_FROM=S`**, the G1's seconds
+  (boot included) to start watching from: its eight hits otherwise all land in the boot. Used to
+  find G1-Mods' Note Out bug.
+- [Docs] Claude: **the loader's key combinations named** (`NOTES.md`, "Boot and memory map"):
+  read from the loader's code and tried by Javier on his real G1: Shift + Store enters the MIDI
+  update mode, Navigator up + Find the production test, Navigator up + Panel Split the RAM test;
+  Shift + Patch/Load boots the ROM's factory OS (slots "Empty patch", and the next plain power-on
+  is back to normal).
+- [Docs] Claude: README, the OS update: **tick Safe (Slower)**. Without it Clavia's updater runs
+  ahead of the G1 and ends with "Dump error" though the OS arrives whole (seen by Javier in G1-Emu,
+  the received OS byte for byte the 3.03b); with it, on his real G1 through a UM-ONE, the two kept
+  pace and there was no error.
+- [Fix] **Settings offered a raw MIDI card that does not exist (Claude, found by Javier).** With
+  raw MIDI off, the box showed `G1Emu` (the snd-virmidi card of the first attempts), and ticking it
+  again saved that; the card G1-Emu makes and Bitwig lists is `G1` (`G1 MIDI 1`), the default
+  everywhere else. So the MIDI OUT never reached Bitwig until the ports were linked by hand. The
+  box now offers the settings' own default.
+- [New] **The plugin's MIDI output is the G1's MIDI OUT (Claude, asked by Javier).** What the OS
+  sends out of the SCI went nowhere in the plugin (the standalone already sent it to its `MIDI`
+  port): the runner's worker now puts its bytes back into messages (`midioutparser.h`: running
+  status, real time anywhere, no SysEx) at the host frame where the G1's sound plays, and
+  `processBlock` puts them in the block's MIDI in place of the track's, which a host would
+  otherwise get back. `producesMidi()` is true, and `NEEDS_MIDI_OUTPUT` too: without it JUCE gives
+  the VST3 and the CLAP no event output and the messages are lost. The G1 sends a parameter's CC
+  only when the patch assigns it one (`$110CAC` in the OS), so a patch with no MIDI assignments
+  sends nothing when its knobs turn. For G1-Mods' MIDI Out module (notes from the G1's sequencers
+  to the DAW). `g1patchtest --knob-at S:knob` sweeps a panel knob, and the bench now prints what
+  came out of the MIDI OUT: with a patch whose knobs move constants assigned to CC 1-18, knob 1
+  gives `B0 01 xx` as it turns, on the factory OS and on the 3.03b. Checked: `g1midiouttest` (new,
+  no ROM), `g1runnertest`, and by Javier in Bitwig: the knobs' CC reach another track.
 - [Release] **v0.1.0-alpha.24: the Expanded holds (Claude, decided with Javier).** Release notes
   in `docs/release-notes.md`: the two Expanded fixes below and what came since alpha.23 (one
   settings file, Banks..., a run's own ROM).

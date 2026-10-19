@@ -678,6 +678,13 @@ namespace g1plugin
 			runner->setGainDb(gain);
 		}
 		runner->process(outs, 4, ins, numIns, static_cast<size_t>(frames), isNonRealtime());
+		// The buffer now carries what the G1's MIDI OUT sent, not the track's MIDI, which a host
+		// would otherwise get back as the plugin's output.
+		_midi.clear();
+		runner->takeMidiOut(static_cast<size_t>(frames), [&](const uint32_t _offset, const uint8_t* _bytes, const uint8_t _size)
+		{
+			_midi.addEvent(_bytes, _size, static_cast<int>(std::min<uint32_t>(_offset, static_cast<uint32_t>(frames - 1))));
+		});
 		for(int c = 0; c < 4; ++c)
 			if(copies[c] && outs[c])
 				std::copy_n(outs[c], frames, copies[c]);
