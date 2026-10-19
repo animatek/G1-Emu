@@ -159,7 +159,7 @@ int main(int argc, char** argv)
 {
 	if(argc < 3)
 	{
-		std::fprintf(stderr, "usage: g1patchtest ROM patch.pch [--note N|-1] [--note-at S] [--note-off-at S] [--events +S,-S,...] [--param-at S:section:module:param:value] [--add-module-at S:type:index:x:y] [--seconds S] [--wav file.wav] [--input-sine Hz] [--input-raw file.f32] [--dump-packets dir] [--bench]\n");
+		std::fprintf(stderr, "usage: g1patchtest ROM patch.pch [--note N|-1] [--note-at S] [--note-off-at S] [--events +S,-S,...] [--param-at S:section:module:param:value] [--add-module-at S:type:index:x:y] [--knob-at S:knob] [--seconds S] [--wav file.wav] [--input-sine Hz] [--input-raw file.f32] [--dump-packets dir] [--bench]\n");
 		std::fprintf(stderr, "cycle diagnostic: G1_JITBLOCK=1 G1_CYCPROF=0..3 (after the note, with disassembly)\n");
 		return 2;
 	}
@@ -172,6 +172,10 @@ int main(int argc, char** argv)
 	// message NME sends when a knob is turned (cc $13, sc $40)
 	struct ParamAt { double at; int section, module, param, value; };
 	std::vector<ParamAt> paramsAt;
+	// --knob-at S:knob (repeatable): panel knob 1-18 swept from 0 to the top over 0.4 s, from S
+	// seconds in, as a hand on the panel would (the ADC, not the editor's message)
+	struct KnobAt { double at; int knob; };
+	std::vector<KnobAt> knobsAt;
 	// --add-module-at S:type:index:x:y (repeatable): a module added to the poly section S seconds
 	// in, with its default parameters, the message NME sends when one is dropped on the canvas
 	struct AddAt { double at; int type, index, x, y; };
@@ -207,6 +211,12 @@ int main(int argc, char** argv)
 			ParamAt pa{};
 			if(std::sscanf(argv[i + 1], "%lf:%d:%d:%d:%d", &pa.at, &pa.section, &pa.module, &pa.param, &pa.value) == 5)
 				paramsAt.push_back(pa);
+		}
+		else if(!std::strcmp(argv[i], "--knob-at"))
+		{
+			KnobAt ka{};
+			if(std::sscanf(argv[i + 1], "%lf:%d", &ka.at, &ka.knob) == 2 && ka.knob >= 1 && ka.knob <= 18)
+				knobsAt.push_back(ka);
 		}
 		else if(!std::strcmp(argv[i], "--add-module-at"))
 		{
@@ -1040,7 +1050,7 @@ int main(int argc, char** argv)
 			t += tickMs;
 		}
 	}
-	else if(noteLater || !paramsAt.empty() || !addsAt.empty())
+	else if(noteLater || !paramsAt.empty() || !addsAt.empty() || !knobsAt.empty())
 	{
 		// Each event at its time, in whole milliseconds like the rest of the bench: the note's
 		// presses and releases (when it plays later) and the parameter changes.
@@ -1053,6 +1063,8 @@ int main(int argc, char** argv)
 			timeline.push_back({paramsAt[k].at, 1, k});
 		for(size_t k = 0; k < addsAt.size(); ++k)
 			timeline.push_back({addsAt[k].at, 2, k});
+		for(size_t k = 0; k < knobsAt.size(); ++k)
+			timeline.push_back({knobsAt[k].at, 3, k});
 		std::stable_sort(timeline.begin(), timeline.end(), [](const Ev& _a, const Ev& _b) { return _a.at < _b.at; });
 		uint64_t nowMs = 0;
 		for(const auto& ev : timeline)
@@ -1063,6 +1075,17 @@ int main(int argc, char** argv)
 			nowMs = std::max(nowMs, atMs);
 			if(ev.kind == 0)
 				mc.getPcPort().receive(withChecksum({0xf0, 0x33, 0x5c, 0x06, static_cast<uint8_t>(pid), 0x56, static_cast<uint8_t>(events[ev.i].second ? 0 : 1), static_cast<uint8_t>(note)}));
+			else if(ev.kind == 3)
+			{
+				const auto adc = g1::KnobMap::KnobAdc[static_cast<size_t>(knobsAt[ev.i].knob - 1)];
+				for(int v = 0; v <= 255; v += 4)
+				{
+					mc.setAdc(adc, static_cast<uint8_t>(v));
+					run(mc, 6 * g_ms);
+				}
+				nowMs += 6 * 64;
+				std::printf("knob %d swept at %.2f s\n", knobsAt[ev.i].knob, knobsAt[ev.i].at);
+			}
 			else if(ev.kind == 2)
 			{
 				const auto& aa = addsAt[ev.i];
@@ -1092,6 +1115,15 @@ int main(int argc, char** argv)
 	else
 		run(mc, static_cast<uint64_t>(seconds * 1000) * g_ms);
 	capture = false;
+	// What the G1 sent out of its MIDI OUT meanwhile (a knob's CC, a Program Change...).
+	{
+		std::vector<uint8_t> midiOut;
+		mc.getSci().read(midiOut);
+		std::printf("MIDI OUT: %zu bytes", midiOut.size());
+		for(size_t k = 0; k < midiOut.size() && k < 48; ++k)
+			std::printf(" %02x", midiOut[k]);
+		std::printf("%s\n", midiOut.size() > 48 ? " ..." : "");
+	}
 	if(bench)
 	{
 		const double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - benchStart).count();

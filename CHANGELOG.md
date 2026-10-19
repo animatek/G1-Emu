@@ -7,6 +7,19 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [New] **The plugin's MIDI output is the G1's MIDI OUT (Claude, asked by Javier).** What the OS
+  sends out of the SCI went nowhere in the plugin (the standalone already sent it to its `MIDI`
+  port): the runner's worker now puts its bytes back into messages (`midioutparser.h`: running
+  status, real time anywhere, no SysEx) at the host frame where the G1's sound plays, and
+  `processBlock` puts them in the block's MIDI in place of the track's, which a host would
+  otherwise get back. `producesMidi()` is true, and `NEEDS_MIDI_OUTPUT` too: without it JUCE gives
+  the VST3 and the CLAP no event output and the messages are lost. The G1 sends a parameter's CC
+  only when the patch assigns it one (`$110CAC` in the OS), so a patch with no MIDI assignments
+  sends nothing when its knobs turn. For G1-Mods' MIDI Out module (notes from the G1's sequencers
+  to the DAW). `g1patchtest --knob-at S:knob` sweeps a panel knob, and the bench now prints what
+  came out of the MIDI OUT: with a patch whose knobs move constants assigned to CC 1-18, knob 1
+  gives `B0 01 xx` as it turns, on the factory OS and on the 3.03b. Checked: `g1midiouttest` (new,
+  no ROM), `g1runnertest`, and by Javier in Bitwig: the knobs' CC reach another track.
 - [Fix] **Factory banks... was empty banks: now Banks..., with Restore (Claude, found by Javier).**
   The G1's factory patches were never in the ROM (they came in each synth's flash and as Clavia's
   files), so starting the flash over leaves the banks empty, not the factory's. The button is now

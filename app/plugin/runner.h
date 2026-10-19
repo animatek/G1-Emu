@@ -22,6 +22,7 @@
 #include "hostconfig.h"
 #include "miditransport.h"
 #include "midirouting.h"
+#include "midioutparser.h"
 #include "presetslink.h"
 #include "slotkeeper.h"
 #include "synthsettings.h"
@@ -98,6 +99,23 @@ namespace g1app
 
 		void setGainDb(float _gainDb);
 
+		// Audio thread, after process(): what the G1's MIDI OUT sent during the frames this block
+		// just took, each at its offset in the block (where the G1's own sound has it), through
+		// _add(offset, bytes, size). Messages that came out before the block go at its start, and
+		// those after it wait for the next. No SysEx (MidiOutParser).
+		template<typename Add> void takeMidiOut(const size_t _frames, Add&& _add)
+		{
+			const auto end = m_consumed.load(std::memory_order_relaxed);
+			const auto start = end - std::min<uint64_t>(end, _frames);
+			while(const auto* m = m_midiOutQueue.front())
+			{
+				if(m->frame >= end)
+					break;
+				_add(static_cast<uint32_t>(m->frame > start ? m->frame - start : 0), m->bytes, m->size);
+				m_midiOutQueue.pop();
+			}
+		}
+
 		// Held by the worker while it emulates: whoever wants to read the G1's state from
 		// another thread (the flash, to save it) takes it for as long as it reads.
 		std::unique_lock<std::mutex> lockEngine() { return std::unique_lock<std::mutex>(m_engineMutex); }
@@ -127,6 +145,8 @@ namespace g1app
 		AudioBridge m_bridge;
 		HealthProbe m_health;			// worker thread, and DSP 3's for output()
 		SpscQueue<Event, 1024> m_events;
+		SpscQueue<Event, 1024> m_midiOutQueue;	// the G1's MIDI OUT, by the output frame it came out at
+		MidiOutParser m_midiOutParser;			// worker thread
 		MidiRouting m_midiRouting;		// the worker's: the track's notes, by each slot's octave shift
 		std::atomic<bool> m_selectedControllers{false};	// MIDI CC Mode on Selected Slots (setSelectedControllers)
 		std::atomic<bool> m_octaveShift{false};			// Octave Shift On (setOctaveShift)

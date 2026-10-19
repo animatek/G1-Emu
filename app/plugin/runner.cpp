@@ -289,10 +289,23 @@ namespace g1app
 					mc.exec();
 					produced = m_bridge.produced();
 				}
-				// The G1's MIDI OUT goes nowhere yet; its PC Port goes to the editor, if there is one.
+				// The G1's MIDI OUT goes to the host as the plugin's MIDI output, at the host frame its
+				// sound plays at (produced less the skew); its PC Port goes to the editor, if there is
+				// one. Not while racing: those frames are skipped, and no one hears them.
 				out.clear();
 				mc.getSci().read(out);
 				m_midiOut += out.size();
+				for(const auto b : out)
+				{
+					MidiOutParser::Message msg;
+					if(!m_midiOutParser.feed(b, msg) || racing)
+						continue;
+					Event e;
+					e.frame = produced - skew;
+					e.size = msg.size;
+					std::copy_n(msg.bytes, 3, e.bytes);
+					m_midiOutQueue.push(e);	// dropped if the host has stopped taking blocks
+				}
 				pcOut.clear();
 				mc.getPcPort().takeTx(pcOut);
 				m_pcOut += pcOut.size();

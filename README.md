@@ -288,6 +288,10 @@ VST3 is built.
   the panel. VST3 carries no Program Change as MIDI, so the plugin also has 128 programs: a host
   that sends Program Changes to a VST3 sets those, and they reach the G1 on channel 1. The G1 does not remember what each slot had, so the plugin remembers the last Program
   Change of each channel and sends it again when the project opens.
+- **The G1's MIDI OUT is the plugin's MIDI output:** what the G1 sends there (the CC of a knob
+  turned on the panel, and whatever the OS sends) comes out of the track, on the sample where the
+  G1's own sound has it, for the DAW to record or route to another instrument. SysEx is not passed
+  on. The standalone sends the same to its `MIDI` port.
 - **Latency** is one host block plus about 5.5 ms, and it is reported to the DAW, which
   compensates for it: notes land on the exact sample the DAW put them on, whatever the block size.
 - **The Presets page** works here too: the banks, a click to load, and Load .pch (see
