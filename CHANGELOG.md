@@ -7,6 +7,15 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Docs] Claude: **the loader's key combinations named** (`NOTES.md`, "Boot and memory map"):
+  read from the loader's code and tried by Javier on his real G1: Shift + Store enters the MIDI
+  update mode, Navigator up + Find the production test, Navigator up + Panel Split the RAM test;
+  Shift + Patch/Load boots the ROM's factory OS (slots "Empty patch", and the next plain power-on
+  is back to normal).
+- [Docs] Claude: README, the OS update: **tick Safe (Slower)**. Without it Clavia's updater runs
+  ahead of the G1 and ends with "Dump error" though the OS arrives whole (seen by Javier in G1-Emu,
+  the received OS byte for byte the 3.03b); with it, on his real G1 through a UM-ONE, the two kept
+  pace and there was no error.
 - [Fix] **Settings offered a raw MIDI card that does not exist (Claude, found by Javier).** With
   raw MIDI off, the box showed `G1Emu` (the snd-virmidi card of the first attempts), and ticking it
   again saved that; the card G1-Emu makes and Bitwig lists is `G1` (`G1 MIDI 1`), the default

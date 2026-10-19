@@ -240,7 +240,9 @@ Then:
    G1 has no OS to run and waits for one. Your banks are not touched.
 2. Run the updater (`wine "Nord Modular OS v3.03b Update.exe"`) and choose **G1-Emu's PC Port** as
    its MIDI output and input. Follow its steps. The G1's display counts the percentage received
-   and ends with `Update completed`. If the updater complains before the G1 is done, let the G1
+   and ends with `Update completed`. Tick **Safe (Slower)** on the ports page: without it the
+   updater sends faster than the G1 takes it in, and ends with "Dump error" while the G1 is still
+   working (harmless, but confusing). If the updater complains before the G1 is done, let the G1
    finish: what counts is its display.
 3. Close G1-Emu. The OS that came in is kept in the data folder (`os/received-….bin`) and set as
    `os =` in the settings, so the window, the console and the plugin all run it from then on.

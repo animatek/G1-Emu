@@ -82,9 +82,18 @@ reads `$201800`) and chooses:
 | Keys held | What it does |
 | --- | --- |
 | none | Copies the OS from the flash at `$300000` to RAM (length at `+8`, data from `+$20`) and jumps to `$100000`. If the flash is empty (`$FFFFFFFF`), it enters update mode. |
-| D1=`$7F`, D2=`$BF` | MIDI update mode: runs the *Update utility* from `$0800`. |
-| D1=`$7F`, D3=`$F7` | Boots the **factory OS stored in the ROM itself** (`$C800`, `$1CE01` long words). |
-| D3=`$EF` and D1=`$F7`/`$FB` | Factory and RAM tests. |
+| D1=`$7F`, D2=`$BF` (**Shift + Store**) | MIDI update mode: runs the *Update utility* from `$0800`. |
+| D1=`$7F`, D3=`$F7` (Shift + Patch/Load) | Boots the **factory OS stored in the ROM itself** (`$C800`, `$1CE01` long words). |
+| D3=`$EF`, D1=`$F7` (Navigator up + Find) | The utility with mode 2: "Production test". |
+| D3=`$EF`, D1=`$FB` (Navigator up + Panel Split) | RAM test. |
+
+**Which buttons (2026-10-19).** The loader selects row 2 (`$3F`), row 0 (`$6F`) and row 1 (`$5F`)
+and compares each whole byte, so only those keys may be held: D1, D2 and D3 are the panel's button
+rows 2, 0 and 1 (the table in "The panel"). Tried by Javier on his real G1: **Shift + Store**
+enters the update mode, Navigator up + Find shows "Production test", Navigator up + Panel Split
+runs the RAM test, and **Shift + Patch/Load** (row 1 bit 3, the factory test's "Play") boots the
+ROM's factory OS: it also says 3.03, and shows only in not loading the stored settings (every slot
+"Empty patch"); the next power-on without keys runs the flash's OS again, as before.
 
 **Memory map** (chip-selects programmed by the OS):
 
