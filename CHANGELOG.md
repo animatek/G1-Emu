@@ -7,6 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Fix] Claude, from `docs/improvement-plan.md` (tasks 2a, 3a, 3b, 3c): the PIT registers (PICR,
+  PITR) are also kept when written a byte at a time (`write8`), as `write16` already did; the DSP
+  workers' wake-up, `launchDsp`'s generation bump, is `seq_cst` to pair with the sleepers' count; the
+  host-port trace (about 3 MB an instance) is off unless `g1boot` turns it on (`setHostTrace`); a
+  duplicate include removed in `g1dsp.cpp`; the two `0x3ff` tests in `exec()` joined into one (same
+  order). Checked: builds (Release, Linux, with Gearmulator and dsp56300 cloned in the session);
+  `ctest` 7 of 7 pass, the 4 ROM tests skipped (no ROM in the session), same as before. **Not**
+  checked against the golden WAVs or `g1boot`'s output: no ROM here. Tasks 1 and 2b wait for a ROM.
 - [Docs] Claude: **an improvement plan from a code review** (`docs/improvement-plan.md`, asked by
   Javier): the Presets page's uploads not protected from the editor's bytes as the keeper's are
   (#75's failure, to be reproduced first in `g1pchtest`), the host-port trace and the panel's

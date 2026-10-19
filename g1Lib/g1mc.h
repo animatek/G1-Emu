@@ -101,6 +101,8 @@ namespace g1
 		// Trace of the accesses to the HI08 ports ($200000-$20003F), in order.
 		struct HostAccess { uint32_t addr; uint32_t value; uint32_t pc; bool write; uint8_t size; };
 		std::vector<HostAccess>& hostTrace() { return m_hostTrace; }
+		// Off by default (about 3 MB per instance): only g1boot reads the trace.
+		void setHostTrace(const bool _on) { m_traceHostOn = _on; }
 
 		// Puts the ROM's factory OS in the flash, as an update would.
 		void installRomOsInFlash();
@@ -180,6 +182,7 @@ namespace g1
 		Flash m_flash;					// $300000
 		std::map<uint32_t, UnknownAccess> m_unknown;
 		std::vector<HostAccess> m_hostTrace;
+		bool m_traceHostOn = false;
 		std::array<mc68k::Hdi08, g_hostPorts> m_hostPorts;
 		const uint32_t m_dspCount;
 		std::array<std::unique_ptr<Dsp>, g_maxDsps> m_dsps;

@@ -60,6 +60,7 @@ int main(int argc, char** argv)
 	// G1_MODEL=expanded: the 8 DSPs of the expansion board.
 	const char* model = std::getenv("G1_MODEL");
 	g1::Microcontroller mc(rom, model && std::string(model) == "expanded" ? g1::g_expandedDsps : g1::g_regularDsps);
+	mc.setHostTrace(true);	// before the first instruction: the report reads the trace from the start
 
 	// g1boot ROM dis FROM TO: disassembles (hex addresses)
 	if(argc > 4 && std::string(argv[2]) == "dis")

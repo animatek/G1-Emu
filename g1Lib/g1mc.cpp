@@ -165,9 +165,8 @@ namespace g1
 			const auto pos = m_pcTrailPos.load(std::memory_order_relaxed);
 			m_pcTrail[pos].store(getPC(), std::memory_order_relaxed);
 			m_pcTrailPos.store((pos + 1) % g_pcTrail, std::memory_order_relaxed);
-		}
-		if((m_ucCycles & 0x3ff) < cycles)
 			catchUpDsps();
+		}
 		execPcPort();
 		execPit(cycles);
 		while(m_ucCycles >= m_nextSciSample)	// the UART advances at its clock rate
@@ -300,7 +299,7 @@ namespace g1
 		job.target = _target;
 		job.claimed.store(false, std::memory_order_relaxed);
 		job.busy.store(true, std::memory_order_relaxed);
-		job.generation.fetch_add(1, std::memory_order_release);
+		job.generation.fetch_add(1, std::memory_order_seq_cst);	// seq_cst: pairs with ++m_sleepers in workerLoop
 		if(m_sleepers.load() > 0)
 		{
 			std::lock_guard lock(m_wakeMutex);
@@ -391,7 +390,7 @@ namespace g1
 
 	void Microcontroller::traceHost(const uint32_t _addr, const bool _write, const uint32_t _value)
 	{
-		if(m_hostTrace.size() < 200000)
+		if(m_traceHostOn && m_hostTrace.size() < 200000)
 			m_hostTrace.push_back({_addr, _value, getPC(), _write, 0});
 	}
 
@@ -572,6 +571,11 @@ namespace g1
 		if(isInternalPeripheral(addr))
 		{
 			if(addr == 0xfffc0e || addr == 0xfffc0f) ++m_sciDataWrites;
+			// PICR and PITR as bytes (68k: the even address is the high byte), as write16 keeps them.
+			if(addr == 0xfffa22) m_picr = static_cast<uint16_t>((m_picr & 0x00ff) | (_val << 8));
+			if(addr == 0xfffa23) m_picr = static_cast<uint16_t>((m_picr & 0xff00) | _val);
+			if(addr == 0xfffa24) m_pitr = static_cast<uint16_t>((m_pitr & 0x00ff) | (_val << 8));
+			if(addr == 0xfffa25) m_pitr = static_cast<uint16_t>((m_pitr & 0xff00) | _val);
 			const auto tmskBefore = gptMask();
 			Mc68k::write8(addr, _val);
 			if(addr == 0xfff920)
