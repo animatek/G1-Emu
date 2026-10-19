@@ -285,6 +285,10 @@ namespace g1plugin
 		// hangs, its note off arriving on the channel the slot no longer hears. At most
 		// RestoreHoldMs, in case the keeper never settles.
 		std::atomic<bool> m_restoring{false};
+		// While restoring, the MIDI channels whose notes may come in all the same
+		// (bit per channel): each slot on them is back and keeps its channel (restoreStep).
+		std::atomic<uint32_t> m_openChannels{0};
+		std::atomic<bool> m_holdAll{false};	// restoring with every channel held: the runner races
 		juce::uint32 m_restoreStart = 0;
 		g1app::PresetsLink m_presets;				// the OS's banks, for the panel's Presets page
 		std::vector<uint8_t> m_os;				// HostOptions::os, if set: the OS to run instead of the ROM's

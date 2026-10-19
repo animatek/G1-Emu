@@ -123,6 +123,7 @@ namespace g1app
 		MidiRouting m_midiRouting;	// the notes from the MIDI port, by each slot's octave shift
 		std::atomic<bool> m_selectedControllers{false};	// m_options's, for the thread that runs the G1
 		std::atomic<bool> m_octaveShift{false};			// as m_selectedControllers
+		std::atomic<bool> m_racing{false};				// booting faster than real time: its audio is kept from the card
 		bool m_rawMidiBound = false;
 		std::string m_romProblem;
 		std::vector<uint8_t> m_rom;		// kept for a restart

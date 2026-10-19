@@ -392,6 +392,8 @@ namespace g1plugin
 		for(size_t s = 0; s < m_octaveParams.size(); ++s)
 			m_lastOctaveParams[s] = m_octaveParams[s]->get();	// where the host has them: the new G1's go to it
 		m_restoring = false;
+		m_holdAll = false;
+		m_openChannels = 0;
 		m_presets.reset();
 		m_unstarted = false;
 		if(_state)
@@ -450,6 +452,7 @@ namespace g1plugin
 			&m_synthSettings, m_link.listening() ? &m_link : nullptr, &m_presets);
 		m_runner->setSelectedControllers(m_selectedControllers);
 		m_runner->setOctaveShift(m_octaveShift);
+		m_runner->watchRestore(&m_holdAll);	// it races while the project goes back in
 		m_unstarted = false;
 		if(std::exchange(m_engineFresh, false))
 			replayPrograms();
@@ -626,8 +629,9 @@ namespace g1plugin
 		{
 			if(transport && m.numBytes > 0 && (m.data[0] == 0xf8 || m.data[0] == 0xfa || m.data[0] == 0xfb || m.data[0] == 0xfc || m.data[0] == 0xf2))
 				continue;
-			if(restoring && m.numBytes > 0 && ((m.data[0] & 0xf0) == 0x80 || (m.data[0] & 0xf0) == 0x90))
-				continue;	// no notes while a project's state goes back in (m_restoring)
+			if(restoring && m.numBytes > 0 && ((m.data[0] & 0xf0) == 0x80 || (m.data[0] & 0xf0) == 0x90)
+				&& !(m_openChannels.load(std::memory_order_relaxed) & (1u << (m.data[0] & 0x0f))))
+				continue;	// no notes while a project's state goes back in (m_restoring), but on a slot already back
 			clockUpTo(static_cast<uint32_t>(std::max(m.samplePosition, 0)));
 			runner->queueMidi(static_cast<uint32_t>(m.samplePosition), m.data, static_cast<size_t>(m.numBytes));
 			const auto status = m.data[0] & 0xf0;
@@ -815,6 +819,7 @@ namespace g1plugin
 		if(m_keeper && (xml->getChildByName("Slots") || m_pendingSettings))
 		{
 			m_restoring = true;
+			m_holdAll = true;
 			m_restoreStart = juce::Time::getMillisecondCounter();
 		}
 		m_origin = otherOs ? "this project, saved with another OS: its banks and settings, with the OS in use" : "this project";
@@ -993,6 +998,29 @@ namespace g1plugin
 		if(m_restoring && ((!m_pendingSettings && m_keeper && m_keeper->settled())
 			|| juce::Time::getMillisecondCounter() - m_restoreStart > RestoreHoldMs))
 			m_restoring = false;
+		// A slot's channel opens once every slot on it is back and keeps its channel (the project's
+		// settings may move it, and a note played before would hang). A channel no slot is on stays
+		// shut: opening it would end the race for nothing. With Keyboard Mode on Selected Slots a
+		// note is copied to other slots: none opens until the end.
+		uint32_t open = 0;
+		g1app::SynthSettings os;
+		uint64_t revision = 0;
+		if(m_restoring && m_keeper && m_synthSettings.settings(os, revision) && os.keyboardMode == 0
+			&& (!m_pendingSettings || m_pendingSettings->keyboardMode == 0))
+		{
+			uint32_t shut = 0;
+			for(size_t s = 0; s < 4; ++s)
+			{
+				const int ch = os.midiChannel[s];
+				if(ch < 0 || ch > 15)
+					continue;	// off
+				const bool back = !m_keeper->restoring(s) && (!m_pendingSettings || m_pendingSettings->midiChannel[s] == ch);
+				(back ? open : shut) |= 1u << ch;
+			}
+			open &= ~shut;
+		}
+		m_openChannels.store(open, std::memory_order_relaxed);
+		m_holdAll = m_restoring && open == 0;	// a channel open, someone may play: real time from then
 	}
 
 	bool Processor::lastController(int& _channel, int& _cc, uint32_t& _serial)

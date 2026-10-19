@@ -279,6 +279,12 @@ namespace g1app
 		return !any(m_dirty) && !any(m_uploadPending);
 	}
 
+	bool SlotKeeper::restoring(const size_t _slot) const
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		return m_hasRestore || m_uploadPending[_slot & 3] || (m_state == State::Uploading && m_slot == _slot);
+	}
+
 	// ____________________________________________________________________________________________
 	// Worker thread
 
@@ -522,8 +528,8 @@ namespace g1app
 						std::lock_guard<std::mutex> lock(m_mutex);
 						m_uploadPending[s] = false;
 						m_state = State::Uploading;
+						m_slot = s;	// with the state, for restoring()
 					}
-					m_slot = s;
 					m_upload = uploadMessages(m_slots[s].sections, static_cast<uint8_t>(s));
 					m_step = 0;
 					m_deadline = 0;

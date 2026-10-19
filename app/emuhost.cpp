@@ -312,6 +312,10 @@ namespace g1app
 		mc.outputDsp().setBlockCallback([this](const int32_t _o1, const int32_t _o2, const int32_t _o3, const int32_t _o4)
 		{
 			m_health.output(_o1 - g_dc, _o2 - g_dc);
+			// Raced ahead, the boot's frames would fill the card's queue past its cushion, and the
+			// trimming leaves it four times as deep: that much latency for good.
+			if(m_racing.load(std::memory_order_relaxed))
+				return;
 #ifdef G1_BACKEND_JUCE
 			if(m_juceAudio)
 				m_juceAudio->push(_o1 - g_dc, _o2 - g_dc, _o3 - g_dc, _o4 - g_dc);
@@ -473,7 +477,7 @@ namespace g1app
 		auto& mc = m_engine->mc();
 		g1::keepThreadAtFullSpeed();
 		using clock = std::chrono::steady_clock;
-		const auto start = clock::now();
+		auto start = clock::now();
 		auto lastStats = start;
 		auto lastSave = start;
 		auto lastRawMidi = start;
@@ -510,6 +514,11 @@ namespace g1app
 				_bytes.size() > 16 ? "..." : "");
 			std::fflush(stdout);
 		};
+
+		// The boot races: the G1 runs as fast as it goes until the OS answers the settings link, and
+		// keeps real time from there. Nothing can be heard before. G1_FAST_BOOT=0 boots in real time.
+		const bool fastBoot = [] { const char* v = std::getenv("G1_FAST_BOOT"); return !(v && *v == '0'); }();
+		bool osUp = false;
 
 		while(!m_quit)
 		{
@@ -560,10 +569,25 @@ namespace g1app
 
 			// Emulate until the real clock is reached (at most 2 ms at once)
 			const double elapsed = std::chrono::duration<double>(t0 - start).count();
-			const auto target = static_cast<uint64_t>(elapsed * g1::g_ucClock);
+			const bool racing = fastBoot && !osUp;
+			m_racing.store(racing, std::memory_order_relaxed);
 			const auto limit = mc.ucCycles() + g1::g_ucClock / 500;
+			const auto target = racing ? limit : static_cast<uint64_t>(elapsed * g1::g_ucClock);
 			while(mc.ucCycles() < target && mc.ucCycles() < limit)
 				mc.exec();
+			if(!osUp)
+			{
+				SynthSettings s;
+				uint64_t revision = 0;
+				if(m_synthSettings.settings(s, revision))
+				{
+					osUp = true;
+					// From here on, real time again, as if the G1 had been switched on that long ago.
+					if(fastBoot)
+						start = clock::now() - std::chrono::duration_cast<clock::duration>(
+						std::chrono::duration<double>(static_cast<double>(mc.ucCycles()) / g1::g_ucClock));
+				}
+			}
 
 			// What goes out. The answers to the settings' and the presets' own requests stay here.
 			const auto nowMs = mc.ucCycles() / msCycles;
@@ -606,7 +630,7 @@ namespace g1app
 
 			const auto t1 = clock::now();
 			busy += std::chrono::duration<double>(t1 - t0).count();
-			if(mc.ucCycles() >= target)
+			if(!racing && mc.ucCycles() >= target)
 			{
 				mc.setIdle(true);	// the DSP threads sleep too instead of spinning through it
 				g1::preciseSleep(std::chrono::microseconds(500));	// sleep_for: 15.6 ms on Windows

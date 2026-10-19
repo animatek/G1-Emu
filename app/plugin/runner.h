@@ -86,6 +86,9 @@ namespace g1app
 		void setSelectedControllers(const bool _on) { m_selectedControllers = _on; }
 		// Octave Shift: On moves each note by its slot's shift, Off plays it as the rack does. Any thread.
 		void setOctaveShift(const bool _on) { m_octaveShift = _on; }
+		// While *_flag is set (the processor's restore of a project, its notes held
+		// back), the worker races too. Before the worker starts, or never.
+		void watchRestore(const std::atomic<bool>* _flag) { m_restoreFlag = _flag; }
 		double rate() const { return m_rate; }
 
 		// Audio thread. First the block's MIDI (offsets within the block), then the block itself.
@@ -133,6 +136,8 @@ namespace g1app
 		std::atomic<uint64_t> m_consumed{0};	// frames the host has taken (audio thread writes)
 		uint64_t m_debt = 0;					// frames owed: put out as silence, not yet arrived
 		bool m_primed = false;					// the first full block has gone out
+		std::atomic<const std::atomic<bool>*> m_restoreFlag{nullptr};
+		std::atomic<size_t> m_discard{0};		// the raced frames still queued, for the audio thread to drop
 
 		std::mutex m_engineMutex;
 		std::thread m_thread;

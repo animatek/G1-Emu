@@ -57,6 +57,8 @@ namespace g1app
 		// nothing else may reach the OS, which drops an upload another message comes into half
 		// done (#75). The runner holds the editor's bytes meanwhile.
 		bool uploading() const { return m_state == State::Uploading; }
+		// True while _slot's patch from a restore is still to go back in.
+		bool restoring(size_t _slot) const;
 
 		// The slots as bytes for a project, and back (false if they are not this format).
 		static std::vector<uint8_t> pack(const Slots& _slots);

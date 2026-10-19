@@ -92,6 +92,8 @@ namespace g1app
 
 	void Runner::process(float* const* _outs, const size_t _numOuts, const float* const* _ins, const size_t _numIns, const size_t _frames, const bool _offline)
 	{
+		if(const auto stale = m_discard.exchange(0))
+			m_bridge.skip(stale);	// the raced frames: nobody waited for them
 		size_t done = 0;
 		while(done < _frames)
 		{
@@ -168,10 +170,33 @@ namespace g1app
 			pcOut.swap(toEditor);
 		};
 
+		// The boot and a project's restore race: the G1 runs as fast as it goes, ahead of the host,
+		// until the OS answers the settings link and while the restore holds every note back (no
+		// one can hear it). Then the frames it got ahead by are skipped (skew), those still queued
+		// dropped, and the pacing goes on from there. G1_FAST_BOOT=0 keeps real time throughout.
+		// Without a settings link (the tests) nothing says when the OS is up: no race.
+		const bool fastBoot = [] { const char* v = std::getenv("G1_FAST_BOOT"); return !(v && *v == '0'); }();
+		bool osUp = !m_settings, raced = false;
+		uint64_t skew = 0;
+
 		while(!m_quit.load(std::memory_order_acquire))
 		{
 			const auto t0 = clock::now();
-			const uint64_t target = m_consumed.load(std::memory_order_acquire) + m_ahead;
+			const auto* restoreFlag = m_restoreFlag.load(std::memory_order_relaxed);
+			const bool restoring = restoreFlag && restoreFlag->load(std::memory_order_relaxed);
+			const bool racing = fastBoot && (!osUp || restoring);
+			if(raced && !racing)
+			{
+				// From here the host's frames line up with the G1's again: of what is queued, the boot's
+				// and the restore's, all but what the worker may be ahead by is dropped, and the frames
+				// raced ahead are skipped.
+				raced = false;
+				const auto queued = m_bridge.queued();
+				m_discard.store(queued > m_ahead ? queued - m_ahead : 0);
+				skew = m_bridge.produced() - m_consumed.load(std::memory_order_acquire) - std::min<uint64_t>(queued, m_ahead);
+			}
+			raced |= racing;
+			const uint64_t target = racing ? UINT64_MAX : m_consumed.load(std::memory_order_acquire) + m_ahead + skew;
 			uint64_t produced = m_bridge.produced();
 
 			// The events whose frame has come. An event is queued for consumed + latency + offset,
@@ -220,7 +245,7 @@ namespace g1app
 			bool midiIn = false;
 			while(const auto* e = m_events.front())
 			{
-				if(e->frame > produced)
+				if(e->frame + skew > produced)
 					break;
 				// Each note moved by its slot's octave shift, which the OS keeps but does not apply
 				// (with Octave Shift On).
@@ -248,7 +273,7 @@ namespace g1app
 			{
 				uint64_t limit = target;
 				if(const auto* e = m_events.front())
-					limit = std::min(limit, e->frame);
+					limit = std::min(limit, e->frame + skew);
 				// A slice of at most 0.5 ms of G1 time, so the lock is let go often.
 				const auto stop = mc.ucCycles() + g1::g_ucClock / 2000;
 				while(produced < limit && mc.ucCycles() < stop)
@@ -266,6 +291,12 @@ namespace g1app
 				keepOwn(m_settings);
 				keepOwn(m_presets);
 				keepOwn(m_keeper);
+				if(!osUp)
+				{
+					SynthSettings s;
+					uint64_t revision = 0;
+					osUp = m_settings->settings(s, revision);
+				}
 				lock.unlock();
 				if(m_pcPort && !pcOut.empty())
 					m_pcPort->send(m_pcIndex, pcOut);
