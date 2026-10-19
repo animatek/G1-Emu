@@ -205,9 +205,19 @@ namespace g1plugin
 	}
 
 	// What the last editor was left like: a new instance starts there, and a project's state, when
-	// one comes, has the last word. Plain "key = value", like the settings file.
+	// one comes, has the last word. The model and the panel's switches are the standalone's
+	// settings, one file for both, so neither starts as the other did not leave it; only the
+	// window's size is the plugin's own (plugin.conf), a DAW's window not being the standalone's.
 	void Processor::loadPreferences()
 	{
+		g1app::HostOptions o;
+		o.load(g1app::defaultSettingsPath());
+		m_extrasOpen = o.extrasOpen;
+		m_knobDisplays = o.knobDisplays;
+		m_knobFollowsPatch = o.knobFollowsPatch;
+		m_expanded = o.expanded;
+		m_randomExclude = o.randomExclude;
+
 		std::ifstream f(preferencesPath());
 		std::string line;
 		while(std::getline(f, line))
@@ -217,26 +227,27 @@ namespace g1plugin
 				continue;
 			const auto key = juce::String(line.substr(0, eq)).trim();
 			const auto value = juce::String(line.substr(eq + 1)).trim();
-			if(key == "extrasOpen")				m_extrasOpen = value != "0";
-			else if(key == "knobDisplays")		m_knobDisplays = value != "0";
-			else if(key == "knobFollowsPatch")	m_knobFollowsPatch = value != "0";
-			else if(key == "model")			m_expanded = value == "expanded";
-			else if(key == "randomExclude")		m_randomExclude = g1app::knobListFromString(value.toStdString());
-			else if(key == "panelScale")		m_panelScale = juce::jlimit(g1gui::PanelView::MinScale, g1gui::PanelView::MaxScale, value.getFloatValue());
+			if(key == "panelScale")
+				m_panelScale = juce::jlimit(g1gui::PanelView::MinScale, g1gui::PanelView::MaxScale, value.getFloatValue());
 		}
 	}
 
 	void Processor::savePreferences() const
 	{
+		// Read again just before: the standalone may have changed the rest of the file meanwhile.
+		g1app::HostOptions o;
+		o.load(g1app::defaultSettingsPath());
+		o.extrasOpen = m_extrasOpen;
+		o.knobDisplays = m_knobDisplays;
+		o.knobFollowsPatch = m_knobFollowsPatch;
+		o.expanded = m_expanded;
+		o.randomExclude = m_randomExclude;
+		o.save(g1app::defaultSettingsPath());
+
 		std::error_code ec;
 		std::filesystem::create_directories(std::filesystem::path(preferencesPath()).parent_path(), ec);
 		std::ofstream f(preferencesPath(), std::ios::trunc);
-		f << "# G1-Emu plugin: how a new instance's window starts (a project keeps its own).\n"
-		  << "extrasOpen = " << (m_extrasOpen ? 1 : 0) << "\n"
-		  << "knobDisplays = " << (m_knobDisplays ? 1 : 0) << "\n"
-		  << "knobFollowsPatch = " << (m_knobFollowsPatch ? 1 : 0) << "\n"
-		  << "model = " << (m_expanded ? "expanded" : "regular") << "\n"
-		  << "randomExclude = " << g1app::knobListToString(m_randomExclude) << "\n"
+		f << "# G1-Emu plugin: the size a new instance's window starts at (the rest is in settings.conf).\n"
 		  << "panelScale = " << m_panelScale << "\n";
 	}
 

@@ -40,7 +40,8 @@ namespace g1gui
 	class SettingsView : public juce::Component, private juce::Timer
 	{
 	public:
-		explicit SettingsView(g1app::EmuHost& _host);
+		// _restart switches the G1 off and on (the window's own restart: this view goes with it).
+		SettingsView(g1app::EmuHost& _host, std::function<void()> _restart);
 		~SettingsView() override;
 		void paint(juce::Graphics& _g) override;
 		void resized() override;
@@ -89,5 +90,10 @@ namespace g1gui
 		bool m_noticeOpen = false;
 		void setNoticeOpen(bool _open);
 		juce::Label m_running, m_note;
+		// Starting over, each after a question, then restarted: the factory banks (the user's
+		// set aside in a file), and the ROM's own OS instead of an updated one (os =).
+		std::function<void()> m_restart;
+		juce::TextButton m_factoryBanks{"Factory banks..."}, m_romOs{"ROM's own OS..."};
+		void askThenRestart(const juce::String& _title, const juce::String& _message, const juce::String& _yes, std::function<void()> _then);
 	};
 }

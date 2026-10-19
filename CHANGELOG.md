@@ -7,6 +7,25 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Change] **One settings file for the standalone and the plugins, and two ways to start over
+  (Claude, asked by Javier: "as simple as possible for the user").**
+  - The plugin took its model and its panel switches (extras drawer, knob displays, knobs follow
+    the patch, Random's exclusions) from `plugin.conf`, the standalone from `settings.conf`: the
+    two could run different models without anyone noticing (Regular in one, Expanded in the
+    other here). Both now read and write `settings.conf`; `plugin.conf` keeps only the plugin
+    window's size. A project still keeps its own.
+  - Emulator Settings, beside Read the notice: **Factory banks...** restarts the G1 with the
+    factory banks, the flash so far set aside as `flash-before-reset-<date>.bin`
+    (`EmuHost::resetFlashOnRestart`); **ROM's own OS...** forgets `os =` and restarts with the
+    ROM's OS (greyed out when none is set). Both ask first.
+  - What the environment sets for one run (`G1_AUDIO`, `G1_RAWMIDI`, `G1_DIRECT_LINK`, `G1_ROM`...)
+    was saved into `settings.conf` the next time anything was saved: `HostOptions::save` now keeps
+    the file's own value for those keys.
+  - `G1_SNAPSHOTS` also takes the Emulator Settings card (`9-emulator-settings.png`).
+  - Checked: builds, `ctest -L g1` passes; the snapshots, where the card fits with both buttons;
+    `settings.conf` after a snapshot run with `G1_AUDIO=no G1_RAWMIDI=0 G1_DIRECT_LINK=0` differs
+    only by the extras drawer the run clicks open (before: audio, raw MIDI and the direct link
+    were written off).
 - [Fix] **A ROM given for one run no longer becomes everyone's, and Settings fits the panel
   (Claude, asked by Javier).** The standalone wrote the ROM it was started with into
   `settings.conf`, which the plugins read too: a ROM on the command line (`g1gui.sh`, a launcher,
@@ -15,7 +34,7 @@ Older entries cite their commit by hand.
   only when the settings or the search found it, or when one is chosen. And the Settings card,
   cut to a small panel's height, left its bottom rows past the card and Close over the notes: the
   content is now drawn smaller to fit, all of it (`CardView::contentScale`). Checked: builds;
-  `ctest -L g1` passes; the card by eye in the standalone, by Javier.
+  `ctest -L g1` passes; the card in a `G1_SNAPSHOTS` picture (next entry).
 - [Docs] **ROADMAP: the way to the first beta, again (Claude, decided with Javier).** alpha.16 was
   to be beta 1 and the numbers ran past it. Now: alpha.24 brings the Expanded's dropout fix (both
   models hold); beta 1 comes when Windows is clean (#53 fixed, #59 and #65 explained or closed, #48

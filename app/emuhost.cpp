@@ -265,6 +265,17 @@ namespace g1app
 		if(m_updateMode)
 			keepReceivedOs();
 		saveFlash();
+		if(std::exchange(m_resetFlash, false))
+		{
+			char stamp[32];
+			const auto t = std::time(nullptr);
+			std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::localtime(&t));
+			const auto aside = std::filesystem::path(m_flashPath).parent_path() / (std::string("flash-before-reset-") + stamp + ".bin");
+			std::error_code ec;
+			std::filesystem::rename(m_flashPath, aside, ec);
+			_log += ec ? "the flash could not be set aside (" + ec.message() + "): kept as it was\n"
+				: "the flash set aside as " + aside.string() + ": factory banks\n";
+		}
 
 		std::array<uint8_t, 256> adc{};
 		for(size_t i = 0; i < adc.size(); ++i)

@@ -145,8 +145,8 @@ namespace g1plugin
 
 		// The panel's preferences, kept in the project. A change is told to the host, or most would
 		// not save a project where nothing else changed and lose it (message thread). They are also
-		// what a new instance starts with (plugin.conf, beside the standalone's settings): the
-		// switches are written at once, the size when the editor closes (savePreferences).
+		// what a new instance starts with (the standalone's settings.conf, the size alone in
+		// plugin.conf): the switches are written at once, the size when the editor closes.
 		g1app::SynthSettingsLink& synthSettings() { return m_synthSettings; }
 		g1app::PresetsLink& presets() { return m_presets; }
 

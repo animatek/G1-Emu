@@ -128,35 +128,52 @@ namespace g1app
 
 	bool HostOptions::save(const std::string& _path) const
 	{
+		// What the environment sets for one run (the scripts, the test bench, G1_SNAPSHOTS) is not
+		// written over the file's own: those keys keep what the file says, as G1_ROM's ROM does.
+		HostOptions o = *this;
+		if(HostOptions file; file.load(_path))
+		{
+			const auto keep = [](const char* _var, auto& _mine, const auto& _file) { if(std::getenv(_var)) _mine = _file; };
+			keep("G1_ROM", o.rom, file.rom);
+			keep("G1_AUDIO", o.audio, file.audio);
+			keep("G1_GAIN_DB", o.gainDb, file.gainDb);
+			keep("G1_JACK_CONNECT", o.jackConnect, file.jackConnect);
+			keep("G1_DIRECT_LINK", o.directLink, file.directLink);
+			keep("G1_RAWMIDI", o.rawMidiCard, file.rawMidiCard);
+			keep("G1_PCPORT_OUT", o.pcPortOutDevice, file.pcPortOutDevice);
+			keep("G1_PCPORT_IN", o.pcPortInDevice, file.pcPortInDevice);
+			keep("G1_MIDI_OUT", o.midiOutDevice, file.midiOutDevice);
+			keep("G1_MIDI_IN", o.midiInDevice, file.midiInDevice);
+		}
 		std::error_code ec;
 		std::filesystem::create_directories(std::filesystem::path(_path).parent_path(), ec);
 		std::ofstream f(_path, std::ios::trunc);
 		if(!f)
 			return false;
 		f << "# G1-Emu settings. The G1_* environment variables still win over this file.\n"
-		  << "audio = " << audio << "\n"
-		  << "gainDb = " << gainDb << "\n"
-		  << "jackConnect = " << (jackConnect ? 1 : 0) << "\n"
-		  << "directLink = " << (directLink ? 1 : 0) << "\n"
-		  << "rawMidiCard = " << rawMidiCard << "\n"
-		  << "rom = " << rom << "\n"
-		  << "os = " << os << "\n"
-		  << "model = " << (expanded ? "expanded" : "regular") << "\n"
-		  << "showDisclaimer = " << (showDisclaimer ? 1 : 0) << "\n"
-		  << "extrasOpen = " << (extrasOpen ? 1 : 0) << "\n"
-		  << "knobDisplays = " << (knobDisplays ? 1 : 0) << "\n"
-		  << "knobFollowsPatch = " << (knobFollowsPatch ? 1 : 0) << "\n"
-		  << "midiCcSelectedSlots = " << (selectedControllers ? 1 : 0) << "\n"
-		  << "octaveShift = " << (octaveShift ? 1 : 0) << "\n"
-		  << "randomExclude = " << knobListToString(randomExclude) << "\n"
-		  << "tooltips = " << (tooltips ? 1 : 0) << "\n"
-		  << "presetsHideEmpty = " << (presetsHideEmpty ? 1 : 0) << "\n"
-		  << "masterVolume = " << masterVolume << "\n"
-		  << "panelScale = " << panelScale << "\n"
-		  << "pcPortOutDevice = " << pcPortOutDevice << "\n"
-		  << "pcPortInDevice = " << pcPortInDevice << "\n"
-		  << "midiOutDevice = " << midiOutDevice << "\n"
-		  << "midiInDevice = " << midiInDevice << "\n";
+		  << "audio = " << o.audio << "\n"
+		  << "gainDb = " << o.gainDb << "\n"
+		  << "jackConnect = " << (o.jackConnect ? 1 : 0) << "\n"
+		  << "directLink = " << (o.directLink ? 1 : 0) << "\n"
+		  << "rawMidiCard = " << o.rawMidiCard << "\n"
+		  << "rom = " << o.rom << "\n"
+		  << "os = " << o.os << "\n"
+		  << "model = " << (o.expanded ? "expanded" : "regular") << "\n"
+		  << "showDisclaimer = " << (o.showDisclaimer ? 1 : 0) << "\n"
+		  << "extrasOpen = " << (o.extrasOpen ? 1 : 0) << "\n"
+		  << "knobDisplays = " << (o.knobDisplays ? 1 : 0) << "\n"
+		  << "knobFollowsPatch = " << (o.knobFollowsPatch ? 1 : 0) << "\n"
+		  << "midiCcSelectedSlots = " << (o.selectedControllers ? 1 : 0) << "\n"
+		  << "octaveShift = " << (o.octaveShift ? 1 : 0) << "\n"
+		  << "randomExclude = " << knobListToString(o.randomExclude) << "\n"
+		  << "tooltips = " << (o.tooltips ? 1 : 0) << "\n"
+		  << "presetsHideEmpty = " << (o.presetsHideEmpty ? 1 : 0) << "\n"
+		  << "masterVolume = " << o.masterVolume << "\n"
+		  << "panelScale = " << o.panelScale << "\n"
+		  << "pcPortOutDevice = " << o.pcPortOutDevice << "\n"
+		  << "pcPortInDevice = " << o.pcPortInDevice << "\n"
+		  << "midiOutDevice = " << o.midiOutDevice << "\n"
+		  << "midiInDevice = " << o.midiInDevice << "\n";
 		return f.good();
 	}
 }

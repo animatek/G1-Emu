@@ -71,7 +71,7 @@ namespace g1gui
 		return l;
 	}
 
-	SettingsView::SettingsView(g1app::EmuHost& _host) : m_host(_host)
+	SettingsView::SettingsView(g1app::EmuHost& _host, std::function<void()> _restart) : m_host(_host), m_restart(std::move(_restart))
 	{
 		setLookAndFeel(&m_look);
 		const auto& o = m_host.options();
@@ -280,6 +280,25 @@ namespace g1gui
 		addChildComponent(m_notice);
 		m_noticeToggle.onClick = [this] { setNoticeOpen(!m_noticeOpen); };
 		addAndMakeVisible(m_noticeToggle);
+
+		m_factoryBanks.setTooltip("Start over with the factory banks. Yours are kept in a file beside them, not lost");
+		m_factoryBanks.onClick = [this]
+		{
+			askThenRestart("Factory banks", "The G1 restarts with the factory banks.\n\nYour banks are not lost: they are kept beside "
+				"them as flash-before-reset-<date>.bin. Plugin instances already in a project keep their own.", "Reset the banks",
+				[this] { m_host.resetFlashOnRestart(); });
+		};
+		addAndMakeVisible(m_factoryBanks);
+		m_romOs.setTooltip(o.os.empty() ? "The OS in use is the ROM's own already"
+			: juce::String("Run the OS in the ROM again instead of the updated one (") + o.os + ")");
+		m_romOs.setEnabled(!o.os.empty());
+		m_romOs.onClick = [this]
+		{
+			askThenRestart("The ROM's own OS", "The G1 restarts with the OS in the ROM instead of the updated one.\n\nThe updated OS "
+				"stays in its folder; a new update brings it back.", "Use the ROM's OS",
+				[this] { m_host.options().os.clear(); m_host.options().save(g1app::EmuHost::defaultSettingsPath()); });
+		};
+		addAndMakeVisible(m_romOs);
 
 		for(auto* l : {&m_running, &m_note})
 		{
@@ -502,5 +521,22 @@ namespace g1gui
 		m_notice.setBounds(0, 0, g_width, g_bottomY - g_gap);
 		m_disclaimer.setBounds(0, g_bottomY, 230, g_rowH);
 		m_noticeToggle.setBounds(240, g_bottomY + 1, 170, 26);
+		// Between the notice's and the card's Close.
+		m_factoryBanks.setBounds(430, g_bottomY + 1, 170, 26);
+		m_romOs.setBounds(610, g_bottomY + 1, 170, 26);
+	}
+
+	void SettingsView::askThenRestart(const juce::String& _title, const juce::String& _message, const juce::String& _yes, std::function<void()> _then)
+	{
+		juce::AlertWindow::showAsync(juce::MessageBoxOptions().withIconType(juce::MessageBoxIconType::QuestionIcon)
+			.withTitle(_title).withMessage(_message).withButton(_yes).withButton("Cancel"),
+			[v = juce::Component::SafePointer<SettingsView>(this), then = std::move(_then)](const int _result)
+			{
+				if(_result != 1 || !v)
+					return;
+				then();
+				if(v->m_restart)
+					v->m_restart();
+			});
 	}
 }

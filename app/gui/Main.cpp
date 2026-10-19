@@ -44,7 +44,7 @@ namespace g1gui
 		float panelScale() const override { return m_host.options().panelScale; }
 		void setPanelScale(const float _scale) override { m_host.options().panelScale = _scale; }	// saved when the window closes
 		juce::String settingsTooltip() const override { return "Audio driver, output level and raw MIDI"; }
-		std::unique_ptr<juce::Component> createSettings() override { return std::make_unique<SettingsView>(m_host); }
+		std::unique_ptr<juce::Component> createSettings() override { return std::make_unique<SettingsView>(m_host, [this] { restart(); }); }
 		g1app::SynthSettingsLink& synthSettings() override { return m_host.synthSettings(); }
 		g1app::PresetsLink& presets() override { return m_host.presets(); }
 		bool lastController(int& _channel, int& _cc, uint32_t& _serial) override { return m_host.lastController(_channel, _cc, _serial); }
@@ -179,7 +179,7 @@ namespace g1gui
 
 	// G1_SNAPSHOTS=dir: pictures of the window, for a look at the GUI from somewhere else (a
 	// phone, a pull request). Once the G1 has booted, the panel, the extras drawer, About at its
-	// top and at its end, the Synth Settings and Presets pages, Load .pch's question and the panel again are saved as PNGs, each after clicking what
+	// top and at its end, the Synth Settings and Presets pages, Load .pch's question, the panel again and the Emulator Settings card are saved as PNGs, each after clicking what
 	// a user would click; then G1-Emu quits. With G1_AUDIO=no and G1_RAWMIDI=0 it touches no device.
 	class Snapshots : private juce::Timer
 	{
@@ -221,7 +221,12 @@ namespace g1gui
 					presets->loadPch(juce::File(G1_SOURCE_DIR "/tools/patches/ClockTest.pch"));
 				break;
 			case 8: save("7-load-pch.png"); click("Cancel"); click("Presets"); break;
-			case 9: save("8-back-to-panel.png"); break;
+			case 9:
+				save("8-back-to-panel.png");
+				if(auto* gear = findNamed<IconButton>(w, "Settings"))
+					gear->triggerClick();
+				break;
+			case 10: save("9-emulator-settings.png"); break;
 			default:
 				stopTimer();
 				juce::JUCEApplication::getInstance()->systemRequestedQuit();

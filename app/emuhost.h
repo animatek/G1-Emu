@@ -74,6 +74,9 @@ namespace g1app
 		// boots from it, with the knobs where they were. MIDI ports and audio stay open. Whatever
 		// holds on to mc() must let it go first: the G1 it returned is gone.
 		bool restart(std::string& _log);
+		// The next restart() starts from the factory banks. The flash so far is not lost: it is
+		// kept beside, as flash-before-reset-<date>.bin.
+		void resetFlashOnRestart() { m_resetFlash = true; }
 
 		// The G1. The panel (getLcd, ledRow, setButton, setAdc) can be used from another thread.
 		g1::Microcontroller& mc() { return m_engine->mc(); }
@@ -121,6 +124,7 @@ namespace g1app
 		SynthSettingsLink m_synthSettings;
 		PresetsLink m_presets;
 		MidiRouting m_midiRouting;	// the notes from the MIDI port, by each slot's octave shift
+		bool m_resetFlash = false;	// resetFlashOnRestart()
 		std::atomic<bool> m_selectedControllers{false};	// m_options's, for the thread that runs the G1
 		std::atomic<bool> m_octaveShift{false};			// as m_selectedControllers
 		std::atomic<bool> m_racing{false};				// booting faster than real time: its audio is kept from the card
