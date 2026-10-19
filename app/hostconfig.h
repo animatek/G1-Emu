@@ -33,6 +33,9 @@ namespace g1app
 		bool directLink = true;				// the PC Port over a local socket for Animatek NME (directlink.h)
 		std::string rawMidiCard = "G1";		// the raw MIDI card to take over (empty: none)
 		std::string rom;					// the ROM to use; empty: look for one (romfinder.h)
+		// The ROM this run uses, never saved: one given for a run only (the command line, G1_ROM,
+		// G1-Mods' modified ROM) is not the standalone's and the plugins' ROM, which rom keeps.
+		std::string romInUse;
 		std::string os;						// an OS image to run instead of the ROM's factory OS (empty: none)
 		bool expanded = false;				// the model: Expanded (8 DSPs, the expansion board) or Regular (4)
 		bool showDisclaimer = false;		// the notice at startup; the window can turn it back on

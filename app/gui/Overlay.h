@@ -82,6 +82,7 @@ namespace g1gui
 
 	private:
 		juce::Rectangle<int> card() const;
+		float contentScale() const;	// 1, or less on a panel too small for the content
 
 		juce::Image m_backdrop;
 		int m_faceHeight = 0;

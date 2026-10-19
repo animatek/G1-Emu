@@ -180,13 +180,26 @@ namespace g1gui
 			onClose();
 	}
 
-	// Around the content at its own size, or as the space allows on a small panel.
+	// Around the content at its own size. On a panel too small for it the content is drawn smaller,
+	// all of it: cut to the space, its bottom rows went past the card and under Close.
+	float CardView::contentScale() const
+	{
+		if(!m_content || m_content->getWidth() <= 0 || m_content->getHeight() <= 0)
+			return 1.0f;
+		const auto space = m_space.isEmpty() ? getLocalBounds() : m_space;
+		const int w = space.getWidth() - 16 - 2 * overlay::Margin;
+		const int h = space.getHeight() - 16 - overlay::TitleRuleY - g_cardGap - g_cardBottom;
+		return std::min({1.0f, static_cast<float>(w) / static_cast<float>(m_content->getWidth()),
+			static_cast<float>(h) / static_cast<float>(m_content->getHeight())});
+	}
+
 	juce::Rectangle<int> CardView::card() const
 	{
 		const auto space = m_space.isEmpty() ? getLocalBounds() : m_space;
-		const int w = (m_content ? m_content->getWidth() : 0) + 2 * overlay::Margin;
-		const int h = overlay::TitleRuleY + g_cardGap + (m_content ? m_content->getHeight() : 0) + g_cardBottom;
-		return juce::Rectangle<int>(std::min(w, space.getWidth() - 16), std::min(h, space.getHeight() - 16)).withCentre(space.getCentre());
+		const float s = contentScale();
+		const int w = juce::roundToInt(static_cast<float>(m_content ? m_content->getWidth() : 0) * s) + 2 * overlay::Margin;
+		const int h = overlay::TitleRuleY + g_cardGap + juce::roundToInt(static_cast<float>(m_content ? m_content->getHeight() : 0) * s) + g_cardBottom;
+		return juce::Rectangle<int>(w, h).withCentre(space.getCentre());
 	}
 
 	void CardView::paint(juce::Graphics& _g)
@@ -200,7 +213,10 @@ namespace g1gui
 		const int m = overlay::Margin;
 		const int top = c.getY() + overlay::TitleRuleY + g_cardGap, bottom = c.getBottom() - g_cardBottom;
 		if(m_content)
-			m_content->setTopLeftPosition(c.getX() + m, top);
+		{
+			m_content->setTopLeftPosition(0, 0);
+			m_content->setTransform(juce::AffineTransform::scale(contentScale()).translated(static_cast<float>(c.getX() + m), static_cast<float>(top)));
+		}
 		m_close.setBounds(c.getRight() - m - CloseW, bottom - CloseH, CloseW, CloseH);
 	}
 

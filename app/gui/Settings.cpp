@@ -95,8 +95,9 @@ namespace g1gui
 		// point at another. A change needs a restart, like any other ROM swap would on hardware.
 		m_romPath.setColour(juce::Label::textColourId, juce::Colour(0xffc8ccd0));
 		m_romPath.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 11.5f, juce::Font::plain));
-		m_romPath.setText(o.rom.empty() ? "none" : o.rom, juce::dontSendNotification);
-		m_romPath.setTooltip(o.rom);
+		const auto& romInUse = o.romInUse.empty() ? o.rom : o.romInUse;
+		m_romPath.setText(romInUse.empty() ? "none" : romInUse, juce::dontSendNotification);
+		m_romPath.setTooltip(romInUse);
 		addAndMakeVisible(m_romPath);
 
 		m_romChoose.onClick = [this] { chooseRom(); };

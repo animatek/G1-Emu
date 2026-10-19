@@ -7,6 +7,15 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Fix] **A ROM given for one run no longer becomes everyone's, and Settings fits the panel
+  (Claude, asked by Javier).** The standalone wrote the ROM it was started with into
+  `settings.conf`, which the plugins read too: a ROM on the command line (`g1gui.sh`, a launcher,
+  G1-Mods' `run-g1emu.sh` with its modified ROM) or in `G1_ROM` became the plugins' ROM. Now it
+  is used for that run only (`HostOptions::romInUse`, shown as "ROM in use") and `rom =` changes
+  only when the settings or the search found it, or when one is chosen. And the Settings card,
+  cut to a small panel's height, left its bottom rows past the card and Close over the notes: the
+  content is now drawn smaller to fit, all of it (`CardView::contentScale`). Checked: builds;
+  `ctest -L g1` passes; the card by eye in the standalone, by Javier.
 - [Docs] **ROADMAP: the way to the first beta, again (Claude, decided with Javier).** alpha.16 was
   to be beta 1 and the numbers ran past it. Now: alpha.24 brings the Expanded's dropout fix (both
   models hold); beta 1 comes when Windows is clean (#53 fixed, #59 and #65 explained or closed, #48

@@ -89,8 +89,7 @@ namespace g1app
 
 		// The environment wins over whatever the window asked for: the scripts and the test bench
 		// are driven that way and must keep working with the settings file in place.
-		if(const char* v = std::getenv("G1_ROM"))
-			m_options.rom = v;
+		const char* romForThisRun = std::getenv("G1_ROM");
 		if(const char* v = std::getenv("G1_AUDIO"))
 			m_options.audio = v;
 		if(const char* v = std::getenv("G1_GAIN_DB"))
@@ -113,7 +112,7 @@ namespace g1app
 		// The ROM. G1-Emu ships none, so not finding one is the normal first run, not a crash:
 		// the message has to say what to put where, and what was wrong with what is already there.
 		m_romProblem.clear();
-		const auto search = findRom(_romPath, m_options.rom);
+		const auto search = findRom(_romPath, romForThisRun ? std::string(romForThisRun) : m_options.rom);
 		std::vector<uint8_t> rom;
 		if(!search.found() || !inspectRom(search.path, rom).ok())
 		{
@@ -123,7 +122,11 @@ namespace g1app
 			logEvent("start: " + msg);
 			return false;
 		}
-		m_options.rom = search.path;
+		// Remembered only when the settings or the search found it: a ROM given for this run is not
+		// written over the one the plugins use too.
+		if(_romPath.empty() && !romForThisRun)
+			m_options.rom = search.path;
+		m_options.romInUse = search.path;
 		_log += "ROM: " + search.path + "\n";
 		m_rom = std::move(rom);
 
