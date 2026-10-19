@@ -7,6 +7,11 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Fix] **Settings offered a raw MIDI card that does not exist (Claude, found by Javier).** With
+  raw MIDI off, the box showed `G1Emu` (the snd-virmidi card of the first attempts), and ticking it
+  again saved that; the card G1-Emu makes and Bitwig lists is `G1` (`G1 MIDI 1`), the default
+  everywhere else. So the MIDI OUT never reached Bitwig until the ports were linked by hand. The
+  box now offers the settings' own default.
 - [New] **The plugin's MIDI output is the G1's MIDI OUT (Claude, asked by Javier).** What the OS
   sends out of the SCI went nowhere in the plugin (the standalone already sent it to its `MIDI`
   port): the runner's worker now puts its bytes back into messages (`midioutparser.h`: running

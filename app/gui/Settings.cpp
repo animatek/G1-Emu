@@ -183,7 +183,8 @@ namespace g1gui
 		m_rawEnabled.onClick = [this] { updateEnabled(); apply(); };
 		addAndMakeVisible(m_rawEnabled);
 
-		m_rawCard.setText(o.rawMidiCard.empty() ? "G1Emu" : o.rawMidiCard, false);
+		// Off, the box offers the default card (the USB MIDI gadget's ID), so ticking it again works
+		m_rawCard.setText(o.rawMidiCard.empty() ? g1app::HostOptions{}.rawMidiCard : o.rawMidiCard, false);
 		m_rawCard.onFocusLost = [this] { apply(); };
 		m_rawCard.onReturnKey = [this] { apply(); };
 		addAndMakeVisible(m_rawCard);
