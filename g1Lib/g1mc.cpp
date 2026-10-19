@@ -115,6 +115,8 @@ namespace g1
 			std::chrono::steady_clock::time_point busyStart;
 			if(m_benchEnabled)
 				busyStart = std::chrono::steady_clock::now();
+			if(job.claimed.exchange(true, std::memory_order_acq_rel))
+				continue;	// the CPU took it (waitDsp) and clears busy itself
 			m_dsps[dsp]->catchUp(job.target, false);
 			if(m_benchEnabled)
 				m_threadBusyNs[dsp].fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - busyStart).count()), std::memory_order_relaxed);
@@ -296,6 +298,7 @@ namespace g1
 	{
 		auto& job = m_jobs[_dsp];
 		job.target = _target;
+		job.claimed.store(false, std::memory_order_relaxed);
 		job.busy.store(true, std::memory_order_relaxed);
 		job.generation.fetch_add(1, std::memory_order_release);
 		if(m_sleepers.load() > 0)
@@ -310,6 +313,19 @@ namespace g1
 		auto& job = m_jobs[_dsp];
 		if(!job.busy.load(std::memory_order_acquire))
 			return;
+		// Not started yet: rather than wait for its worker, the CPU runs it.
+		if(!job.claimed.exchange(true, std::memory_order_acq_rel))
+		{
+			std::chrono::steady_clock::time_point busyStart;
+			if(m_benchEnabled)
+				busyStart = std::chrono::steady_clock::now();
+			m_dsps[_dsp]->catchUp(job.target, false);
+			if(m_benchEnabled)
+				m_threadBusyNs[_dsp].fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - busyStart).count()), std::memory_order_relaxed);
+			m_cpuRanDsp.fetch_add(1, std::memory_order_relaxed);
+			job.busy.store(false, std::memory_order_release);
+			return;
+		}
 		std::chrono::steady_clock::time_point waitStart;
 		if(m_benchEnabled)
 			waitStart = std::chrono::steady_clock::now();
@@ -354,6 +370,7 @@ namespace g1
 		}
 		out.periodicBarriers = m_periodicBarriers.load(std::memory_order_relaxed);
 		out.hostPortBarriers = m_hostPortBarriers.load(std::memory_order_relaxed);
+		out.cpuRanDsp = m_cpuRanDsp.load(std::memory_order_relaxed);
 		return out;
 	}
 
@@ -363,6 +380,7 @@ namespace g1
 		m_cpuWaitingNs.store(0, std::memory_order_relaxed);
 		m_periodicBarriers.store(0, std::memory_order_relaxed);
 		m_hostPortBarriers.store(0, std::memory_order_relaxed);
+		m_cpuRanDsp.store(0, std::memory_order_relaxed);
 		for(uint32_t i = 0; i < m_dspCount; ++i)
 		{
 			m_threadBusyNs[i].store(0, std::memory_order_relaxed);

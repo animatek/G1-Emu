@@ -1097,8 +1097,8 @@ int main(int argc, char** argv)
 		const double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - benchStart).count();
 		const auto s = mc.benchStats();
 		const double scale = wall > 0 ? 1.0 / wall : 0.0;
-		std::printf("BENCH emulated_s=%.3f wall_s=%.6f realtime=%.3f periodic_barriers_s=%.1f host_port_barriers_s=%.1f\n",
-			seconds, wall, wall > 0 ? seconds / wall : 0.0, s.periodicBarriers * scale, s.hostPortBarriers * scale);
+		std::printf("BENCH emulated_s=%.3f wall_s=%.6f realtime=%.3f periodic_barriers_s=%.1f host_port_barriers_s=%.1f cpu_ran_dsp_s=%.1f\n",
+			seconds, wall, wall > 0 ? seconds / wall : 0.0, s.periodicBarriers * scale, s.hostPortBarriers * scale, s.cpuRanDsp * scale);
 		std::printf("BENCH thread=cpu busy_s=%.6f waiting_s=%.6f\n", s.cpuBusyNs / 1e9, s.cpuWaitingNs / 1e9);
 		for(uint32_t d = 0; d < mc.dspCount(); ++d)
 			std::printf("BENCH thread=dsp%u busy_s=%.6f waiting_s=%.6f\n", d, s.threadBusyNs[d] / 1e9, s.threadWaitingNs[d] / 1e9);

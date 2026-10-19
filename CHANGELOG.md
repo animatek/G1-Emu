@@ -7,6 +7,21 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Release] **v0.1.0-alpha.24: the Expanded holds (Claude, decided with Javier).** Release notes
+  in `docs/release-notes.md`: the two Expanded fixes below and what came since alpha.23 (one
+  settings file, Banks..., a run's own ROM).
+- [Fix] **Fewer dropouts on the Expanded: the CPU runs a late DSP itself, and the emulation's
+  threads at a high priority (Claude, found by Javier in Bitwig, 2026-10-18).** When the CPU had
+  to wait for a DSP whose worker had not started it yet (busy with its other DSP, or not woken),
+  it waited; now whoever claims the job first runs it (`DspJob::claimed`, `waitDsp`), the same
+  work either way. And `keepThreadAtFullSpeed` raises each emulation thread's priority as
+  Gearmulator does (`dsp56k::ThreadTools`, Highest: nice -10 on Linux where RLIMIT_NICE allows it,
+  time-critical on Windows, user-interactive on macOS); at the normal priority a DAW's other
+  threads took the emulation's turn with the load well below 100 %. `g1patchtest --bench` prints
+  how often the CPU ran a DSP (`cpu_ran_dsp_s`). Checked: `golden.sh check` byte-identical for
+  the ten bench patches on both models (threaded, serial, reference); `ctest -L g1` passes;
+  `g1runnertest --realtime --seconds 30` on an Expanded cut to 5 threads (`taskset -c 0-4`):
+  1967 dropouts at 91 % load before, 4 at 59 % after.
 - [Fix] **The plugin went silent for good when the G1 ran slower than real time (Claude, found by
   Javier in Bitwig and by Waltercalling on a laptop, #75).** Switched to Expanded on a machine that
   cannot quite keep up, every frame came late; the runner owed each one and dropped it as late, the

@@ -1,5 +1,7 @@
 #include "g1thread.h"
 
+#include "dsp56kBase/threadtools.h"
+
 #include <thread>
 
 #ifdef _WIN32
@@ -63,5 +65,6 @@ namespace g1
 		state.StateMask = 0;	// controlled by us, and off
 		SetThreadInformation(GetCurrentThread(), ThreadPowerThrottling, &state, sizeof(state));
 #endif
+		dsp56k::ThreadTools::setCurrentThreadPriority(dsp56k::ThreadPriority::Highest);	// false where not allowed: it stays as it was
 	}
 }

@@ -138,7 +138,7 @@ namespace g1
 		{
 			uint64_t cpuBusyNs = 0, cpuWaitingNs = 0;
 			std::array<uint64_t, g_maxDsps> threadBusyNs{}, threadWaitingNs{}, blocks{};
-			uint64_t periodicBarriers = 0, hostPortBarriers = 0;
+			uint64_t periodicBarriers = 0, hostPortBarriers = 0, cpuRanDsp = 0;
 		};
 		void setBenchEnabled(bool _enabled) { m_benchEnabled = _enabled; }
 		void resetBenchStats();
@@ -222,11 +222,15 @@ namespace g1
 		uint32_t m_workerCount = 0;		// thread w runs DSPs w, w + m_workerCount...
 		std::vector<std::thread> m_workers;
 		// One job per DSP, on its own cache line: the CPU sets the target and bumps the generation,
-		// the worker runs up to it and clears busy.
+		// the worker runs up to it and clears busy. Whoever claims it first runs it: the CPU, when it
+		// must wait for a DSP whose worker has not started it yet (busy with its other DSP, or not
+		// woken), runs it itself instead of waiting (waitDsp). The same work either way, so the
+		// output does not change; only the CPU's idle waits do.
 		struct alignas(64) DspJob
 		{
 			std::atomic<uint64_t> generation{0};
 			std::atomic<bool> busy{false};
+			std::atomic<bool> claimed{false};
 			uint64_t target = 0;
 		};
 		std::array<DspJob, g_maxDsps> m_jobs;
@@ -239,7 +243,7 @@ namespace g1
 		std::array<std::atomic<uint64_t>, g_maxDsps> m_threadBusyNs{};
 		std::array<std::atomic<uint64_t>, g_maxDsps> m_threadWaitingNs{};
 		std::array<uint64_t, g_maxDsps> m_benchBlockBase{};
-		std::atomic<uint64_t> m_periodicBarriers{0}, m_hostPortBarriers{0};
+		std::atomic<uint64_t> m_periodicBarriers{0}, m_hostPortBarriers{0}, m_cpuRanDsp{0};
 		std::mutex m_wakeMutex;
 		std::condition_variable m_wake;
 		uint64_t m_pitIrqs = 0;

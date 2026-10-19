@@ -1,27 +1,43 @@
-# G1-Emu v0.1.0-alpha.23
+# G1-Emu v0.1.0-alpha.24
 
-A G1 that starts faster, Octave Shift you can switch off, and a fix for projects.
+The Expanded, steadier: it no longer goes silent on a computer that cannot keep up, and it drops
+out less. And one settings file for the standalone and the plugins.
 
-**Faster start (Mike Fiction).** While the G1 boots, and while a project's slots go back in, the
-emulator now runs as fast as the computer allows, then carries on in real time. Nothing can be
-heard during those moments anyway. The OS answers in about 0.4 s instead of 2.5 s, and a project's
-notes are let in sooner: a slot's channel opens as soon as the slots on it are back.
+**Fix: the plugin went silent for good when the computer could not keep up.** Switched to the
+Expanded (8 DSPs) on a machine that cannot quite run it in real time, the sound stopped and never
+came back until you went back to the Regular. It now keeps playing: on such a machine it breaks
+up, which tells you it is too much for it, instead of going quiet. Thanks to @Waltercalling for
+the report.
 
-**Octave Shift: Enabled or Disabled (Mike Fiction).** The rack G1 ignores the octave shift a patch
-carries; the keyboard model plays it. **Disabled is the default**, as the rack plays: the notes go
-in as sent, and the OCT SHIFT keys and LEDs are greyed out (the LEDs still show the patch's shift,
-so a keyboard patch that sounds an octave away shows why). **Enabled** moves each slot's notes by
-its shift, as before. Set it on the Synth Settings page (OCT SHIFT) or with a right click on OCT
-SHIFT. A project from before opens Disabled: if it relied on the shift, enable it and save the
-project again.
+**Fewer dropouts with heavy patches.** The emulator's threads now ask the system for a high
+priority, as Gearmulator's own plugins do, so the DAW's other work takes their turn less often.
+And when one DSP's thread is late, the main thread now does that DSP's work itself instead of
+waiting for it. The sound is the same, bit for bit; only the waiting changes.
 
-**Fix: a reopened project keeps its octave shifts.** Since alpha.22 a project could come back with
-slot A's octave shift at 0. It now keeps the shifts its patches carried.
+**One settings file.** The plugin kept its model (Regular or Expanded) and its panel switches
+apart from the standalone's, so the two could run different models without anyone noticing. Both
+now share `settings.conf`; the plugin keeps only its window size apart. A project still keeps its
+own model and settings.
+
+**Banks...** (Emulator Settings): restore your banks from a saved copy, or start with empty banks.
+Either puts the banks in use aside first, as `flash-before-reset-<date>.bin`. Note that the ROM
+holds no factory patches: those came in each synth's flash and as Clavia's files. **ROM's own
+OS...** goes back to the ROM's OS if you had picked an OS update.
+
+**Fix: a ROM given for one run** (on the command line) no longer becomes the plugins' ROM too, and
+the Settings card fits a small panel.
 
 Your ROM, banks, settings and projects are not affected otherwise.
 
+## Please test
+
+If the Expanded still breaks up or goes silent, tell us in #75 and attach the log
+(`%APPDATA%\Animatek\G1-Emu\g1-emu.log` on Windows, `~/.local/share/Animatek/G1-Emu/g1-emu.log`
+on Linux and macOS), with your CPU and DAW.
+
 ## Known
 
+- Switching to the Expanded restarts the G1: wait a few seconds until its eight DSPs have booted.
+- On a computer that cannot run the Expanded in real time it breaks up: use the Regular there.
 - On Windows the plugin has no PC Port of its own (it uses the direct link); the standalone still
   needs loopMIDI for the editor when the direct link is not used.
-- Very heavy patches on the Expanded can still drop out on some machines. We are working on it.
