@@ -7,6 +7,9 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Docs] **Release notes for v0.1.0-alpha.23 (Claude, asked by Javier).** `docs/release-notes.md`:
+  the faster start (#78) and Octave Shift Enabled / Disabled (#77), both by Mike Fiction, and the
+  octave shift a reopened project lost (21176fd).
 - [Fix] **A reopened project keeps slot A's octave shift again (Claude, asked by Javier; found by
   Mike Fiction).** Since the slots on and active came back with a project (#75), writing its
   settings means three messages (the settings, SlotsSelected, SlotActivated) at 300 ms of G1 time

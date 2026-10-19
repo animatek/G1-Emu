@@ -1,29 +1,24 @@
-# G1-Emu v0.1.0-alpha.22
+# G1-Emu v0.1.0-alpha.23
 
-The expansion board, the G1 as an effect, and projects that come back as you left them.
+A G1 that starts faster, Octave Shift you can switch off, and a fix for projects.
 
-**Regular or Expanded (#39).** The G1 can now be the Expanded: the G1 with its expansion board,
-eight DSPs instead of four and about twice the voices per patch (BellsMorph goes from 8 voices to
-16). Pick it in Settings, "ROM and model", in the standalone (it applies on the next start or
-Restart) or on the plugin's Settings card, where it is saved with the project. A project from
-before runs a Regular, as it did. The Expanded needs more CPU (about 2.75 cores against 1.6 on our
-test machine), so pick it only for the patches that need the voices.
+**Faster start (Mike Fiction).** While the G1 boots, and while a project's slots go back in, the
+emulator now runs as fast as the computer allows, then carries on in real time. Nothing can be
+heard during those moments anyway. The OS answers in about 0.4 s instead of 2.5 s, and a project's
+notes are let in sooner: a slot's channel opens as soon as the slots on it are back.
 
-**G1-Emu FX (#76).** A second plugin, installed next to the instrument: the same G1, but as an
-effect, with its input on from the start. Put it on an audio track and the track's sound goes into
-the G1's two audio inputs, ready for a patch's AudioIn module: filters, delays, vocoders, anything
-the G1 can do to a sound. Notes and the editor work as in the instrument.
+**Octave Shift: Enabled or Disabled (Mike Fiction).** The rack G1 ignores the octave shift a patch
+carries; the keyboard model plays it. **Disabled is the default**, as the rack plays: the notes go
+in as sent, and the OCT SHIFT keys and LEDs are greyed out (the LEDs still show the patch's shift,
+so a keyboard patch that sounds an octave away shows why). **Enabled** moves each slot's notes by
+its shift, as before. Set it on the Synth Settings page (OCT SHIFT) or with a right click on OCT
+SHIFT. A project from before opens Disabled: if it relied on the shift, enable it and save the
+project again.
 
-**Projects bring back their slots as they were (#75).**
+**Fix: a reopened project keeps its octave shifts.** Since alpha.22 a project could come back with
+slot A's octave shift at 0. It now keeps the shifts its patches carried.
 
-- Which slots are on and which one is active now come back with the project. Before, every slot
-  holding a patch came back on, which split the voices among them.
-- A heavy patch in slot A no longer comes back broken, showing `Error`. When Animatek NME connected
-  while the project was opening, its first messages arrived in the middle of the patch going back
-  into the slot, and the G1 dropped it half done. The editor now waits until the slots are back.
-
-Your ROM, banks, settings and projects are not affected: a project saved with an earlier version
-opens as before.
+Your ROM, banks, settings and projects are not affected otherwise.
 
 ## Known
 
