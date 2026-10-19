@@ -7,6 +7,15 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Fix] **Factory banks... was empty banks: now Banks..., with Restore (Claude, found by Javier).**
+  The G1's factory patches were never in the ROM (they came in each synth's flash and as Clavia's
+  files), so starting the flash over leaves the banks empty, not the factory's. The button is now
+  **Banks...**, a menu: **Restore banks from a saved copy...** (a file chooser in the flash's
+  folder, a 1 MB G1-Emu flash: the `flash-before-reset-<date>.bin` copies or any other) and
+  **Empty banks...**, which says it plainly. Either sets the banks in use aside first
+  (`EmuHost::resetFlashOnRestart(from)`; `flash.bin` itself chosen is taken from its copy). Javier's
+  banks, emptied twice, came back from the first copy. Checked: builds, `ctest -L g1` passes, the
+  card in the snapshots.
 - [Change] **One settings file for the standalone and the plugins, and two ways to start over
   (Claude, asked by Javier: "as simple as possible for the user").**
   - The plugin took its model and its panel switches (extras drawer, knob displays, knobs follow

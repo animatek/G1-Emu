@@ -281,14 +281,21 @@ namespace g1gui
 		m_noticeToggle.onClick = [this] { setNoticeOpen(!m_noticeOpen); };
 		addAndMakeVisible(m_noticeToggle);
 
-		m_factoryBanks.setTooltip("Start over with the factory banks. Yours are kept in a file beside them, not lost");
-		m_factoryBanks.onClick = [this]
+		m_banks.setTooltip("Empty the banks, or bring back a copy saved before. The banks in use are kept in a file, not lost");
+		m_banks.onClick = [this]
 		{
-			askThenRestart("Factory banks", "The G1 restarts with the factory banks.\n\nYour banks are not lost: they are kept beside "
-				"them as flash-before-reset-<date>.bin. Plugin instances already in a project keep their own.", "Reset the banks",
-				[this] { m_host.resetFlashOnRestart(); });
+			juce::PopupMenu menu;
+			menu.addItem("Restore banks from a saved copy...", [this] { chooseBanks(); });
+			menu.addItem("Empty banks...", [this]
+			{
+				askThenRestart("Empty banks", "The G1 restarts with empty banks.\n\nThe G1's factory patches are not in the ROM (they came in "
+					"each synth's flash), so this does not bring them back. Your banks are not lost: they are kept as "
+					"flash-before-reset-<date>.bin, and Restore banks brings them back. Plugin instances already in a project keep their own.",
+					"Empty the banks", [this] { m_host.resetFlashOnRestart(); });
+			});
+			menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&m_banks));
 		};
-		addAndMakeVisible(m_factoryBanks);
+		addAndMakeVisible(m_banks);
 		m_romOs.setTooltip(o.os.empty() ? "The OS in use is the ROM's own already"
 			: juce::String("Run the OS in the ROM again instead of the updated one (") + o.os + ")");
 		m_romOs.setEnabled(!o.os.empty());
@@ -522,8 +529,30 @@ namespace g1gui
 		m_disclaimer.setBounds(0, g_bottomY, 230, g_rowH);
 		m_noticeToggle.setBounds(240, g_bottomY + 1, 170, 26);
 		// Between the notice's and the card's Close.
-		m_factoryBanks.setBounds(430, g_bottomY + 1, 170, 26);
+		m_banks.setBounds(430, g_bottomY + 1, 170, 26);
 		m_romOs.setBounds(610, g_bottomY + 1, 170, 26);
+	}
+
+	// A G1-Emu flash to bring back, from the folder the saved ones are in.
+	void SettingsView::chooseBanks()
+	{
+		const auto dir = juce::File(g1app::EmuHost::defaultFlashPath()).getParentDirectory();
+		m_chooser = std::make_unique<juce::FileChooser>("Banks to restore (a flash saved before)", dir, "*.bin");
+		m_chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+			[this](const juce::FileChooser& _c)
+		{
+			const auto file = _c.getResult();
+			if(file == juce::File())
+				return;
+			if(file.getSize() != 1024 * 1024)
+			{
+				juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Not a G1-Emu flash",
+					file.getFullPathName() + "\n\nA G1-Emu flash is 1 MB, as flash.bin and the copies beside it.");
+				return;
+			}
+			askThenRestart("Restore banks", "The G1 restarts with the banks in\n" + file.getFileName() + "\n\nThe banks in use now are kept "
+				"as flash-before-reset-<date>.bin.", "Restore", [this, path = file.getFullPathName().toStdString()] { m_host.resetFlashOnRestart(path); });
+		});
 	}
 
 	void SettingsView::askThenRestart(const juce::String& _title, const juce::String& _message, const juce::String& _yes, std::function<void()> _then)

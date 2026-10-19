@@ -272,9 +272,19 @@ namespace g1app
 			std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::localtime(&t));
 			const auto aside = std::filesystem::path(m_flashPath).parent_path() / (std::string("flash-before-reset-") + stamp + ".bin");
 			std::error_code ec;
+			// flash.bin itself chosen: it is the copy set aside from here.
+			auto from = m_resetFlashFrom;
+			if(!from.empty() && std::filesystem::weakly_canonical(from, ec) == std::filesystem::weakly_canonical(m_flashPath, ec))
+				from = aside.string();
 			std::filesystem::rename(m_flashPath, aside, ec);
-			_log += ec ? "the flash could not be set aside (" + ec.message() + "): kept as it was\n"
-				: "the flash set aside as " + aside.string() + ": factory banks\n";
+			if(ec)
+				_log += "the flash could not be set aside (" + ec.message() + "): kept as it was\n";
+			else if(from.empty())
+				_log += "the flash set aside as " + aside.string() + ": empty banks\n";
+			else if(std::filesystem::copy_file(from, m_flashPath, ec); ec)
+				_log += "could not take the banks from " + m_resetFlashFrom + " (" + ec.message() + "): empty banks\n";
+			else
+				_log += "the flash set aside as " + aside.string() + ", the banks from " + m_resetFlashFrom + "\n";
 		}
 
 		std::array<uint8_t, 256> adc{};

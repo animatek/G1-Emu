@@ -90,10 +90,12 @@ namespace g1gui
 		bool m_noticeOpen = false;
 		void setNoticeOpen(bool _open);
 		juce::Label m_running, m_note;
-		// Starting over, each after a question, then restarted: the factory banks (the user's
-		// set aside in a file), and the ROM's own OS instead of an updated one (os =).
+		// Starting over, each after a question, then restarted: empty banks, or banks restored
+		// from a saved flash (the user's set aside in a file either way), and the ROM's own OS
+		// instead of an updated one (os =).
 		std::function<void()> m_restart;
-		juce::TextButton m_factoryBanks{"Factory banks..."}, m_romOs{"ROM's own OS..."};
+		juce::TextButton m_banks{"Banks..."}, m_romOs{"ROM's own OS..."};
+		void chooseBanks();
 		void askThenRestart(const juce::String& _title, const juce::String& _message, const juce::String& _yes, std::function<void()> _then);
 	};
 }
