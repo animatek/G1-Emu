@@ -7,6 +7,12 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Docs] **ROADMAP: the way to the first beta, again (Claude, decided with Javier).** alpha.16 was
+  to be beta 1 and the numbers ran past it. Now: alpha.24 brings the Expanded's dropout fix (both
+  models hold); beta 1 comes when Windows is clean (#53 fixed, #59 and #65 explained or closed, #48
+  and #64 fixed or in the known issues), with the README, the notes for a new user and signing.
+  NME telling the models apart and the boot without a ROM (#16) move to after it. Plan B: the
+  Expanded marked experimental rather than holding the beta.
 - [Fix] **The plugin silent after the fast boot when the boot is slower than real time (Claude,
   found by Javier in Bitwig).** On the Expanded on this machine the race of #78 runs slower than
   real time: the host had taken 50176 frames when the worker had made 29438, the audio thread owed

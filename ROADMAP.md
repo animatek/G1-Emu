@@ -60,10 +60,24 @@ what it carries works.
     small loader that boots the DSPs) is written as G1-Emu's own boot instead, and the OS comes from
     Clavia's public updaters (#16). Checked against the rack ROM we have: both boots must behave
     the same. That boot is also the way to the Micro, with the Micro's updater.
-- **alpha.16 = the first beta (beta 1)**, once Presets is done and both models hold: the
-  first release meant for everyone, not only testers. Before it: the known issues in the release
-  notes solved or explained, the README and the notes written for a new user, and signing looked
-  at again.
+- **alpha.16-23 (to 2026-10-19):** the numbers ran past the plan; the beta did not come with
+  alpha.16. Out since: the Expanded (alpha.22, #39), G1-Emu FX (#76), projects that bring back
+  their slots (#75), the fast boot (#78) and Octave Shift Enabled / Disabled (#77, alpha.23).
+- **alpha.24: the Expanded holds** (decided with Javier on 2026-10-19). Heavy patches on the
+  Expanded still drop out on some machines; the fix (`g1mc`/`g1thread`, on the `expanded-39`
+  branch, not committed) goes in once Javier has heard it hold in Bitwig. With it both models
+  hold, as the beta asks.
+- **The first beta (beta 1), when Windows is clean**: the first release meant for everyone, and
+  most of them are on Windows. Before it:
+  - **#53** fixed: on Windows the plugin gets no notes from the DAW while NME connects.
+  - **#59 and #65** ("no audio", never reproduced here) explained or closed: ask for logs now.
+  - **#48** (Store) and **#64** (the Performance in the DAW) fixed or written in the known issues.
+  - The known issues in the release notes solved or explained, the README and the notes written
+    for a new user, and signing looked at again.
+  - **Not before it any more:** Animatek NME telling the models apart, and the boot without a ROM
+    (#16). Both after the beta.
+  - **Plan B:** if the Expanded's dropouts drag on, the beta goes out with the Expanded marked
+    *experimental* in Settings and in the notes, rather than waiting for it.
 - **Without a ROM (#16), no date:** a goal for around the beta, not tied to a release. G1-Emu's
   own boot with the OS from Clavia's public updater would spare a new user the hardest step, finding
   a ROM. It goes slowly and is done when it is done.
