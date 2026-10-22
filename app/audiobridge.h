@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace g1app
@@ -47,6 +48,15 @@ namespace g1app
 			return true;
 		}
 
+		// Consumer only: release a batch without copying samples that will not be heard.
+		size_t skip(const size_t _frames)
+		{
+			const auto r = m_read.load(std::memory_order_relaxed);
+			const auto n = std::min(_frames, m_write.load(std::memory_order_acquire) - r);
+			m_read.store(r + n, std::memory_order_release);
+			return n;
+		}
+
 	private:
 		static size_t roundUp(size_t _v) { size_t s = 1; while(s < _v) s <<= 1; return s; }
 		const size_t m_size;
@@ -63,14 +73,17 @@ namespace g1app
 		explicit AudioBridge(const float _gain) : m_gain(_gain), m_out(1 << 15), m_in(1 << 15) {}
 
 		// Called when the device opens, and again if it reopens at another rate.
+		// Serialize with render() (the device's stopped/about-to-start lifecycle); DSP push()
+		// and pullInput() may continue concurrently.
 		void setRate(const uint32_t _rate)
 		{
-			m_rate = _rate ? _rate : 48000;
-			m_prefill = static_cast<size_t>(m_rate * 0.03);		// a 30 ms cushion
+			const auto rate = _rate ? _rate : 48000;
+			m_rate.store(rate, std::memory_order_relaxed);
+			m_prefill = static_cast<size_t>(rate * 0.03);		// a 30 ms cushion
 			m_buffering = true;
 		}
 
-		uint32_t rate() const { return m_rate; }
+		uint32_t rate() const { return m_rate.load(std::memory_order_relaxed); }
 		uint64_t xruns() const { return m_xruns; }
 		float peak() { return m_peak.exchange(0.0f); }
 		void setGain(const float _gain) { m_gain.store(_gain, std::memory_order_relaxed); }
@@ -84,7 +97,7 @@ namespace g1app
 			if(a > m_peak.load(std::memory_order_relaxed))
 				m_peak.store(a, std::memory_order_relaxed);
 			// From 96 kHz to the device's rate: one output sample every EmuRate/rate input samples.
-			const double step = EmuRate / m_rate;
+			const double step = EmuRate / rate();
 			while(m_outPos < 1.0)
 			{
 				std::array<float, Outs> f;
@@ -101,7 +114,7 @@ namespace g1app
 		// The L/R inputs at 96 kHz, signed 24-bit (DSP 0 thread).
 		void pullInput(int32_t& _l, int32_t& _r)
 		{
-			const double step = m_rate / EmuRate;	// device samples per emulator sample
+			const double step = rate() / EmuRate;	// device samples per emulator sample
 			m_inPos += step;
 			while(m_inPos >= 1.0)
 			{
@@ -137,17 +150,15 @@ namespace g1app
 				std::array<float, Ins> in{};
 				for(size_t c = 0; c < Ins && c < _numIns; ++c)
 					if(_ins[c])
-						in[c] = _ins[c][k];
+						in[c] = cleanInput(_ins[c][k]);
 				m_in.push(in);
 			}
 
 			// If the emulator runs ahead (its clock is not the sound card's), the cushion is
 			// trimmed so the latency does not grow without bound.
-			while(m_out.available() > m_prefill * 4)
-			{
-				std::array<float, Outs> drop;
-				m_out.pop(drop);
-			}
+			const auto queued = m_out.available();
+			if(queued > m_prefill * 4)
+				m_out.skip(queued - m_prefill * 4);
 		}
 
 		// For a consumer that paces the emulator itself instead of buffering against a card that
@@ -173,9 +184,7 @@ namespace g1app
 		// Throws away up to _frames frames; returns how many (audio thread).
 		size_t skip(const size_t _frames)
 		{
-			size_t k = 0;
-			for(std::array<float, Outs> f; k < _frames && m_out.pop(f); ++k) {}
-			return k;
+			return m_out.skip(_frames);
 		}
 
 		// The L/R inputs, for pullInput() to hand to DSP 0 (audio thread).
@@ -186,17 +195,29 @@ namespace g1app
 				std::array<float, Ins> in{};
 				for(size_t c = 0; c < Ins && c < _numIns; ++c)
 					if(_ins[c])
-						in[c] = _ins[c][_offset + k];
+						in[c] = cleanInput(_ins[c][_offset + k]);
 				m_in.push(in);
 			}
 		}
 
 	private:
+		// Sanitize before interpolation: NaN survives clamp, and even finite extremes can
+		// overflow the subtraction. Neither may reach the float-to-integer DSP input.
+		static float cleanInput(const float _v)
+		{
+			// Inspect IEEE-754 bits: Release uses fast-math, which can remove isfinite().
+			uint32_t bits;
+			static_assert(sizeof(bits) == sizeof(_v));
+			std::memcpy(&bits, &_v, sizeof(bits));
+			return (bits & 0x7f800000u) == 0x7f800000u ? 0.0f : std::clamp(_v, -1.0f, 1.0f);
+		}
+
 		std::atomic<uint64_t> m_produced{0};
 		std::atomic<float> m_gain;
 		FrameRing<Outs> m_out;
 		FrameRing<Ins> m_in;
-		uint32_t m_rate = 48000;
+		// Device restarts can change the rate while the emulator/DSP threads are running.
+		std::atomic<uint32_t> m_rate{48000};
 		size_t m_prefill = 1440;
 		bool m_buffering = true;
 		double m_outPos = 0.0, m_inPos = 0.0;

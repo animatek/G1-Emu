@@ -7,6 +7,19 @@ Older entries cite their commit by hand.
 
 ## 2026-10-19
 
+- [Fix/Performance] Codex: **audio bridge review** (local change, not committed). Sanitize
+  non-finite and out-of-range input before DSP conversion, including under Release fast-math;
+  make device sample-rate changes atomic; discard queued frames in one bounded batch instead
+  of popping each frame. Added ROM-free FIFO/concurrency/input tests and review notes in
+  `docs/audio-review-2026-10-19.md`. Verified: Release build, audio bridge and Regular/Expanded
+  runner CTests (3/3), separate UBSan/float-cast-overflow and ThreadSanitizer runs. A local
+  16,384-frame discard microbenchmark improved from 7.1–7.3 us to 0.022–0.023 us; this is
+  not a whole-emulator CPU or memory improvement measurement.
+- [Cleanup] Cursor: **dropped tracked CMake logs and ignored local leftovers.** `build.log` and
+  `build-cfg.log` were in Git (machine paths, nothing the build reads). `*.log` and `/Images/`
+  are ignored now; a leftover Windows MIDI screenshot was not committed. Private folders
+  (`Correspondencia/`, `Patreon post/`, `Roms/`) stay local and ignored. Checked: `git ls-files`
+  has no logs or `Images/`; CMake and `ctest` do not mention those files.
 - [Tools] Claude: `g1patchtest`'s `G1_WATCH_PC` takes **`G1_WATCH_FROM=S`**, the G1's seconds
   (boot included) to start watching from: its eight hits otherwise all land in the boot. Used to
   find G1-Mods' Note Out bug.

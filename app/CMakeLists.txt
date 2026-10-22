@@ -29,6 +29,13 @@ if(WIN32)
 	target_link_libraries(g1Core PUBLIC ws2_32)
 endif()
 
+# Shared audio queues and conversion, without a ROM or audio device.
+find_package(Threads REQUIRED)
+add_executable(g1audiobridgetest audiobridgetest.cpp)
+target_link_libraries(g1audiobridgetest PRIVATE Threads::Threads)
+add_test(NAME g1audiobridgetest COMMAND g1audiobridgetest)
+set_tests_properties(g1audiobridgetest PROPERTIES TIMEOUT 30 LABELS g1)
+
 # Parameter values as the editor reads them (g1Lib/g1format.h). No ROM needed.
 add_executable(g1formattest formattest.cpp)
 target_link_libraries(g1formattest PRIVATE g1Lib)

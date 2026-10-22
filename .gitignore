@@ -3,10 +3,14 @@ Roms/
 *.BIN
 *.syx
 *.zip
+*.log
 build/
 build-*/
 bin/
 .local/
+
+# Local screenshots, not part of the project
+/Images/
 
 # Private Patreon drafts
 /Patreon post/
