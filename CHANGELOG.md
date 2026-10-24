@@ -7,6 +7,9 @@ Older entries cite their commit by hand.
 
 ## 2026-10-24
 
+- [Tests] Claude: `g1audiobridgetest` says which input failed and what it got (the macOS job of
+  v0.1.0-alpha.25's CI failed "sanitized input" on arm64 only; x86 with gcc and clang, with and
+  without fast-math, passes). Diagnostic only; the release waits for the cause.
 - [Docs] Claude: **Patreon and Donate buttons** in the README ("Support the project") and a
   `.github/FUNDING.yml`, so GitHub shows its Sponsor button. No code changes.
 - [Docs] Claude: **release notes for v0.1.0-alpha.25** (`docs/release-notes.md`): the #81 fix and

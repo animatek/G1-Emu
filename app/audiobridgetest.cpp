@@ -69,10 +69,15 @@ int main()
 		int32_t l = 0, r = 0;
 		bridge.pullInput(l, r); // interpolation starts with the previous (silent) sample
 		check(l == 0 && r == 0, "initial input silence");
+		int index = 0;
 		for(const auto value : expected)
 		{
 			bridge.pullInput(l, r);
-			check(l == static_cast<int32_t>(value * 8388607.0f) && r == 0, "sanitized input");
+			const auto want = static_cast<int32_t>(value * 8388607.0f);
+			if(l != want || r != 0)
+				std::fprintf(stderr, "input %d via %s: got %d / %d, wanted %d / 0\n", index, render ? "render" : "pushInputs", l, r, want);
+			check(l == want && r == 0, "sanitized input");
+			++index;
 		}
 	}
 
