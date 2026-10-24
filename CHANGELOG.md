@@ -32,6 +32,22 @@ Older entries cite their commit by hand.
   are ignored now; a leftover Windows MIDI screenshot was not committed. Private folders
   (`Correspondencia/`, `Patreon post/`, `Roms/`) stay local and ignored. Checked: `git ls-files`
   has no logs or `Images/`; CMake and `ctest` do not mention those files.
+- [Fix] Claude, from `docs/improvement-plan.md` (tasks 2a, 3a, 3b, 3c): the PIT registers (PICR,
+  PITR) are also kept when written a byte at a time (`write8`), as `write16` already did; the DSP
+  workers' wake-up, `launchDsp`'s generation bump, is `seq_cst` to pair with the sleepers' count; the
+  host-port trace (about 3 MB an instance) is off unless `g1boot` turns it on (`setHostTrace`); a
+  duplicate include removed in `g1dsp.cpp`; the two `0x3ff` tests in `exec()` joined into one (same
+  order). Checked: builds (Release, Linux, with Gearmulator and dsp56300 cloned in the session);
+  `ctest` 7 of 7 pass, the 4 ROM tests skipped (no ROM in the session), same as before. Then
+  checked on the maintainer's machine with the ROM (2026-10-24): `tools/bench/golden.sh` byte-identical
+  on all 8 patches against WAVs recorded before the merge, `g1boot` still reports the host-port
+  traffic, `ctest -L g1` 16/16. Tasks 1 and 2b still open.
+- [Docs] Claude: **an improvement plan from a code review** (`docs/improvement-plan.md`, asked by
+  Javier): the Presets page's uploads not protected from the editor's bytes as the keeper's are
+  (#75's failure, to be reproduced first in `g1pchtest`), the host-port trace and the panel's
+  "unknown" logging out of the hot path, PIT registers written by byte, the DSP workers' wake-up
+  ordering, a measurement of ticking only the ports with a DSP, and one coordinator for the PC Port
+  links (only if asked). Step by step, for whoever carries it out; no code changed.
 - [Tools] Claude: `g1patchtest`'s `G1_WATCH_PC` takes **`G1_WATCH_FROM=S`**, the G1's seconds
   (boot included) to start watching from: its eight hits otherwise all land in the boot. Used to
   find G1-Mods' Note Out bug.
