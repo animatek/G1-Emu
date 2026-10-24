@@ -1,39 +1,29 @@
-# G1-Emu v0.1.0-alpha.24
+# G1-Emu v0.1.0-alpha.25
 
-The Expanded, steadier: it no longer goes silent on a computer that cannot keep up, and it drops
-out less. And one settings file for the standalone and the plugins.
+Uploads that no longer fail at random, and some quiet work under the hood.
 
-**Fix: the plugin went silent for good when the computer could not keep up.** Switched to the
-Expanded (8 DSPs) on a machine that cannot quite run it in real time, the sound stopped and never
-came back until you went back to the Regular. It now keeps playing: on such a machine it breaks
-up, which tells you it is too much for it, instead of going quiet. Thanks to @Waltercalling for
-the report.
+**Fix: "upload rejected by synth (code 6: Unfinished bubble error)".** Sending a patch from the
+editor to the plugin could fail now and then, with any patch. While an editor uploads a patch,
+the plugin's own background request (it re-reads the synth settings every couple of seconds)
+could slip in between two packets when the acknowledgements were slow, and the G1's OS drops an
+upload another message comes into. The plugin now keeps out of an upload until it ends. We
+reproduced it here with long waits between packets: it failed before, it goes through now.
+Thanks to @sovietpop for the report. We have not seen it on a Mac, so please tell us in #81 if
+it still happens.
 
-**Fewer dropouts with heavy patches.** The emulator's threads now ask the system for a high
-priority, as Gearmulator's own plugins do, so the DAW's other work takes their turn less often.
-And when one DSP's thread is late, the main thread now does that DSP's work itself instead of
-waiting for it. The sound is the same, bit for bit; only the waiting changes.
+**Under the hood.** A review of the audio path (bad input values no longer reach the DSPs, a
+change of the sound card's sample rate is applied in one step, and a queue of late frames is
+dropped in one go), and small fixes in the core (the system clock when it is written a byte at a
+time, the DSP threads' wake-up on ARM, about 3 MB less memory per instance). The sound is the same,
+bit for bit, on the eight test patches.
 
-**One settings file.** The plugin kept its model (Regular or Expanded) and its panel switches
-apart from the standalone's, so the two could run different models without anyone noticing. Both
-now share `settings.conf`; the plugin keeps only its window size apart. A project still keeps its
-own model and settings.
-
-**Banks...** (Emulator Settings): restore your banks from a saved copy, or start with empty banks.
-Either puts the banks in use aside first, as `flash-before-reset-<date>.bin`. Note that the ROM
-holds no factory patches: those came in each synth's flash and as Clavia's files. **ROM's own
-OS...** goes back to the ROM's OS if you had picked an OS update.
-
-**Fix: a ROM given for one run** (on the command line) no longer becomes the plugins' ROM too, and
-the Settings card fits a small panel.
-
-Your ROM, banks, settings and projects are not affected otherwise.
+Your ROM, banks, settings and projects are not affected.
 
 ## Please test
 
-If the Expanded still breaks up or goes silent, tell us in #75 and attach the log
-(`%APPDATA%\Animatek\G1-Emu\g1-emu.log` on Windows, `~/.local/share/Animatek/G1-Emu/g1-emu.log`
-on Linux and macOS), with your CPU and DAW.
+If you saw the `Unfinished bubble` error, send a few patches to the plugin and tell us in #81 if
+it is gone. If something else breaks up, attach the log (`%APPDATA%\Animatek\G1-Emu\g1-emu.log` on
+Windows, `~/.local/share/Animatek/G1-Emu/g1-emu.log` on Linux and macOS), with your CPU and DAW.
 
 ## Known
 

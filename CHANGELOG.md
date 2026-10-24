@@ -7,6 +7,8 @@ Older entries cite their commit by hand.
 
 ## 2026-10-24
 
+- [Docs] Claude: **release notes for v0.1.0-alpha.25** (`docs/release-notes.md`): the #81 fix and
+  the audio-path review and core fixes since alpha.24. Not tagged: the tag publishes the release.
 - [Test] Claude: **the Presets page's upload takes NME connecting in the middle** (task 1 of
   `docs/improvement-plan.md`, which feared #75's failure here too). `g1pchtest` now uploads into free
   places of bank 9 with no editor, with NME's greeting and a RequestPatch landing between two packets
