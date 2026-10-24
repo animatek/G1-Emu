@@ -46,6 +46,9 @@ namespace g1app
 		void upload(int _slot, std::vector<std::vector<uint8_t>> _frames, std::vector<uint8_t> _abort, int _bank, int _position);
 		struct UploadStatus { bool busy = false, ok = false; std::string message; uint64_t serial = 0; };
 		UploadStatus uploadStatus() const;
+		// A patch going in packet by packet: anything else sent to the PC Port meanwhile makes the OS
+		// drop it (#75, #81), so the editor's bytes wait (runner, EmuHost). Worker thread.
+		bool uploading() const { return m_state == State::Uploading; }
 
 		// A slot's MIDI controllers: which CC moves which parameter of its patch (its ControlMap),
 		// for the panel's knob menu. readControls() asks the OS for them (RequestPatch for the

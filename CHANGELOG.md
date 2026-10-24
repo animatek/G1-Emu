@@ -7,6 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-10-24
 
+- [Test] Claude: **the Presets page's upload takes NME connecting in the middle** (task 1 of
+  `docs/improvement-plan.md`, which feared #75's failure here too). `g1pchtest` now uploads into free
+  places of bank 9 with no editor, with NME's greeting and a RequestPatch landing between two packets
+  (6- and 8-packet patches via `G1_PCH`: the repo's own are one packet), and with those bytes held
+  until the upload ends. All three store the patch: the OS tolerates it for this upload, so nothing
+  holds the editor's bytes for the `PresetsLink` (step 1.2 not done); the case is a guard.
+  `PresetsLink::uploading()` added for it. Verified: `g1pchtest` with FM303, WindowLicker03 and
+  4VoiceChoir.
 - [Fix] Claude: **the settings' and presets' links keep out of an editor's upload** (#81). Only the `SlotKeeper` knew an editor was
   between the first and last packet of an upload; `SynthSettingsLink` (re-reads every 2 s) and
   `PresetsLink` waited just 500 ms (100 ms for a load) after the last whole message, so with

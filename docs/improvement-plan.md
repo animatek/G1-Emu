@@ -1,5 +1,9 @@
 # Improvement plan (2026-10-19)
 
+**Status (2026-10-24):** tasks 2a, 3a, 3b and 3c are done and merged, checked against the golden WAVs.
+Task 1 was reproduced in `g1pchtest` and is **not a bug**: the OS takes NME's greeting and a
+RequestPatch in the middle of a Presets upload, so step 1.2 is not needed. Tasks 2b, 4 and 5 are open.
+
 A code review of the core (`g1Lib/g1mc.cpp`, `g1Lib/g1dsp.cpp`), the plugin's runner, the audio
 bridge and the PC Port links found no serious faults, but a few things worth doing. This file is
 the step-by-step plan, written to be carried out by someone (or a model) who did not do the review.
