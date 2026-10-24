@@ -205,11 +205,18 @@ namespace g1app
 		// overflow the subtraction. Neither may reach the float-to-integer DSP input.
 		static float cleanInput(const float _v)
 		{
-			// Inspect IEEE-754 bits: Release uses fast-math, which can remove isfinite().
+			// Integer logic only: Release builds with -Ofast, where the compiler may assume there is
+			// no NaN or infinity, and on arm64 (macOS) a clamp of a NaN that was selected away came
+			// out as -1 (v0.1.0-alpha.25's CI). The float is only ever returned as it came or as +-1.
 			uint32_t bits;
 			static_assert(sizeof(bits) == sizeof(_v));
 			std::memcpy(&bits, &_v, sizeof(bits));
-			return (bits & 0x7f800000u) == 0x7f800000u ? 0.0f : std::clamp(_v, -1.0f, 1.0f);
+			const uint32_t magnitude = bits & 0x7fffffffu;
+			if(magnitude >= 0x7f800000u)		// infinity or NaN
+				return 0.0f;
+			if(magnitude >= 0x3f800000u)		// 1.0 and beyond, up to the largest finite value
+				return (bits & 0x80000000u) ? -1.0f : 1.0f;
+			return _v;
 		}
 
 		std::atomic<uint64_t> m_produced{0};

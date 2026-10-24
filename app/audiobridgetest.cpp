@@ -1,6 +1,8 @@
 #include "audiobridge.h"
 
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <limits>
 #include <thread>
@@ -57,9 +59,18 @@ int main()
 	{
 		g1app::AudioBridge bridge(1);
 		bridge.setRate(96000);
-		const float values[] = {std::numeric_limits<float>::quiet_NaN(),
-			std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(),
-			std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), 0.5f};
+		// Built from their bits: Release builds with -Ofast, under which a NaN or infinity written as a
+		// constant is undefined behavior for the compiler and may be folded to anything.
+		const auto fromBits = [](const uint32_t _bits)
+		{
+			volatile uint32_t held = _bits;
+			const uint32_t b = held;
+			float f;
+			std::memcpy(&f, &b, sizeof(f));
+			return f;
+		};
+		const float values[] = {fromBits(0x7fc00000u), fromBits(0x7f800000u), fromBits(0xff800000u),
+			fromBits(0x7f7fffffu), fromBits(0xff7fffffu), 0.5f};
 		const float expected[] = {0, 0, 0, 1, -1, 0.5f};
 		const float* inputs[] = {values};
 		if(render)

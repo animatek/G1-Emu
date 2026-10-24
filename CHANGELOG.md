@@ -7,9 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-10-24
 
-- [Tests] Claude: `g1audiobridgetest` says which input failed and what it got (the macOS job of
-  v0.1.0-alpha.25's CI failed "sanitized input" on arm64 only; x86 with gcc and clang, with and
-  without fast-math, passes). Diagnostic only; the release waits for the cause.
+- [Fix] Claude: **the audio bridge's input sanitizing, in integers only** (the macOS job of
+  v0.1.0-alpha.25's CI failed `g1audiobridgetest` on arm64: a NaN came out of the DSP input as
+  -1.0, not 0; x86 passes). Release builds with `-Ofast`, where float tests on NaN are undefined
+  for the compiler. `AudioBridge::cleanInput` now decides from the bits (infinity and NaN to 0,
+  magnitude from 1.0 up to +-1) and returns the float only as it came or as +-1. The test builds
+  its NaN and infinities from bits (a constant NaN is folded under `-Ofast`) and says which input
+  failed. Verified here: the test passes with gcc and clang at `-Ofast`, `-O3` and `-O0` on
+  x86; arm64 is checked by the CI's macOS job.
 - [Docs] Claude: **Patreon and Donate buttons** in the README ("Support the project") and a
   `.github/FUNDING.yml`, so GitHub shows its Sponsor button. No code changes.
 - [Docs] Claude: **release notes for v0.1.0-alpha.25** (`docs/release-notes.md`): the #81 fix and
