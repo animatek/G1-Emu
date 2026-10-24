@@ -7,6 +7,8 @@ Older entries cite their commit by hand.
 
 ## 2026-10-24
 
+- [Docs] Claude: **Patreon and Donate buttons** in the README ("Support the project") and a
+  `.github/FUNDING.yml`, so GitHub shows its Sponsor button. No code changes.
 - [Docs] Claude: **release notes for v0.1.0-alpha.25** (`docs/release-notes.md`): the #81 fix and
   the audio-path review and core fixes since alpha.24. Not tagged: the tag publishes the release.
 - [Test] Claude: **the Presets page's upload takes NME connecting in the middle** (task 1 of

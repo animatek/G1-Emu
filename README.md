@@ -411,6 +411,16 @@ version, system, audio and MIDI details already filled in. Say what you did, wha
 and what happened. **If a patch is involved, attach its `.pch`** (zipped if GitHub refuses it):
 the file you used, not its name ([why](#some-patches-do-not-sound-or-sound-strange)).
 
+## Support the project
+
+G1-Emu is free and open source, built in spare time, and the builds in Releases cost nothing. If it
+is useful to you and you want it to keep going:
+
+[![Patreon](https://img.shields.io/badge/Patreon-support-f96854?logo=patreon&logoColor=white)](https://www.patreon.com/c/animatek)
+[![Donate](https://img.shields.io/badge/Donate-PayPal-0070ba?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?hosted_button_id=YATW56VC46ENE)
+
+A donation is a thank-you: nothing is locked behind it.
+
 ## License and credits
 
 **Panel skin and GUI design by Mike Fiction.**
