@@ -259,8 +259,11 @@ namespace g1app
 				m_editorHeld.clear();
 			}
 			speak(m_keeper, m_settings, m_presets);
-			speak(m_settings, m_keeper, m_presets);
-			speak(m_presets, m_keeper, m_settings);
+			if(!(m_keeper && m_keeper->editorUploading(nowMs())))
+			{
+				speak(m_settings, m_keeper, m_presets);
+				speak(m_presets, m_keeper, m_settings);
+			}
 			bool midiIn = false;
 			while(const auto* e = m_events.front())
 			{

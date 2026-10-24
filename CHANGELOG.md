@@ -5,6 +5,18 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-10-24
+
+- [Fix] Claude: **the settings' and presets' links keep out of an editor's upload** (#81). Only the `SlotKeeper` knew an editor was
+  between the first and last packet of an upload; `SynthSettingsLink` (re-reads every 2 s) and
+  `PresetsLink` waited just 500 ms (100 ms for a load) after the last whole message, so with
+  slow ACKs a request could slip between two packets and the OS answers "Unfinished bubble"
+  (code 6). `SlotKeeper::editorUploading(now)` now gates them in the runner; it lapses after 30 s
+  of silence so an editor that vanished half way does not silence them for good. Verified:
+  new `g1uploadgaptest` (an upload with 1.5 s between packets while the settings' link wants
+  to read: without the gate the OS drops it and the last packet is never taken, with it the
+  upload completes), `g1slotkeepertest` (new checks) and `ctest -L g1` 16/16.
+
 ## 2026-10-19
 
 - [Fix/Performance] Codex: **audio bridge review** (local change, not committed). Sanitize

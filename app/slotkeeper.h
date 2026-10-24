@@ -57,6 +57,12 @@ namespace g1app
 		// nothing else may reach the OS, which drops an upload another message comes into half
 		// done (#75). The runner holds the editor's bytes meanwhile.
 		bool uploading() const { return m_state == State::Uploading; }
+		// Worker thread. True while an editor's upload is between its first packet and its last: the
+		// settings' and presets' links keep out of it too, however slow the acks are (#81: a request
+		// between two packets makes the OS answer "Unfinished bubble"). It lapses after EditorUploadMs
+		// of silence, so an editor that vanished half way does not silence them for good.
+		bool editorUploading(uint64_t _nowMs) const { return m_editorUploading && _nowMs < m_lastActivity + EditorUploadMs; }
+		static constexpr uint64_t EditorUploadMs = 30000;
 		// True while _slot's patch from a restore is still to go back in.
 		bool restoring(size_t _slot) const;
 

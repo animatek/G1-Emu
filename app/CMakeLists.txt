@@ -60,6 +60,12 @@ target_link_libraries(g1synthsettingstest PRIVATE g1Core)
 add_test(NAME g1synthsettingstest COMMAND g1synthsettingstest)
 set_tests_properties(g1synthsettingstest PROPERTIES TIMEOUT 300 LABELS g1 SKIP_RETURN_CODE 77)
 
+# An editor's upload with long waits between packets, with and without the settings' link kept out (#81).
+add_executable(g1uploadgaptest uploadgaptest.cpp)
+target_link_libraries(g1uploadgaptest PRIVATE g1Core)
+add_test(NAME g1uploadgaptest COMMAND g1uploadgaptest)
+set_tests_properties(g1uploadgaptest PROPERTIES TIMEOUT 600 LABELS g1 SKIP_RETURN_CODE 77)
+
 # A kept flash comes back without being formatted again (the OS's marks survive loadFlash).
 add_executable(g1flashkeeptest flashkeeptest.cpp)
 target_link_libraries(g1flashkeeptest PRIVATE g1Core)

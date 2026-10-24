@@ -261,7 +261,7 @@ int main()
 		const auto packets = g1app::SlotKeeper::uploadMessages(g_simpleOsc, 1);
 		size_t sent = 0, acked = 0;
 		std::vector<uint8_t> fromG1, toEditor, toG1;
-		bool waiting = false;
+		bool waiting = false, sawUploading = false;
 		for(uint64_t t = 0; t < 15000 && !(sent == packets.size() && !waiting && second.settled()); ++t)
 		{
 			if(!waiting && sent < packets.size())
@@ -270,6 +270,7 @@ int main()
 				second.editorSent(packets[sent], bench.nowMs());
 				++sent;
 				waiting = true;
+				sawUploading |= sent < packets.size() && second.editorUploading(bench.nowMs());
 			}
 			const auto end = mc.ucCycles() + g_ms;
 			while(mc.ucCycles() < end)
@@ -291,6 +292,11 @@ int main()
 		}
 		std::printf("     editor: %zu packets sent, %zu ACKs seen\n", sent, acked);
 		check(sent == packets.size() && acked >= packets.size(), "an editor's upload gets its ACKs through the keeper");
+		check(sawUploading && !second.editorUploading(bench.nowMs()), "the keeper says an editor's upload is on between its packets, and not after the last (#81)");
+		// An editor that vanishes half way does not keep the other links quiet for good.
+		g1app::SlotKeeper probe;
+		probe.editorSent(packets[0], 1000);
+		check(probe.editorUploading(1000 + g1app::SlotKeeper::EditorUploadMs - 1) && !probe.editorUploading(1000 + g1app::SlotKeeper::EditorUploadMs), "the wait for an editor's next packet lapses after 30 s of silence");
 		why.clear();
 		check(samePatch(g_simpleOsc, second.slots()[1].sections, why), "the keeper reads slot B after the editor's upload" + (why.empty() ? std::string() : " (" + why + ")"));
 	}
