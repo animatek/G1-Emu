@@ -236,18 +236,20 @@ updater. It is optional, done once per machine, and needs:
 
 Then:
 
-1. Start G1-Emu in update mode: `G1_UPDATE=1 ./g1gui.sh`. The display shows `Update utility`: the
-   G1 has no OS to run and waits for one. Your banks are not touched.
+1. Put G1-Emu in update mode: **Settings → OS... → Update mode**, which restarts it as a real G1
+   started with Shift + Store held (or start it with `G1_UPDATE=1 ./g1gui.sh`). The display shows
+   `Update utility`: the G1 waits for an OS. Your banks are not touched.
 2. Run the updater (`wine "Nord Modular OS v3.03b Update.exe"`) and choose **G1-Emu's PC Port** as
    its MIDI output and input. Follow its steps. The G1's display counts the percentage received
-   and ends with `Update completed`. Tick **Safe (Slower)** on the ports page: without it the
+   and asks `Update flash?`: press **Store** on the panel, and it ends with `Update completed`. Tick **Safe (Slower)** on the ports page: without it the
    updater sends faster than the G1 takes it in, and ends with "Dump error" while the G1 is still
    working (harmless, but confusing). If the updater complains before the G1 is done, let the G1
    finish: what counts is its display.
-3. Close G1-Emu. The OS that came in is kept in the data folder (`os/received-….bin`) and set as
+3. Restart the G1 with the power button at the bottom right, beside About (or close G1-Emu). The OS that came in is kept in the data folder (`os/received-….bin`) and set as
    `os =` in the settings, so the window, the console and the plugin all run it from then on.
 
-To go back to the factory OS, empty `os =` in the settings file. Two things to know: a DAW project
+To go back to the factory OS, **Settings → OS... → The ROM's own OS** (or empty `os =` in the
+settings file). Two things to know: a DAW project
 saved with one OS does not apply its G1 state under the other (it is kept as it is, nothing is
 lost), and the received OS is Clavia's, like the ROM: keep it to yourself.
 

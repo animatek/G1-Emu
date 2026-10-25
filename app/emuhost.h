@@ -79,6 +79,11 @@ namespace g1app
 		// flash-before-reset-<date>.bin. Not the factory patches: the ROM never had them (they came
 		// in a synth's flash and as Clavia's files), so empty is as far back as it goes.
 		void resetFlashOnRestart(const std::string& _from = {}) { m_resetFlash = true; m_resetFlashFrom = _from; }
+		// The next restart() boots into the boot ROM's update mode, as G1_UPDATE=1 does at start
+		// (and Shift+Store at power-on on a real G1). The restart after it leaves it, keeping the OS
+		// that came in, if any.
+		void updateModeOnRestart() { m_updateOnRestart = true; }
+		bool updateMode() const { return m_updateMode; }
 
 		// The G1. The panel (getLcd, ledRow, setButton, setAdc) can be used from another thread.
 		g1::Microcontroller& mc() { return m_engine->mc(); }
@@ -127,6 +132,7 @@ namespace g1app
 		PresetsLink m_presets;
 		MidiRouting m_midiRouting;	// the notes from the MIDI port, by each slot's octave shift
 		bool m_resetFlash = false;	// resetFlashOnRestart()
+		bool m_updateOnRestart = false;	// updateModeOnRestart()
 		std::string m_resetFlashFrom;
 		std::atomic<bool> m_selectedControllers{false};	// m_options's, for the thread that runs the G1
 		std::atomic<bool> m_octaveShift{false};			// as m_selectedControllers

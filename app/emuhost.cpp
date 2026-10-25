@@ -249,13 +249,15 @@ namespace g1app
 			auto& image = m_engine->mc().getFlash().data();
 			std::fill(image.begin() + 8, image.begin() + 12, uint8_t(0xff));
 			_log += "UPDATE MODE: the G1 waits for an OS update. Run Clavia's updater, choose this G1's PC Port as\n"
-				"its MIDI output and input, and close G1-Emu when the display says the update is complete.\n";
+				"its MIDI output and input, press Store when it asks, and restart or close G1-Emu when the display\n"
+				"says the update is complete.\n";
 		}
 	}
 
 	// Switching it off and on: the flash is saved and a new G1 boots from it, with the knobs where
 	// they were. The MIDI ports and the sound card stay open, so an editor keeps its connection.
-	// Never in update mode: a restart after an update is the first boot of the OS that came in.
+	// Not in update mode unless updateModeOnRestart() asked for it: a restart after an update is
+	// the first boot of the OS that came in.
 	bool EmuHost::restart(std::string& _log)
 	{
 		if(!running())
@@ -291,7 +293,7 @@ namespace g1app
 		for(size_t i = 0; i < adc.size(); ++i)
 			adc[i] = m_engine->mc().adc(static_cast<uint8_t>(i));
 		m_engine.reset();
-		boot(false, _log);
+		boot(std::exchange(m_updateOnRestart, false), _log);
 		for(size_t i = 0; i < adc.size(); ++i)
 			m_engine->mc().setAdc(static_cast<uint8_t>(i), adc[i]);
 

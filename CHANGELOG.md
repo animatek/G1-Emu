@@ -5,7 +5,19 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
-## 2026-10-24
+## 2026-10-25
+
+- [New] Claude: **update mode from the window**: Settings' "ROM's own OS..." button becomes
+  **OS...**, a menu with **Update mode (install an OS)...**, which restarts the G1 into its boot
+  ROM's update utility as `G1_UPDATE=1` does at start (and Shift + Store at power-on on a real
+  G1), and the ROM's own OS as before. `EmuHost::updateModeOnRestart()` asks the next restart for
+  it; the restart after it leaves it and keeps the OS that came in, as closing did. The dialog
+  and the README say where the power button is and that Store has to be pressed. Checked by
+  Javier and Claude on a copy of the flash: Settings → OS... → Update mode, the display at Update
+  utility, a 3.03b update sent to the PC Port (checksum answered right), Store, Update completed,
+  the power button: the OS kept as `os/received-...bin`, byte for byte the 3.03b, set as `os =`,
+  and the G1 booted it. `ctest`: the 17 G1-Emu tests pass (the six of the core's own are not
+  built here).
 
 - [Fix] Claude: **the audio bridge's input sanitizing, in integers only** (the macOS job of
   v0.1.0-alpha.25's CI failed `g1audiobridgetest` on arm64: a NaN came out of the DSP input as

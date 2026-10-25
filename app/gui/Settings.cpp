@@ -297,16 +297,29 @@ namespace g1gui
 			menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&m_banks));
 		};
 		addAndMakeVisible(m_banks);
-		m_romOs.setTooltip(o.os.empty() ? "The OS in use is the ROM's own already"
-			: juce::String("Run the OS in the ROM again instead of the updated one (") + o.os + ")");
-		m_romOs.setEnabled(!o.os.empty());
-		m_romOs.onClick = [this]
+		m_os.setTooltip("Install an OS through the PC Port, as on a real G1, or run the ROM's own again");
+		m_os.onClick = [this]
 		{
-			askThenRestart("The ROM's own OS", "The G1 restarts with the OS in the ROM instead of the updated one.\n\nThe updated OS "
-				"stays in its folder; a new update brings it back.", "Use the ROM's OS",
-				[this] { m_host.options().os.clear(); m_host.options().save(g1app::EmuHost::defaultSettingsPath()); });
+			juce::PopupMenu menu;
+			menu.addItem("Update mode (install an OS)...", !m_host.updateMode(), false, [this]
+			{
+				askThenRestart("Update mode", "The G1 restarts waiting for an OS, as a real G1 does with Shift + Store held at "
+					"power-on: the display says Update utility.\n\nSend the OS to the PC Port with Clavia's updater (tick Safe,"
+					" Slower). When the display asks Update flash?, press Store; at Update completed, "
+					"restart the G1 with the power button (bottom right, beside About) and it boots the new OS, kept in its "
+					"folder.\n\nYour banks are not touched. To leave without updating, use the power button as well.", "Restart in update mode",
+					[this] { m_host.updateModeOnRestart(); });
+			});
+			const auto& os = m_host.options().os;
+			menu.addItem(os.empty() ? juce::String("The ROM's own OS (in use)") : juce::String("The ROM's own OS..."), !os.empty(), os.empty(), [this]
+			{
+				askThenRestart("The ROM's own OS", "The G1 restarts with the OS in the ROM instead of the updated one.\n\nThe updated OS "
+					"stays in its folder; a new update brings it back.", "Use the ROM's OS",
+					[this] { m_host.options().os.clear(); m_host.options().save(g1app::EmuHost::defaultSettingsPath()); });
+			});
+			menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&m_os));
 		};
-		addAndMakeVisible(m_romOs);
+		addAndMakeVisible(m_os);
 
 		for(auto* l : {&m_running, &m_note})
 		{
@@ -531,7 +544,7 @@ namespace g1gui
 		m_noticeToggle.setBounds(240, g_bottomY + 1, 170, 26);
 		// Between the notice's and the card's Close.
 		m_banks.setBounds(430, g_bottomY + 1, 170, 26);
-		m_romOs.setBounds(610, g_bottomY + 1, 170, 26);
+		m_os.setBounds(610, g_bottomY + 1, 170, 26);
 	}
 
 	// A G1-Emu flash to bring back, from the folder the saved ones are in.
