@@ -7,6 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-10-25
 
+- [GUI] Claude: **a MOD sticker on the panel when the OS is not Clavia's as it came**: yellow,
+  by the G1 logo, a little askew. Which OS runs is told by the version it says in its IAm, read
+  from the instruction that builds it (`move.b #minor,(8,a2)`, `$10B288` in the ROM's factory OS,
+  `$20` higher in the 3.03b update: `g1Lib/g1osversion.h`); both of Clavia's say 3, so any other
+  minor is a modified OS. Read from RAM by the panel's timer, so the window and the plugin show it
+  alike, with no editor needed. Checked: the instruction read in the factory OS, the 3.03b update
+  and a modified image (3, 3 and 9); and by Javier on G1-Emu with a modified OS installed through
+  update mode: the sticker shows (screenshot).
 - [New] Claude: **update mode from the window**: Settings' "ROM's own OS..." button becomes
   **OS...**, a menu with **Update mode (install an OS)...**, which restarts the G1 into its boot
   ROM's update utility as `G1_UPDATE=1` does at start (and Shift + Store at power-on on a real

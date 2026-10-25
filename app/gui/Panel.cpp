@@ -5,6 +5,7 @@
 #include "g1Lib/g1format.h"
 #include "G1Skin.h"
 #include "hostlog.h"
+#include "g1Lib/g1osversion.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1634,6 +1635,26 @@ namespace g1gui
 		shadowAt(g_masterKnob);
 		for(const auto& c : g_knobs)
 			shadowAt(c);
+
+		// A modified OS (one that says another version than Clavia's 3.03) gets a sticker by the
+		// logo, stuck on a little askew, as one would on a real synth.
+		if(m_osModified)
+		{
+			const auto r = skf(300, 960, 220, 104);
+			juce::Graphics::ScopedSaveState state(_g);
+			_g.addTransform(juce::AffineTransform::rotation(-0.10f, r.getCentreX(), r.getCentreY()));
+			_g.setColour(juce::Colours::black.withAlpha(0.35f));
+			_g.fillRoundedRectangle(r.translated(2.0f, 3.0f), 6.0f);
+			_g.setColour(juce::Colours::white);
+			_g.fillRoundedRectangle(r, 6.0f);
+			const auto inner = r.reduced(3.0f);
+			_g.setColour(juce::Colour(0xffffcc00));
+			_g.fillRoundedRectangle(inner, 4.0f);
+			_g.setColour(juce::Colour(0xff1a1a1a));
+			_g.drawRoundedRectangle(inner.reduced(2.0f), 3.0f, 1.5f);
+			_g.setFont(juce::FontOptions(inner.getHeight() * 0.62f, juce::Font::bold));
+			_g.drawText("MOD", inner, juce::Justification::centred, false);
+		}
 	}
 
 	void ExtrasDrawer::paint(juce::Graphics& _g)
@@ -2455,6 +2476,11 @@ namespace g1gui
 		for(size_t i = 0; i < m_octLeds.size(); ++i)
 			m_octLeds[i]->setOn(static_cast<int>(i) - g1app::MidiRouting::MaxShift == octave);
 		showOctaveShift();	// a project's state may have changed it
+		if(const bool modified = g1::osModified(m_mc); modified != m_osModified)
+		{
+			m_osModified = modified;
+			repaint();
+		}
 		updateLearn();
 		updateStatus();
 	}

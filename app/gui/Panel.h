@@ -459,6 +459,7 @@ namespace g1gui
 		PanelButton* m_octDown = nullptr;
 		PanelButton* m_octUp = nullptr;
 		std::array<LedView*, 5> m_octLeds{};	// -2 to +2: the active slot's octave shift
+		bool m_osModified = false;				// the OS is not Clavia's as it came (g1osversion.h): the MOD sticker
 		bool m_octaveShown = true;				// the OCT SHIFT art, keys and LEDs not greyed out: the host's Octave Shift On
 		std::array<PanelButton*, 4> m_modeButtons{};	// Store, System, Edit, Patch/Load
 		std::array<LedView*, 4> m_modeLeds{};
