@@ -40,7 +40,7 @@ namespace g1app
 		}
 	}
 
-	Engine::Engine(const std::vector<uint8_t>& _rom, const std::vector<uint8_t>& _os, const uint32_t _dspCount) : m_mc(std::make_unique<g1::Microcontroller>(_rom, _dspCount))
+	Engine::Engine(const std::vector<uint8_t>& _rom, const std::vector<uint8_t>& _os, const uint32_t _dspCount, const bool _threaded) : m_mc(std::make_unique<g1::Microcontroller>(_rom, _dspCount, _threaded))
 	{
 		m_customOs = !_os.empty() && m_mc->installOsInFlash(_os);
 		if(!m_customOs)

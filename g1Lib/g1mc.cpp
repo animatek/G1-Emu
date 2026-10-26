@@ -35,7 +35,7 @@ namespace
 
 namespace g1
 {
-	Microcontroller::Microcontroller(const std::vector<uint8_t>& _rom, const uint32_t _dspCount) : m_mem(g_memSize, 0), m_dspCount(_dspCount > g_regularDsps ? g_expandedDsps : g_regularDsps), m_sci(getQSM(), static_cast<float>(g_sciRate))
+	Microcontroller::Microcontroller(const std::vector<uint8_t>& _rom, const uint32_t _dspCount, const bool _threaded) : m_mem(g_memSize, 0), m_dspCount(_dspCount > g_regularDsps ? g_expandedDsps : g_regularDsps), m_sci(getQSM(), static_cast<float>(g_sciRate))
 	{
 		std::copy_n(_rom.begin(), std::min<size_t>(_rom.size(), g_romSize), m_mem.begin());
 		for(uint32_t i = 0; i < m_dspCount; ++i)
@@ -53,6 +53,7 @@ namespace g1
 		getPortE().setWriteTXCallback([this](const mc68k::Port& _port) { onPortE(_port.read()); });
 		reset();	// reads the stack and the PC from the vectors at $0 and $4
 
+		m_threaded = _threaded;
 		if(const char* t = std::getenv("G1_THREADS"))
 			m_threaded = std::atoi(t) != 0;
 		m_benchEnabled = std::getenv("G1_BENCH") != nullptr;
