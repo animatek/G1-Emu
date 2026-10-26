@@ -32,12 +32,14 @@ namespace g1plugin
 	{
 		stopTimer();
 		m_panel.reset();
+		m_micro.reset();
 		m_processor.savePreferences();	// the size it was left at, for the next new instance
 	}
 
 	void Editor::engineGoing()
 	{
 		m_panel.reset();
+		m_micro.reset();
 		m_engine = nullptr;
 		m_generation = -1;
 	}
@@ -51,6 +53,7 @@ namespace g1plugin
 	void Editor::rebuild()
 	{
 		m_panel.reset();
+		m_micro.reset();
 		m_generation = m_processor.generation();
 		m_engine = m_processor.engine();
 
@@ -70,6 +73,17 @@ namespace g1plugin
 			resized();
 			return;
 		}
+		// The Micro Modular model has a box of its own, at one size.
+		if(m_engine->mc().dspCount() == g1::g_microDsps)
+		{
+			m_micro = std::make_unique<g1gui::MicroPanel>(static_cast<g1gui::PanelHost&>(*this));
+			const auto aspect = static_cast<double>(g1gui::MicroPanel::Width) / g1gui::MicroPanel::Height;
+			getConstrainer()->setFixedAspectRatio(aspect);
+			getConstrainer()->setSizeLimits(g1gui::MicroPanel::Width, g1gui::MicroPanel::Height, g1gui::MicroPanel::Width, g1gui::MicroPanel::Height);
+			addAndMakeVisible(*m_micro);
+			setSize(g1gui::MicroPanel::Width, g1gui::MicroPanel::Height);
+			return;
+		}
 		m_panel = std::make_unique<g1gui::PanelView>(static_cast<g1gui::PanelHost&>(*this));
 		m_panel->onAspectChanged = [this] { fitTo(m_panel->aspectRatio()); };
 		fitTo(m_panel->aspectRatio());
@@ -86,6 +100,8 @@ namespace g1plugin
 	{
 		if(m_panel)
 			m_panel->setBounds(getLocalBounds());	// the host's size or the corner's: the panel scales to it
+		if(m_micro)
+			m_micro->setBounds(getLocalBounds());
 		auto area = getLocalBounds().reduced(24);
 		auto buttons = area.removeFromBottom(32);
 		m_pickRom.setBounds(buttons.removeFromRight(200));
@@ -154,18 +170,23 @@ namespace g1plugin
 		class InstanceView : public juce::Component
 		{
 		public:
-			InstanceView(juce::RangedAudioParameter& _gain, const juce::String& _instance, const bool _expanded, std::function<void(bool)> _setExpanded)
+			InstanceView(juce::RangedAudioParameter& _gain, const juce::String& _instance, const Processor::Model _model, std::function<void(Processor::Model)> _setModel)
 				: m_gainAttachment(_gain, m_gain)
 			{
-				// Regular or Expanded (8 DSPs, about twice the voices): a new G1, so the change
-				// restarts it, keeping the project's patches as a restart does.
+				// Regular, Expanded (8 DSPs, about twice the voices) or Micro Modular (one DSP, its own
+				// OS): a new G1, so the change restarts it, keeping the project's patches as a restart does.
 				label(m_modelLabel, "Model");
 				m_model.addItem("Regular  (4 DSPs)", 1);
 				m_model.addItem("Expanded  (8 DSPs, twice the voices)", 2);
-				m_model.setSelectedId(_expanded ? 2 : 1, juce::dontSendNotification);
-				m_model.setTooltip("The G1 with or without the expansion board. Changing it restarts the G1; "
+				m_model.addItem("Micro Modular  (1 DSP, its own OS)", 3);
+				m_model.setSelectedId(_model == Processor::Model::Micro ? 3 : _model == Processor::Model::Expanded ? 2 : 1, juce::dontSendNotification);
+				m_model.setTooltip("The G1 with or without the expansion board, or the Micro Modular (one DSP, light on the CPU; "
+					"needs Clavia's Micro OS updater in the ROM folder). Changing it restarts the G1; "
 					"the project's patches and settings stay, what is in the slots and not stored is kept with the project");
-				m_model.onChange = [this, set = std::move(_setExpanded)] { set(m_model.getSelectedId() == 2); };
+				m_model.onChange = [this, set = std::move(_setModel)]
+				{
+					set(m_model.getSelectedId() == 3 ? Processor::Model::Micro : m_model.getSelectedId() == 2 ? Processor::Model::Expanded : Processor::Model::Regular);
+				};
 				addAndMakeVisible(m_model);
 
 				label(m_gainLabel, "Output level");
@@ -228,10 +249,10 @@ namespace g1plugin
 	std::unique_ptr<juce::Component> Editor::createSettings()
 	{
 		// The restart replaces this panel, so it comes later, on the message thread (as restart()).
-		return std::make_unique<InstanceView>(m_processor.gainParameter(), juce::String(m_processor.describe()), m_processor.expanded(),
-			[e = juce::Component::SafePointer<Editor>(this)](const bool _on)
+		return std::make_unique<InstanceView>(m_processor.gainParameter(), juce::String(m_processor.describe()), m_processor.model(),
+			[e = juce::Component::SafePointer<Editor>(this)](const Processor::Model _model)
 			{
-				juce::MessageManager::callAsync([e, _on] { if(e) e->m_processor.setExpanded(_on); });
+				juce::MessageManager::callAsync([e, _model] { if(e) e->m_processor.setModel(_model); });
 			});
 	}
 }

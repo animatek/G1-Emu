@@ -7,6 +7,18 @@ Older entries cite their commit by hand.
 
 ## 2026-10-26
 
+- [New] Claude: **the Micro Modular model in the plugin**: one G1-Emu VST3 is a Regular, an Expanded or a
+  Micro, picked in its Settings (Model) and saved with the project (`model="micro"`), so there are not two
+  plugins. A Micro instance runs the Micro's OS on one DSP (found as in the standalone; without it the
+  instance runs as a Regular one and Settings says so), starts from its own flash (`flash-micro.bin`) and
+  shows the Micro's box (`MicroPanel`, 640 x 360, one size) instead of the rack's panel. `Processor::Model`
+  replaces the Expanded flag (`setModel`); a new instance takes the last model chosen, as before. Checked:
+  `g1vst3check` with `G1_MODEL=micro` plays the Micro (-39.8 dBFS), a project's state restored into a new
+  instance gives the same level and latency (784 frames), the editor is the box (640 x 360) and the knob and
+  volume parameters hold; `g1runnertest-micro` (new): bit-identical output between block sizes. Not checked:
+  the editor's PC Port and the slots (`--slots`) on a Micro, because this machine's `g1vst3check` finds no
+  virtual PC Port even for a Regular; a patch loaded from NME into a Micro instance. Local change, not committed.
+
 - [Fix] Claude: **on the Micro model the Micro's OS wins over `os =`**: a settings file whose `os =` names a
   rack OS (an update, a modified image from update mode) made the Micro model boot that rack OS on one
   DSP: silence, and a rack's IAm (device byte 1) where NME looks for the Micro's 2. Only `G1_OS`, for one

@@ -4,6 +4,7 @@
 
 #include "hostlog.h"
 #include "romfinder.h"
+#include "osimage.h"
 #include "g1Lib/g1format.h"
 
 #include <algorithm>
@@ -15,6 +16,23 @@
 
 namespace g1plugin
 {
+	namespace
+	{
+		Processor::Model modelOf(const g1app::HostOptions& _o)
+		{
+			const auto dsps = _o.dspCount();	// the settings, or G1_MODEL, which wins
+			return dsps == g1::g_microDsps ? Processor::Model::Micro : dsps > g1::g_regularDsps ? Processor::Model::Expanded : Processor::Model::Regular;
+		}
+		Processor::Model modelFromString(const juce::String& _s)
+		{
+			return _s == "micro" ? Processor::Model::Micro : _s == "expanded" ? Processor::Model::Expanded : Processor::Model::Regular;
+		}
+		const char* modelToString(const Processor::Model _m)
+		{
+			return _m == Processor::Model::Micro ? "micro" : _m == Processor::Model::Expanded ? "expanded" : "regular";
+		}
+	}
+
 	namespace
 	{
 		constexpr const char* g_stateTag = "G1EmuState";
@@ -215,7 +233,7 @@ namespace g1plugin
 		m_extrasOpen = o.extrasOpen;
 		m_knobDisplays = o.knobDisplays;
 		m_knobFollowsPatch = o.knobFollowsPatch;
-		m_expanded = o.expanded;
+		m_model = modelOf(o);
 		m_randomExclude = o.randomExclude;
 
 		std::ifstream f(preferencesPath());
@@ -240,9 +258,8 @@ namespace g1plugin
 		o.extrasOpen = m_extrasOpen;
 		o.knobDisplays = m_knobDisplays;
 		o.knobFollowsPatch = m_knobFollowsPatch;
-		o.expanded = m_expanded;
-		if(m_expanded)
-			o.micro = false;	// the plugin has no Micro yet: its Expanded must not leave the file saying Micro
+		o.expanded = m_model == Model::Expanded;
+		o.micro = m_model == Model::Micro;
 		o.randomExclude = m_randomExclude;
 		o.save(g1app::defaultSettingsPath());
 
@@ -392,8 +409,31 @@ namespace g1plugin
 		// The model is the project's: one saved before there was a choice ran on a Regular.
 		if(_state)
 			if(const auto xml = getXmlFromBinary(_state->getData(), static_cast<int>(_state->getSize())); xml && xml->hasTagName(g_stateTag))
-				m_expanded = xml->getStringAttribute("model") == "expanded";
-		auto engine = std::make_unique<g1app::Engine>(m_rom, m_os, m_expanded ? g1::g_expandedDsps : g1::g_regularDsps);
+				m_model = modelFromString(xml->getStringAttribute("model"));
+		// The Micro runs its own OS (not the rack's `os =`) on one DSP; without it, this instance is a
+		// Regular one and says so (microNote), as the standalone does.
+		auto os = m_os;
+		auto dsps = m_model == Model::Expanded ? g1::g_expandedDsps : g1::g_regularDsps;
+		m_microNote.clear();
+		m_microFallback = false;
+		if(m_model == Model::Micro)
+		{
+			g1app::HostOptions options;
+			options.load(g1app::defaultSettingsPath());
+			g1app::OsImage image;
+			if(const char* env = std::getenv("G1_OS"); env && g1app::readOsFile(env, image, m_microNote))
+				m_microNote = std::string("OS: ") + env;
+			else if(!g1app::findMicroOs(options.microOs, image, m_microNote))
+				image = {};
+			if(!image.bytes.empty())
+			{
+				os = std::move(image.bytes);
+				dsps = g1::g_microDsps;
+			}
+			else
+				m_microFallback = true;
+		}
+		auto engine = std::make_unique<g1app::Engine>(m_rom, os, dsps);
 		m_keeper = std::make_unique<g1app::SlotKeeper>();
 		m_synthSettings.reset();
 		m_pendingSettings.reset();
@@ -446,7 +486,11 @@ namespace g1plugin
 	// A new instance's banks: a copy of the standalone's flash, or the factory's.
 	void Processor::startFromStandalone(g1app::Engine& _engine)
 	{
-		const juce::File flash(g1app::defaultFlashPath());
+		// The Micro has its own flash, apart from the rack's.
+		auto flashPath = std::filesystem::path(g1app::defaultFlashPath());
+		if(_engine.mc().dspCount() == g1::g_microDsps)
+			flashPath = flashPath.parent_path() / "flash-micro.bin";
+		const juce::File flash(flashPath.string());
 		juce::MemoryBlock data;
 		if(flash.existsAsFile() && flash.loadFileAsData(data) && _engine.loadFlash(toBytes(data)))
 			m_origin = "a copy of the standalone's flash (" + flash.getFullPathName().toStdString() + ")";
@@ -710,7 +754,7 @@ namespace g1plugin
 		xml.setAttribute("knobDisplays", m_knobDisplays);
 		xml.setAttribute("panelScale", static_cast<double>(m_panelScale));
 		xml.setAttribute("knobFollowsPatch", m_knobFollowsPatch);
-		xml.setAttribute("model", m_expanded ? "expanded" : "regular");
+		xml.setAttribute("model", modelToString(m_model));
 		xml.setAttribute("midiCcSelectedSlots", m_selectedControllers);
 		xml.setAttribute("octaveShift", m_octaveShift);
 		xml.setAttribute("randomExclude", juce::String(g1app::knobListToString(m_randomExclude)));
@@ -725,7 +769,7 @@ namespace g1plugin
 		m_knobDisplays = _xml.getBoolAttribute("knobDisplays", m_knobDisplays);
 		m_panelScale = static_cast<float>(_xml.getDoubleAttribute("panelScale", m_panelScale));
 		m_knobFollowsPatch = _xml.getBoolAttribute("knobFollowsPatch", m_knobFollowsPatch);
-		m_expanded = _xml.getStringAttribute("model") == "expanded";
+		m_model = modelFromString(_xml.getStringAttribute("model"));
 		// A project from before this parameter existed has no attribute: the fixed 36 dB it ran
 		// with, not the new default, so its mix does not jump 12 dB.
 		m_gainParam->setValueNotifyingHost(m_gainParam->convertTo0to1(
@@ -864,9 +908,9 @@ namespace g1plugin
 		_dest = snapshotState();
 	}
 
-	void Processor::setExpanded(const bool _on)
+	void Processor::setModel(const Model _m)
 	{
-		if(std::exchange(m_expanded, _on) == _on)
+		if(std::exchange(m_model, _m) == _m)
 			return;
 		savePreferences();
 		restart();	// the state now says the new model, and the new G1 is built from it
@@ -1247,11 +1291,20 @@ namespace g1plugin
 		return s;
 	}
 
+	std::string Processor::microNote()
+	{
+		std::lock_guard<std::mutex> lock(m_lifecycle);
+		return (m_microFallback ? "not found, so this instance runs as a Regular one: " : "") + m_microNote;
+	}
+
 	std::string Processor::describe()
 	{
 		std::lock_guard<std::mutex> lock(m_lifecycle);
 		std::string d = "ROM: " + (m_romPath.empty() ? std::string("none") : m_romPath) + "\n";
-		d += std::string("Model: ") + (m_expanded ? "Expanded (8 DSPs)" : "Regular (4 DSPs)") + "\n";
+		d += std::string("Model: ") + (m_model == Model::Micro && !m_microFallback ? "Micro Modular (1 DSP)"
+			: m_model == Model::Expanded ? "Expanded (8 DSPs)" : "Regular (4 DSPs)") + "\n";
+		if(m_model == Model::Micro)
+			d += (m_microFallback ? "Micro OS: not found, so this instance runs as a Regular one. " : "") + m_microNote + "\n";
 		if(m_runner)
 		{
 			char buf[160];

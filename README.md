@@ -212,7 +212,7 @@ want to hear about it.
   Settings' **Micro OS** at Clavia's Micro Modular OS updater (the `.exe`; it is read as it is, nothing to
   extract) or leave it in the ROM folder. It has its own box (volume, three edit knobs and the
   two-digit display; its buttons are not there yet) and its own flash (`flash-micro.bin`). Start or
-  Restart to switch (`model = micro`, `G1_MODEL=micro`). Not in the plugin yet.
+  Restart to switch (`model = micro`, `G1_MODEL=micro`). The plugin has it too, in its Settings, so one plugin is a G1 or a Micro.
 - **Settings** (in the window): the ROM, the model, audio driver and device, output level, whether outputs 1/2
   connect themselves, the raw MIDI card, and the notice above. The console reads the same settings;
   the `G1_*` environment variables win over them.
@@ -279,7 +279,7 @@ with its submodules in `~/src/clap-juce-extensions` (or `-DG1_CLAP_DIR=...`); wi
 VST3 is built.
 
 - **Outputs 1/2 and 3/4** as two stereo buses, and **In L/R** as an optional input.
-- **Regular or Expanded** in the plugin's Settings, saved with the project: changing it restarts
+- **Regular, Expanded or Micro Modular** in the plugin's Settings, saved with the project (the Micro needs Clavia's Micro OS updater in the ROM folder, as in the standalone; it has its own box and its own flash, `flash-micro.bin`): changing it restarts
   that instance's G1, which keeps its patches. A new instance takes the last model chosen.
 - **G1-Emu FX** is the same G1 as an effect, to put on an audio track: its **In L/R** is on from the
   start and feeds the G1's two inputs, so a patch with the Audio In module processes the track. It

@@ -33,7 +33,7 @@ function(g1_add_plugin _target _name _code _fx)
 		FORMATS VST3)
 
 	target_sources(${_target} PRIVATE Processor.cpp Processor.h Editor.cpp Editor.h runner.cpp runner.h
-		../gui/Panel.cpp ../gui/Panel.h ../gui/SynthSettingsView.cpp ../gui/SynthSettingsView.h ../gui/Overlay.cpp ../gui/Overlay.h ../gui/LcdFont.h)
+		../gui/Panel.cpp ../gui/Panel.h ../gui/MicroPanel.cpp ../gui/MicroPanel.h ../gui/SynthSettingsView.cpp ../gui/SynthSettingsView.h ../gui/Overlay.cpp ../gui/Overlay.h ../gui/LcdFont.h)
 	target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ../gui)
 	target_compile_definitions(${_target} PUBLIC
 		G1_BUILD_VERSION="${g1_build_version}"
@@ -86,7 +86,9 @@ target_link_libraries(g1runnertest PRIVATE g1Core)
 add_test(NAME g1runnertest COMMAND g1runnertest)
 add_test(NAME g1runnertest-expanded COMMAND g1runnertest)
 set_tests_properties(g1runnertest-expanded PROPERTIES ENVIRONMENT G1_MODEL=expanded)
-set_tests_properties(g1runnertest g1runnertest-expanded PROPERTIES TIMEOUT 300 LABELS g1 SKIP_RETURN_CODE 77)
+add_test(NAME g1runnertest-micro COMMAND g1runnertest)
+set_tests_properties(g1runnertest-micro PROPERTIES ENVIRONMENT G1_MODEL=micro)
+set_tests_properties(g1runnertest g1runnertest-expanded g1runnertest-micro PROPERTIES TIMEOUT 300 LABELS g1 SKIP_RETURN_CODE 77)
 
 # The runner when the DSP JIT cannot generate a block (#17): one failure it recovers from, and a
 # JIT that keeps failing, which must give silence and not hang or crash. Needs a ROM.

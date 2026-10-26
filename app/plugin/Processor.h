@@ -171,11 +171,16 @@ namespace g1plugin
 		float panelScale() const { return m_panelScale; }
 		void setPanelScale(float _scale) { if(std::abs(std::exchange(m_panelScale, _scale) - _scale) > 0.002f) stateChanged(); }
 		void savePreferences() const;
-		// Regular (4 DSPs) or Expanded (8, the expansion board): the project's, and a new instance
-		// takes the last one chosen. A change restarts the G1, which keeps what restart() keeps.
-		// On the message thread, and not from inside the panel, which the restart replaces.
-		bool expanded() const { return m_expanded; }
-		void setExpanded(bool _on);
+		// Regular (4 DSPs), Expanded (8, the expansion board) or Micro Modular (1 DSP, its own OS): the
+		// project's, and a new instance takes the last one chosen. A change restarts the G1, which
+		// keeps what restart() keeps. On the message thread, and not from inside the panel, which the
+		// restart replaces.
+		enum class Model { Regular, Expanded, Micro };
+		Model model() const { return m_model; }
+		void setModel(Model _m);
+		// What happened to the Micro's OS when this instance was made: which one runs, or why the
+		// instance runs as a Regular instead. Empty on the other models.
+		std::string microNote();
 
 	private:
 		void stateChanged() { updateHostDisplay(juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged(true)); }
@@ -309,7 +314,9 @@ namespace g1plugin
 		juce::AudioBuffer<float> m_inputs;		// the inputs, copied before the outputs overwrite them
 
 		bool m_extrasOpen = false, m_knobDisplays = false, m_knobFollowsPatch = false;
-		bool m_expanded = false;
+		Model m_model = Model::Regular;
+		std::string m_microNote;			// m_lifecycle: the Micro's OS in use, or why there is none
+		bool m_microFallback = false;		// the model is Micro and this instance runs as a Regular for want of its OS
 		bool m_selectedControllers = false;		// MIDI CC Mode on Selected Slots: given to each runner
 		bool m_octaveShift = false;				// Octave Shift On: given to each runner
 		uint32_t m_randomExclude = 0;			// the knobs Random leaves alone: bit k for knob k + 1

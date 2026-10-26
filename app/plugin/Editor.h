@@ -4,6 +4,7 @@
 // show, why not: no ROM (with the way to give it one), or the host has not started the audio yet.
 
 #include "Panel.h"
+#include "MicroPanel.h"
 #include "engine.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -67,6 +68,7 @@ namespace g1plugin
 		g1app::Engine* m_engine = nullptr;
 		int m_generation = -1;
 		std::unique_ptr<g1gui::PanelView> m_panel;	// the panel, at the size the user gave the window
+		std::unique_ptr<g1gui::MicroPanel> m_micro;	// instead of it, on the Micro Modular model: one size
 
 		// Shown instead of the panel while there is no G1.
 		juce::Label m_message;
