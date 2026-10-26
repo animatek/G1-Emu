@@ -7,6 +7,13 @@ Older entries cite their commit by hand.
 
 ## 2026-10-26
 
+- [Fix] Claude: **the tests no longer take the model from the user's settings.** Eight tests read
+  `settings.conf` for the ROM and took `model` with it: left on `micro`, they handed a 4-DSP G1 the
+  Micro's OS, which waited for ever logging every read of `$FFF921`; ctest kept that output, filled
+  32 GB of RAM and 26 GB of swap, and the system killed the terminal (twice, 2026-10-26). They now
+  clear `expanded` and `micro` after loading the file; `G1_MODEL` still picks a model (the
+  `-expanded` and `-micro` runs). Checked: every test (7-25) with the settings on `micro`, each in
+  its own systemd scope capped at 6 GB: all pass, the biggest at 1 GB.
 - [Fix] Claude: **the plugin's slot keeper on a Micro**: it asked for the four slots, and a Micro asked for
   slot B stops answering on its PC Port, so the keeper never settled and an editor got nothing through
   (NME did not find the Micro in Bitwig, while the standalone found it). It now asks for, restores and

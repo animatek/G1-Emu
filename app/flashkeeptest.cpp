@@ -44,6 +44,9 @@ int main()
 {
 	g1app::HostOptions options;
 	options.load(g1app::defaultSettingsPath());
+	// The settings give the ROM, not the model: one left on the Micro would hand a 4-DSP G1 the Micro's
+	// OS, which then waits for ever (filling memory with its log). G1_MODEL still picks one.
+	options.expanded = options.micro = false;
 	if(const char* v = std::getenv("G1_ROM"))
 		options.rom = v;
 	const auto search = g1app::findRom({}, options.rom);
