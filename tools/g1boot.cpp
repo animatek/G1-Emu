@@ -59,7 +59,7 @@ int main(int argc, char** argv)
 	}
 	// G1_MODEL=expanded: the 8 DSPs of the expansion board.
 	const char* model = std::getenv("G1_MODEL");
-	g1::Microcontroller mc(rom, model && std::string(model) == "expanded" ? g1::g_expandedDsps : g1::g_regularDsps);
+	g1::Microcontroller mc(rom, model && std::string(model) == "expanded" ? g1::g_expandedDsps : model && std::string(model) == "micro" ? g1::g_microDsps : g1::g_regularDsps);
 	mc.setHostTrace(true);	// before the first instruction: the report reads the trace from the start
 
 	// g1boot ROM dis FROM TO: disassembles (hex addresses)
@@ -76,7 +76,16 @@ int main(int argc, char** argv)
 	}
 
 	const uint64_t steps = (argc > 2 ? std::stoull(argv[2]) : 20) * 1000000ull;
-	mc.installRomOsInFlash();
+	// G1_OS=image: that OS (Clavia's update, the Micro's) instead of the ROM's.
+	bool osImage = false;
+	if(const char* osPath = std::getenv("G1_OS"))
+	{
+		std::ifstream of(osPath, std::ios::binary);
+		const std::vector<uint8_t> os((std::istreambuf_iterator<char>(of)), std::istreambuf_iterator<char>());
+		osImage = mc.installOsInFlash(os);
+	}
+	if(!osImage)
+		mc.installRomOsInFlash();
 	// G1_FLASH=file: boot with that flash (patch storage, settings) instead of an empty one, with
 	// the ROM's OS put over its own, as the standalone does (Engine::useOwnOs).
 	if(const char* fl = std::getenv("G1_FLASH"))
@@ -136,6 +145,9 @@ int main(int argc, char** argv)
 			mc.setAdc(code, static_cast<uint8_t>(std::stoul(all, nullptr, 16)));
 	if(const char* mux = std::getenv("G1_ADCMUX"))
 		mc.setAdc(static_cast<uint8_t>(std::stoul(mux, nullptr, 16)), 0xff);
+	// G1_PORTF=value (hex): what the 68331's port F reads (the Micro's buttons, it seems).
+	if(const char* pf = std::getenv("G1_PORTF"))
+		mc.getPortF().writeRX(static_cast<uint8_t>(std::stoul(pf, nullptr, 16)));
 	std::printf("reset: PC=$%06x SP=$%06x\n", mc.getPC(), mc.getAReg(7));
 	std::fflush(stdout);
 
@@ -610,6 +622,21 @@ int main(int argc, char** argv)
 	printChipSelects(mc);
 	std::printf("\nflash: %u bytes programmed, %u sectors erased\n", mc.getFlash().programmedBytes(), mc.getFlash().erasedSectors());
 
+	if(mc.dspCount() == g1::g_microDsps)
+		std::printf("Micro display: digit1 %02x digit2 %02x\n", mc.microDigit(0), mc.microDigit(1));
+	// G1_DISAFTER="from to": disassembles that range of RAM after the run (the OS runs from $100000).
+	if(const char* da = std::getenv("G1_DISAFTER"))
+	{
+		unsigned from = 0, to = 0;
+		std::sscanf(da, "%x %x", &from, &to);
+		for(uint32_t pc = from; pc < to;)
+		{
+			char dis[128];
+			const auto len = mc.disassemble(pc, dis);
+			std::printf("$%06x  %s\n", pc, dis);
+			pc += len ? len : 2;
+		}
+	}
 	std::printf("\naccesses to unknown hardware (%zu addresses, ROM writes: %u):\n",
 		mc.unknownAccesses().size(), mc.romWrites());
 	int shown = 0;

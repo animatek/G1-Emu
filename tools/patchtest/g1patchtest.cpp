@@ -277,10 +277,13 @@ int main(int argc, char** argv)
 		std::fprintf(stderr, "the ROM must be 512 KB\n");
 		return 1;
 	}
-	// G1_MODEL=expanded: the 8 DSPs of the expansion board.
+	// G1_MODEL=expanded: the 8 DSPs of the expansion board; G1_MODEL=micro: the Micro's one (with its own G1_OS).
 	const char* model = std::getenv("G1_MODEL");
-	g1::Microcontroller mc(rom, model && std::string(model) == "expanded" ? g1::g_expandedDsps : g1::g_regularDsps);
+	g1::Microcontroller mc(rom, model && std::string(model) == "expanded" ? g1::g_expandedDsps : model && std::string(model) == "micro" ? g1::g_microDsps : g1::g_regularDsps);
 	mc.setBenchEnabled(bench);
+	// G1_ADCALL=value (hex): every ADC channel at that value from power-on (the Micro's volume is not on the rack's channel).
+	if(const char* all = std::getenv("G1_ADCALL"))
+		mc.setAdc(static_cast<uint8_t>(std::stoul(all, nullptr, 16)));
 	// G1_OS=image: run that OS (Clavia's 3.03b update) instead of the ROM's factory one.
 	bool osImage = false;
 	if(const char* osPath = std::getenv("G1_OS"))
@@ -906,6 +909,15 @@ int main(int argc, char** argv)
 	{
 		const auto ch = static_cast<uint8_t>((std::atoi(mn) - 1) & 0x0f);
 		mc.getSci().write({static_cast<uint8_t>(0x90 | ch), static_cast<uint8_t>(note), 100});
+	}
+	// G1_MIDIRAW="b0 07 7f": these bytes go in through the MIDI port before the measurement.
+	if(const char* raw = std::getenv("G1_MIDIRAW"))
+	{
+		std::vector<uint8_t> bytes;
+		for(const auto& t : juce::StringArray::fromTokens(raw, " ", ""))
+			bytes.push_back(static_cast<uint8_t>(t.getHexValue32()));
+		mc.getSci().write(bytes);
+		run(mc, 200 * g_ms);
 	}
 	auto sendNote = [&]
 	{

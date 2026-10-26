@@ -35,7 +35,7 @@ namespace
 
 namespace g1
 {
-	Microcontroller::Microcontroller(const std::vector<uint8_t>& _rom, const uint32_t _dspCount) : m_mem(g_memSize, 0), m_dspCount(_dspCount > g_regularDsps ? g_expandedDsps : g_regularDsps), m_sci(getQSM(), static_cast<float>(g_sciRate))
+	Microcontroller::Microcontroller(const std::vector<uint8_t>& _rom, const uint32_t _dspCount) : m_mem(g_memSize, 0), m_dspCount(_dspCount > g_regularDsps ? g_expandedDsps : _dspCount > g_microDsps ? g_regularDsps : g_microDsps), m_sci(getQSM(), static_cast<float>(g_sciRate))
 	{
 		std::copy_n(_rom.begin(), std::min<size_t>(_rom.size(), g_romSize), m_mem.begin());
 		for(uint32_t i = 0; i < m_dspCount; ++i)
@@ -48,6 +48,27 @@ namespace g1
 		// The OS reads the master volume from the ADC and sets the last DSP's gain (Y:$5F) with it.
 		// At zero, nothing comes out. The other knobs stay at zero.
 		m_adc[g_adcVolume] = 0xff;
+
+		// Serial ADC on the QSPI (the Micro's knobs): each word sent comes back as the value of its queue
+		// entry, which the OS stores as RX >> 1. The rack never uses the QSPI. Entry 3 is the volume
+		// (found by trying them: the Micro makes no sound with it at zero), the others stay at zero.
+		m_qspiAdc[g_qspiVolume] = 0xff;
+		getQSM().setSpiWriteCallback([this](const uint16_t, const uint8_t _queue)
+		{
+			Mc68k::write16(0xfffd00 + 2u * (_queue & 15u), static_cast<uint16_t>(m_qspiAdc[_queue & 15u] << 1));
+		});
+		if(const char* q = std::getenv("G1_QSPIADC"))	// "ff,00,00,00": test hook
+		{
+			uint32_t i = 0;
+			for(const char* c = q; *c && i < m_qspiAdc.size();)
+			{
+				m_qspiAdc[i++] = static_cast<uint8_t>(std::strtoul(c, nullptr, 16));
+				while(*c && *c != ',')
+					++c;
+				if(*c == ',')
+					++c;
+			}
+		}
 
 		// DUART bus: port E carries /CS, /RD, /WR and the register address.
 		getPortE().setWriteTXCallback([this](const mc68k::Port& _port) { onPortE(_port.read()); });
@@ -594,6 +615,12 @@ namespace g1
 			m_flash.write(addr - g_flashAddress, _val);
 			return;
 		}
+		// The Micro drives its two 7-segment digits through the same two addresses: the segments go to
+		// $201800, then $202000 says which digit is on (1 or 2; 0 turns them off between digits).
+		if(addr == g_panelIn)
+			m_microSegments = _val;
+		if(addr == g_panelOut && (_val == 1 || _val == 2))
+			m_microDigits[_val - 1].store(m_microSegments, std::memory_order_relaxed);
 		if(addr == g_panelOut)
 			m_adcSelect = _val;	// ADC multiplexer channel
 		else if(addr == g_panelLeds)

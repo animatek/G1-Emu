@@ -241,6 +241,8 @@ namespace g1plugin
 		o.knobDisplays = m_knobDisplays;
 		o.knobFollowsPatch = m_knobFollowsPatch;
 		o.expanded = m_expanded;
+		if(m_expanded)
+			o.micro = false;	// the plugin has no Micro yet: its Expanded must not leave the file saying Micro
 		o.randomExclude = m_randomExclude;
 		o.save(g1app::defaultSettingsPath());
 

@@ -61,17 +61,20 @@ namespace g1gui
 		void timerCallback() override;
 		void apply();			// takes what the controls say into the options and saves them
 		void chooseRom();		// the file picker, which checks the file before writing it down
+		void chooseMicroOs();	// the same for the Micro Modular's OS (Clavia's updater or an image)
+		void showMicroOs();		// which Micro OS the next start would use, or what is missing
 		void updateEnabled();	// the ALSA device only matters with the ALSA driver, and so on
 		void updateAudioDevices(const juce::String& selected = {});
 
 		g1app::EmuHost& m_host;
 		Look m_look;	// before the controls, so it outlives them
 
-		juce::Label m_romLabel, m_audioLabel, m_deviceLabel, m_gainLabel, m_rawLabel, m_modelLabel;
-		juce::Label m_romPath;
+		juce::Label m_romLabel, m_audioLabel, m_deviceLabel, m_gainLabel, m_rawLabel, m_modelLabel, m_microOsLabel;
+		juce::Label m_romPath, m_microOsPath;
+		juce::TextButton m_microOsChoose{"Choose..."};
 		juce::TextButton m_romChoose{"Choose..."}, m_romFolder{"Open the ROM folder"};
 		std::unique_ptr<juce::FileChooser> m_chooser;
-		juce::ComboBox m_model;		// Regular or Expanded
+		juce::ComboBox m_model;		// Regular, Expanded or Micro Modular
 		juce::ComboBox m_audio;
 		juce::ComboBox m_device;
 		juce::StringArray m_audioDevices;

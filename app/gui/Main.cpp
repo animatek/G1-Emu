@@ -10,6 +10,7 @@
 // window (Settings.h), the notice included.
 
 #include "Panel.h"
+#include "MicroPanel.h"
 
 #include "Settings.h"
 
@@ -133,6 +134,13 @@ namespace g1gui
 		// Any size, in the panel's proportions, which change with the extras drawer.
 		void showPanel()
 		{
+			// The Micro Modular model has a box of its own: one size.
+			if(m_host.mc().dspCount() == g1::g_microDsps)
+			{
+				setContentOwned(new MicroPanel(m_panelHost), true);
+				m_constrainer.setSizeLimits(MicroPanel::Width, MicroPanel::Height, MicroPanel::Width, MicroPanel::Height);
+				return;
+			}
 			auto* view = new PanelView(m_panelHost);
 			setContentOwned(view, true);
 			view->applyLimits(m_constrainer);
@@ -203,6 +211,21 @@ namespace g1gui
 				if(b)
 					b->triggerClick();
 			};
+			// The Micro Modular's box has no pages: its picture, then the Settings card from its button.
+			if(findNamed<MicroPanel>(w))
+			{
+				switch(m_step++)
+				{
+				case 0: save("1-micro-panel.png"); click("Settings"); break;
+				default:
+					save("2-micro-settings.png");
+					stopTimer();
+					juce::JUCEApplication::getInstance()->systemRequestedQuit();
+					return;
+				}
+				startTimer(1500);
+				return;
+			}
 			auto* about = findNamed<AboutView>(w);
 			auto* aboutText = about ? findNamed<juce::TextEditor>(*about) : nullptr;
 			switch(m_step++)

@@ -1,4 +1,5 @@
 #include "Settings.h"
+#include "osimage.h"
 
 #include "Overlay.h"
 #include "Panel.h"
@@ -48,7 +49,7 @@ namespace g1gui
 		constexpr int g_labelW = 110, g_rowH = 28, g_gap = 10, g_headingH = 22;
 		constexpr int g_colW = 430, g_colGap = 40, g_width = 2 * g_colW + g_colGap;
 		constexpr int g_rightX = g_colW + g_colGap;
-		constexpr int g_audioY = 146, g_belowY = 322, g_bottomY = 424, g_height = g_bottomY + g_rowH;
+		constexpr int g_audioY = 184, g_belowY = 360, g_bottomY = 462, g_height = g_bottomY + g_rowH;
 		// The manual MIDI pairing patch (Windows, until Windows MIDI Services can own ports;
 		// jucemidi.h) adds four device rows to the MIDI column, under a longer note.
 #if defined(_WIN32) && defined(G1_BACKEND_JUCE) && !defined(G1_WINDOWS_MIDI)
@@ -116,10 +117,23 @@ namespace g1gui
 		// next start or Restart.
 		m_model.addItem("Regular  (4 DSPs)", 1);
 		m_model.addItem("Expanded  (8 DSPs, twice the voices)", 2);
-		m_model.setSelectedId(o.expanded ? 2 : 1, juce::dontSendNotification);
-		m_model.setTooltip("The G1 with or without the expansion board; on the next start or Restart");
+		m_model.addItem("Micro Modular  (1 DSP, its own OS)", 3);
+		m_model.setSelectedId(o.micro ? 3 : o.expanded ? 2 : 1, juce::dontSendNotification);
+		m_model.setTooltip("The G1 with or without the expansion board, or the Micro Modular (one DSP, light on the CPU); on the next start or Restart");
 		m_model.onChange = [this] { apply(); };
 		addAndMakeVisible(m_model);
+
+		// The Micro runs its own OS, which G1-Emu does not ship: Clavia's updater for it (the .exe) is
+		// read as it is.
+		label(m_microOsLabel, "Micro OS");
+		m_microOsPath.setColour(juce::Label::textColourId, juce::Colour(0xffc8ccd0));
+		m_microOsPath.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 11.5f, juce::Font::plain));
+		m_microOsPath.setMinimumHorizontalScale(0.7f);
+		addAndMakeVisible(m_microOsPath);
+		m_microOsChoose.setTooltip("Clavia's Micro Modular OS updater (the .exe), or an OS image");
+		m_microOsChoose.onClick = [this] { chooseMicroOs(); };
+		addAndMakeVisible(m_microOsChoose);
+		showMicroOs();
 
 		// The native Linux backend is a JACK node or a plain ALSA device. Everywhere else JUCE
 		// exposes the system's real CoreAudio/WASAPI/DirectSound devices.
@@ -380,6 +394,42 @@ namespace g1gui
 		});
 	}
 
+	void SettingsView::showMicroOs()
+	{
+		g1app::OsImage image;
+		std::string note;
+		const bool found = g1app::findMicroOs(m_host.options().microOs, image, note);
+		const auto last = note.rfind('\n');
+		const auto line = last == std::string::npos ? note : note.substr(last + 1);
+		m_microOsPath.setText(found ? juce::File(juce::String(line).fromFirstOccurrenceOf("Micro OS: ", false, false)).getFileName() : "not found (see the tooltip)", juce::dontSendNotification);
+		m_microOsPath.setTooltip(juce::String(line));
+	}
+
+	void SettingsView::chooseMicroOs()
+	{
+		m_chooser = std::make_unique<juce::FileChooser>("Choose Clavia's Micro Modular OS (the updater .exe)",
+			juce::File(m_host.options().microOs).existsAsFile() ? juce::File(m_host.options().microOs).getParentDirectory()
+				: juce::File(g1app::publicRomFolder()), "*.exe;*.EXE;*.bin;*.BIN");
+		m_chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+			[this](const juce::FileChooser& _c)
+		{
+			const auto file = _c.getResult();
+			if(file == juce::File())
+				return;
+			g1app::OsImage image;
+			std::string why;
+			if(!g1app::readOsFile(file.getFullPathName().toStdString(), image, why) || (image.fromUpdater && !image.isMicro()))
+			{
+				juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Not the Micro Modular's OS",
+					file.getFullPathName() + "\n\n" + (why.empty() ? juce::String("That updater is for another model: \"") + image.model + "\"." : juce::String(why)));
+				return;
+			}
+			m_host.options().microOs = file.getFullPathName().toStdString();
+			showMicroOs();
+			apply();
+		});
+	}
+
 	void SettingsView::updateAudioDevices(const juce::String& selected)
 	{
 #ifdef G1_BACKEND_JUCE
@@ -435,6 +485,7 @@ namespace g1gui
 		}
 #endif
 		o.expanded = m_model.getSelectedId() == 2;
+		o.micro = m_model.getSelectedId() == 3;
 		o.gainDb = static_cast<float>(m_gain.getValue());
 		o.jackConnect = m_jackConnect.getToggleState();
 		o.rawMidiCard = m_rawEnabled.getToggleState() ? m_rawCard.getText().trim().toStdString() : std::string();
@@ -515,6 +566,9 @@ namespace g1gui
 		m_romFolder.setBounds(g_labelW + g_gap + 110, y - 2, 170, 26);
 		y += g_rowH + g_gap;
 		row(m_modelLabel, m_model, 0, y);
+		m_microOsLabel.setBounds(0, y, g_labelW, g_rowH);
+		m_microOsPath.setBounds(g_labelW + g_gap, y, g_colW - g_labelW - 2 * g_gap - 100, g_rowH);
+		m_microOsChoose.setBounds(g_colW - 100, y, 100, 26);
 
 		y = g_audioY + g_headingH;
 		row(m_audioLabel, m_audio, 0, y);

@@ -20,7 +20,7 @@ message(STATUS "g1Host: ${G1_BACKEND} audio and MIDI backend")
 # No devices and no threads of its own: the plugin builds on it without the backends below.
 add_library(g1Core STATIC engine.cpp engine.h hostconfig.cpp hostconfig.h hostlog.cpp hostlog.h diaglog.cpp diaglog.h romfinder.cpp romfinder.h
 	slotkeeper.cpp slotkeeper.h synthsettings.cpp synthsettings.h presetslink.cpp presetslink.h audiobridge.h directlink.cpp directlink.h
-	midirouting.cpp midirouting.h)
+	midirouting.cpp midirouting.h osimage.cpp osimage.h)
 target_include_directories(g1Core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # So a clone works with no setup: the repo's own Roms/ is one of the folders searched.
 target_compile_definitions(g1Core PRIVATE G1_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -40,6 +40,13 @@ set_tests_properties(g1audiobridgetest PROPERTIES TIMEOUT 30 LABELS g1)
 add_executable(g1formattest formattest.cpp)
 target_link_libraries(g1formattest PRIVATE g1Lib)
 add_test(NAME g1formattest COMMAND g1formattest)
+
+# The OS reader: the Micro Modular's OS out of Clavia's updater. Needs the updater, so without one it
+# reports itself skipped.
+add_executable(g1osimagetest osimagetest.cpp)
+target_link_libraries(g1osimagetest PRIVATE g1Core)
+add_test(NAME g1osimagetest COMMAND g1osimagetest)
+set_tests_properties(g1osimagetest PROPERTIES TIMEOUT 60 LABELS g1 SKIP_RETURN_CODE 77)
 
 # The SlotKeeper against an emulated G1 (issue #25). Needs a ROM, so without one it reports itself
 # skipped.

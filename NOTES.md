@@ -74,6 +74,39 @@ rack's `$181801`/`$181802`), so its codec framing differs. No LCD (`$202004`–`
 touched); the knobs are still read through `$202000`/`$202800`. The update holds only the OS: the
 Micro's boot ROM is not in it.
 
+## Micro Modular in G1-Emu
+
+(2026-10-26, issue #82.) `G1_MODEL=micro` builds one DSP (`g1::g_microDsps`) and, with
+`G1_OS=Roms/Micro/micro-os.bin`, the Micro's OS boots on the rack's boot ROM: it loads its program
+into DSP 0, runs at 100 % speed, answers NME's IAm with the last byte `02` where the rack says `01`,
+and **sounds like the rack** (SimpleOSC at -61.8 dBFS, Test Audio at -54.1 dBFS and 349 Hz, the same
+figures). The DSP's block routine is the rack's DSP 3 output stage in the same program: it computes
+`out = X:$5F + Y:$5F x signal`, with `Y:$5F` the master gain, and the OS writes that gain from the
+volume knob.
+
+**The Micro's panel is not the rack's.** It has a volume knob, three more, two buttons and a
+two-digit 7-segment display (photo in `Roms/Imagenes`). The OS never touches the rack's ADC at
+`$202000`/`$202800`: it drives the display by multiplexing (`$201800` = segments, `$202000` = digit
+select) and **reads its knobs from a serial ADC on the 68331's QSPI** (SPCR0 `$AA40`, SPCR2 `$4300`
+wrapping over four queue entries, command bytes `$D0`, transmit words `$033C $02BC $03BC $023C`;
+the OS stores each received word as `RX >> 1` at `$15737E`+). With no one answering the QSPI the
+volume read zero, `Y:$5F` was never written and the output was silence: that was the whole problem
+(the patch ran, the same code and data as the rack's DSP 0). `Microcontroller::setQspiAdc` answers
+each queue entry with a value; **entry 3 is the volume** (found by trying them), entries 0-2 are
+the other knobs and do nothing to the sound so far (`G1_QSPIADC=ff,00,00,00` is the test hook).
+
+**The Micro's buttons** (Shift, Patch, Note Trig) are not on the QSPI. The OS reads the 68331's port F
+(`$FFFA19`); **active high**, idle 0: pressing combinations of bits 0-2 makes the display change (bits
+0 and 2 together showed `C4`, the note it plays; others blank it or showed `On`/`OF`), but a single bit
+from a fresh boot changed nothing visible, so which bit is which is not mapped. The display is **active
+low**, a-g on bits 0-6 and the dot on bit 7 (`$F9` is `1`); the OS lights digit 1 (the right one) and
+digit 2 (the left one) in turn.
+
+Open: notes through the PC Port's play-note path do not track pitch on the Micro while MIDI notes on
+channel 1 do (`G1_MIDINOTE=1`: 524 Hz for note 72, the rack's 522); the 7-segment display and the
+buttons are not emulated; where an end user gets the Micro's OS image (the rack's `os =` setting
+has the same question).
+
 ## Boot and memory map
 
 **The loader** (`$000000`–`$0007FF`) reads the panel at power-on (selects rows in `$202005`,

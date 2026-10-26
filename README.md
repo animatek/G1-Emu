@@ -207,6 +207,12 @@ want to hear about it.
   board: eight DSPs instead of four, and the same OS gives each patch about twice the voices
   (BellsMorph 8 → 16, 4VoiceChoir 16 → 32). It costs more CPU, and the change takes effect on the
   next start or Restart (`model =` in the settings file, `G1_MODEL=expanded`).
+- **Micro Modular:** the third model, one DSP and its own OS, light on the CPU (about a third of
+  a Regular's) for small patches and slower computers. G1-Emu does not ship that OS: point
+  Settings' **Micro OS** at Clavia's Micro Modular OS updater (the `.exe`; it is read as it is, nothing to
+  extract) or leave it in the ROM folder. It has its own box (volume, three edit knobs and the
+  two-digit display; its buttons are not there yet) and its own flash (`flash-micro.bin`). Start or
+  Restart to switch (`model = micro`, `G1_MODEL=micro`). Not in the plugin yet.
 - **Settings** (in the window): the ROM, the model, audio driver and device, output level, whether outputs 1/2
   connect themselves, the raw MIDI card, and the notice above. The console reads the same settings;
   the `G1_*` environment variables win over them.

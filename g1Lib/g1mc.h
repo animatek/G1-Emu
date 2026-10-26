@@ -44,6 +44,7 @@ namespace g1
 	static constexpr uint32_t g_panelRows = 0x202005;		// rows: LEDs (bits 0-3) and buttons (4-6, active low)
 	static constexpr uint32_t g_lcdData = 0x202006;		// HD44780 LCD: data bus
 	static constexpr uint32_t g_lcdControl = 0x202007;		// LCD: bit 0 = RS, bit 1 = E
+	static constexpr uint8_t g_qspiVolume = 3;				// the Micro's volume: its QSPI ADC queue entry
 	static constexpr uint8_t g_adcVolume = 0x30;			// multiplexer code of the master volume
 	static constexpr uint32_t g_flashAddress = 0x300000;	// CS7, 1 MB, 8 bits: the installed OS
 	static constexpr uint32_t g_flashSize = Flash::Size;
@@ -59,6 +60,9 @@ namespace g1
 	// The G1 without the expansion board has DSPs 0-3; with it (the Expanded), all 8. The OS counts
 	// them at boot by the ports that answer, so the same OS runs either. It chains them in one line,
 	// 0 -> 1 -> ... -> last -> codec: the last DSP is the codec's, the input still enters at DSP 0.
+	// The Micro Modular has one DSP, which also does what the last one does on the rack (output to the
+	// codec). It runs its own OS, which sets 1 DSP instead of counting ports (NOTES.md, "Micro Modular").
+	static constexpr uint32_t g_microDsps = 1;
 	static constexpr uint32_t g_regularDsps = 4;
 	static constexpr uint32_t g_expandedDsps = 8;
 	static constexpr uint32_t g_maxDsps = g_expandedDsps;
@@ -198,6 +202,9 @@ namespace g1
 		uint16_t m_picr = 0, m_pitr = 0;
 		std::array<uint8_t, 256> m_adc{};	// set in the constructor: volume at full, knobs at zero
 		uint8_t m_adcSelect = 0, m_adcResult = 0;
+		uint8_t m_microSegments = 0;
+		std::array<std::atomic<uint8_t>, 2> m_microDigits{};	// the Micro's 7-segment display: what each digit last showed
+		std::array<uint8_t, 16> m_qspiAdc{};	// the Micro's knobs, read through the QSPI: one value per queue entry
 		uint8_t m_ledLatch = 0, m_panelRows = 0xff;
 		std::array<std::atomic<uint8_t>, 4> m_leds{};
 		std::array<std::atomic<uint8_t>, 3> m_buttons{};	// 1 = pressed
@@ -267,6 +274,12 @@ namespace g1
 		// Panel knobs: ADC value for each multiplexer code (what the OS writes to $202000)
 		void setAdc(uint8_t _value) { m_adc.fill(_value); }
 		void setAdc(uint8_t _select, uint8_t _value) { m_adc[_select] = _value; }
+		// The Micro Modular reads its knobs (volume included) from a serial ADC on the QSPI, not from
+		// the rack's multiplexer: queue entry _entry answers with _value (0-255).
+		void setQspiAdc(uint8_t _entry, uint8_t _value) { m_qspiAdc[_entry & 15] = _value; }
+		uint8_t qspiAdc(uint8_t _entry) const { return m_qspiAdc[_entry & 15]; }
+		// The Micro's display: the segment bits of digit _digit (0 or 1), as the OS last drove them.
+		uint8_t microDigit(uint32_t _digit) const { return m_microDigits[_digit & 1].load(std::memory_order_relaxed); }
 		uint8_t adc(uint8_t _select) const { return m_adc[_select]; }
 		uint32_t getSR() const;
 	private:

@@ -5,6 +5,27 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-10-26
+
+- [New] Claude: **the Micro Modular as a third model** (issue #82): one DSP and its own OS, picked in
+  Settings beside Regular and Expanded (`model = micro`, `G1_MODEL=micro`). The Micro's OS boots on
+  the rack's boot ROM and sounds like the rack (SimpleOSC -61.8 dBFS, Test Audio -54.1 dBFS at
+  349 Hz, the rack's figures) at about a third of the CPU (0.4 cores against 1.2). Its panel is not
+  the rack's: it reads its knobs, the volume among them, from a serial ADC on the 68331's QSPI,
+  which nothing answered, so the volume read zero and the output was silence. `setQspiAdc` answers
+  each queue entry (entry 3 is the volume); `microDigit` gives the two 7-segment digits the OS
+  multiplexes through `$201800`/`$202000`. A box of its own (`MicroPanel`: volume, three edit knobs,
+  the display, the status line) replaces the rack's panel on that model; its buttons are not there,
+  because where they sit on port F is not mapped (`NOTES.md`, "Micro Modular in G1-Emu").
+  `app/osimage.*` reads the OS out of Clavia's Windows updater (also for `os =`), so a user points
+  Settings' **Micro OS** at the `.exe` and extracts nothing; the flash is `flash-micro.bin`, apart
+  from the rack's; with no Micro OS the run is a Regular and the log says so. Settings gets a third
+  model and the Micro OS row (the card grows 38 px); `g1boot` takes `G1_OS` and `G1_DISAFTER`, and
+  `g1patchtest` takes `G1_MODEL=micro`, `G1_ADCALL` and `G1_MIDIRAW`. Checked: `ctest` 17 tests pass,
+  among them the new `g1osimagetest` (the updater gives the extraction script's image byte for
+  byte); `g1run` and `g1gui` with `model = micro` boot it from the `.exe`, and the snapshot shows
+  the box with the display at 1. Not in the plugin yet. Local change, not committed.
+
 ## 2026-10-25
 
 - [GUI] Claude: **a MOD sticker on the panel when the OS is not Clavia's as it came**: yellow,

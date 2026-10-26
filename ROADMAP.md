@@ -52,9 +52,13 @@ what it carries works.
   - **In Animatek NME:** the editor tells them apart when it connects (to be found: what the OS
     says about its DSPs, in the IAm reply or the synth settings) and shows which one each G1-Emu
     is, with an icon or similar.
-  - **Not the Micro Modular** (one DSP): decided on 2026-10-07 to leave it out of G1-Emu's models.
-    It runs its own OS, not the rack's (which only knows four or eight DSPs), so it becomes its own
-    emulation or part of AG1TEK, the one-slot plugin (see "Other G1 models").
+  - **The Micro Modular (one DSP) is a model after all** (changed 2026-10-26, issue #82): its
+    OS (`Roms/Micro/micro-os.bin`, from Clavia's public Micro updater) boots on the rack's boot ROM
+    and loads its program into one DSP, so it is a third setting beside Regular and Expanded
+    (`G1_MODEL=micro`), not a separate emulation. Cheap for the CPU, which is what the issue asks
+    for. In progress on branch `micro-1dsp`; see `NOTES.md`, "Micro Modular in G1-Emu". It keeps
+    to the 2026-10-07 rule of no hardware dumps. AG1TEK (one slot with the editor inside) stays a
+    separate, paused idea.
   - **No hardware dumps** (decided 2026-10-07): nobody opens a synth to read its ROM, neither
     Javier's G1 nor a borrowed Micro. What only the ROM holds (the vectors, the start-up and the
     small loader that boots the DSPs) is written as G1-Emu's own boot instead, and the OS comes from
@@ -241,8 +245,7 @@ the modules that exist).
 - **Micro Modular:** one DSP, confirmed in its OS (`NOTES.md`, "The official OS update"), which
   makes a simpler engine with no links between DSPs. Open: its boot ROM (not in the update, so it
   needs the same boot replacement as #16) and the ESSI clock towards its codec.
-  Not one of G1-Emu's models (decided 2026-10-07): its own emulation, or part of AG1TEK, booted
-  with G1-Emu's own boot (#16) and the Micro's public updater, not from a dumped ROM.
+  Now a G1-Emu model (2026-10-26): the Micro OS boots on the rack's boot ROM, see above.
 
 ### New modules inside the G1 (modified OS)
 

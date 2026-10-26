@@ -131,6 +131,9 @@ namespace g1app
 		m_rom = std::move(rom);
 
 		m_flashPath = _flashPath.empty() ? defaultFlashPath() : _flashPath;
+		// The Micro keeps its own flash: its OS and its patch storage are not the rack's.
+		if(_flashPath.empty() && m_options.dspCount() == g1::g_microDsps)
+			m_flashPath = (std::filesystem::path(m_flashPath).parent_path() / "flash-micro.bin").string();
 		const char* up = std::getenv("G1_UPDATE");
 		boot(up && std::string(up) == "1", _log);
 
@@ -232,7 +235,14 @@ namespace g1app
 		const auto os = m_options.loadOs(osNote);
 		if(!osNote.empty())
 			_log += osNote + "\n";
-		m_engine = std::make_unique<Engine>(m_rom, os, m_options.dspCount());
+		auto dsps = m_options.dspCount();
+		// The Micro runs its own OS: without it a one-DSP rack would boot and stay silent.
+		if(dsps == g1::g_microDsps && os.empty())
+		{
+			_log += "Micro Modular model: no OS for it, so this run is a Regular G1\n";
+			dsps = g1::g_regularDsps;
+		}
+		m_engine = std::make_unique<Engine>(m_rom, os, dsps);
 		_log += std::string("model: ") + HostOptions::modelName(m_engine->mc().dspCount()) + " (" + std::to_string(m_engine->mc().dspCount()) + " DSPs)\n";
 
 		std::vector<uint8_t> flash;

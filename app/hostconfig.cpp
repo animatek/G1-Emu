@@ -1,4 +1,5 @@
 #include "hostconfig.h"
+#include "osimage.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -55,7 +56,8 @@ namespace g1app
 			else if(key == "rawMidiCard")	rawMidiCard = value;
 			else if(key == "rom")			rom = value;
 			else if(key == "os")			os = value;
-			else if(key == "model")			expanded = value == "expanded";
+			else if(key == "model")			{ expanded = value == "expanded"; micro = value == "micro"; }
+			else if(key == "microOs")		microOs = value;
 			else if(key == "showDisclaimer") showDisclaimer = value != "0";
 			else if(key == "extrasOpen")	extrasOpen = value != "0";
 			else if(key == "knobDisplays")	knobDisplays = value != "0";
@@ -104,26 +106,35 @@ namespace g1app
 		if(const char* v = std::getenv("G1_OS"))
 			path = v;
 		_note.clear();
+		OsImage image;
+		if(path.empty() && dspCount() == g1::g_microDsps)
+		{
+			// Its own OS: the rack's only knows four or eight DSPs.
+			if(!findMicroOs(microOs, image, _note))
+				return {};
+			return image.bytes;
+		}
 		if(path.empty())
 			return {};
-		std::ifstream f(path, std::ios::binary);
-		std::vector<uint8_t> image((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-		// As it runs from RAM at $100000: a few hundred KB of long words, below the patch storage.
-		if(image.size() < 0x10000 || image.size() > 0x6ffe0 || (image.size() & 3))
+		std::string why;
+		if(!readOsFile(path, image, why))
 		{
-			_note = "OS image " + path + " not used: " + (image.empty() ? "cannot read it" : "not an OS image (" + std::to_string(image.size()) + " bytes)");
+			_note = "OS image " + path + " not used: " + why;
 			return {};
 		}
 		_note = "OS: " + path;
-		return image;
+		return image.bytes;
 	}
 
 	uint32_t HostOptions::dspCount() const
 	{
-		bool e = expanded;
+		bool e = expanded, m = micro;
 		if(const char* v = std::getenv("G1_MODEL"))
+		{
 			e = std::string(v) == "expanded";
-		return e ? g1::g_expandedDsps : g1::g_regularDsps;
+			m = std::string(v) == "micro";
+		}
+		return m ? g1::g_microDsps : e ? g1::g_expandedDsps : g1::g_regularDsps;
 	}
 
 	bool HostOptions::save(const std::string& _path) const
@@ -158,7 +169,8 @@ namespace g1app
 		  << "rawMidiCard = " << o.rawMidiCard << "\n"
 		  << "rom = " << o.rom << "\n"
 		  << "os = " << o.os << "\n"
-		  << "model = " << (o.expanded ? "expanded" : "regular") << "\n"
+		  << "model = " << (o.micro ? "micro" : o.expanded ? "expanded" : "regular") << "\n"
+		  << "microOs = " << o.microOs << "\n"
 		  << "showDisclaimer = " << (o.showDisclaimer ? 1 : 0) << "\n"
 		  << "extrasOpen = " << (o.extrasOpen ? 1 : 0) << "\n"
 		  << "knobDisplays = " << (o.knobDisplays ? 1 : 0) << "\n"

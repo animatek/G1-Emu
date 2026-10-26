@@ -37,7 +37,9 @@ namespace g1app
 		// G1-Mods' modified ROM) is not the standalone's and the plugins' ROM, which rom keeps.
 		std::string romInUse;
 		std::string os;						// an OS image to run instead of the ROM's factory OS (empty: none)
-		bool expanded = false;				// the model: Expanded (8 DSPs, the expansion board) or Regular (4)
+		bool expanded = false;				// the model: Expanded (8 DSPs, the expansion board) or Regular (4)...
+		bool micro = false;					// ...or the Micro Modular (1 DSP, its own OS): wins over expanded
+		std::string microOs;				// Clavia's Micro Modular OS updater (.exe) or image; empty: look in the ROM folders
 		bool showDisclaimer = false;		// the notice at startup; the window can turn it back on
 		bool extrasOpen = false;			// the window's extras drawer (Random...) was left open
 		bool knobDisplays = false;			// a display above each knob with what it is assigned to
@@ -67,14 +69,15 @@ namespace g1app
 		// was there, which is how the window knows it is a first run.
 		bool load(const std::string& _path);
 
-		// The OS image named by `os` (or G1_OS, which wins), read into _image. Empty when there is
-		// none or it cannot be read; _note says which was used, or why not, for the log.
+		// The OS image named by `os` (or G1_OS, which wins; an OS image or Clavia's updater), read into
+		// _image. On the Micro Modular model it is the Micro's (`microOs`, or found in the ROM folders).
+		// Empty when there is none or it cannot be read; _note says which was used, or why not.
 		std::vector<uint8_t> loadOs(std::string& _note) const;
 		bool save(const std::string& _path) const;
 
-		// The DSPs of the model chosen (`model`, or G1_MODEL=regular|expanded, which wins): 4 or 8.
+		// The DSPs of the model chosen (`model`, or G1_MODEL=regular|expanded|micro, which wins): 4, 8 or 1.
 		uint32_t dspCount() const;
-		static const char* modelName(uint32_t _dspCount) { return _dspCount > g1::g_regularDsps ? "Expanded" : "Regular"; }
+		static const char* modelName(uint32_t _dspCount) { return _dspCount > g1::g_regularDsps ? "Expanded" : _dspCount < g1::g_regularDsps ? "Micro Modular" : "Regular"; }
 	};
 
 	// What a running G1 reports, for the status bar and the Report issue button.
