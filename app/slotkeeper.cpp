@@ -275,7 +275,7 @@ namespace g1app
 		if(m_hasRestore || m_state != State::Idle)
 			return false;
 		// Restored slots still to be sent count too: between two uploads the keeper is idle.
-		const auto any = [](const auto& _flags) { return std::any_of(_flags.begin(), _flags.end(), [](const bool _f) { return _f; }); };
+		const auto any = [this](const auto& _flags) { return std::any_of(_flags.begin(), _flags.begin() + static_cast<std::ptrdiff_t>(m_slotCount.load()), [](const bool _f) { return _f; }); };
 		return !any(m_dirty) && !any(m_uploadPending);
 	}
 
@@ -293,6 +293,7 @@ namespace g1app
 		traceMsg("->", _nowMs, _msg);
 		_toG1.insert(_toG1.end(), _msg.begin(), _msg.end());
 		m_filterUntil = UINT64_MAX;	// until the transaction ends, then a tail
+		m_editorWaits = false;
 	}
 
 	void SlotKeeper::abort(const uint64_t _nowMs)
@@ -317,6 +318,12 @@ namespace g1app
 			if(isClavia(_m) && ccOf(_m) == CcIAm)
 				return;
 			m_lastActivity = _nowMs;
+			// Talking to an idle keeper, the editor waits for its own answers: the tail after the keeper's
+			// last transaction, kept for late replies to it, must not take them. On a Micro, whose only
+			// slot is the one the keeper has just read, it took an upload's ACKs. After an abort the
+			// keeper's own late replies may still come, so then the tail stays.
+			if(m_state == State::Idle)
+				m_editorWaits = true;
 			if(m_state == State::Requesting || m_state == State::Fetching)
 				abort(_nowMs);		// the editor talks: the keeper gets out of the way
 			if(!isClavia(_m))
@@ -366,7 +373,7 @@ namespace g1app
 		{
 			traceMsg("<-", _nowMs, _m);
 			const bool mine = m_state != State::Idle && m_state != State::Boot;
-			const bool filtering = mine || _nowMs < m_filterUntil;
+			const bool filtering = mine || (_nowMs < m_filterUntil && !m_editorWaits);
 			bool hide = false;
 			if(isClavia(_m))
 			{
@@ -512,7 +519,7 @@ namespace g1app
 				{
 					m_slots = m_pendingRestore;
 					m_hasRestore = false;
-					for(size_t s = 0; s < SlotCount; ++s)
+					for(size_t s = 0; s < m_slotCount; ++s)
 					{
 						m_uploadPending[s] = !m_slots[s].empty();
 						m_dirty[s] = m_slots[s].empty();	// nothing saved for it: learn what it has
@@ -520,7 +527,7 @@ namespace g1app
 				}
 			}
 			// Not into the middle of an editor's upload: the OS would drop both (#75).
-			for(size_t s = 0; s < SlotCount && !m_editorUploading; ++s)
+			for(size_t s = 0; s < m_slotCount && !m_editorUploading; ++s)
 				if(m_uploadPending[s])
 				{
 					{
@@ -540,7 +547,7 @@ namespace g1app
 			size_t slot = SlotCount;
 			{
 				std::lock_guard<std::mutex> lock(m_mutex);
-				for(size_t s = 0; s < SlotCount && slot == SlotCount; ++s)
+				for(size_t s = 0; s < m_slotCount && slot == SlotCount; ++s)
 					if(m_dirty[s])
 						slot = s;
 				if(slot != SlotCount)

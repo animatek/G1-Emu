@@ -68,6 +68,7 @@ namespace
 
 		uint64_t nowMs() { return engine.mc().ucCycles() / g_ms; }
 
+		uint8_t requestSlot = 1;	// the slot the editor asks for while the keeper uploads
 		// Runs the G1 for _ms, a millisecond at a time, with the keeper on its PC Port.
 		void run(const uint64_t _ms)
 		{
@@ -82,8 +83,8 @@ namespace
 				{
 					editorOnUpload = false;
 					uploadBegan = nowMs();
-					// NME connecting: IAm, then RequestPatch for slot B.
-					editorHeld = {0xf0, 0x33, 0x00, 0x06, 0x00, 0x03, 0x03, 0xf7, 0xf0, 0x33, 0x5d, 0x06, 0x41, 0x35, 0x7c, 0xf7};
+					// NME connecting: IAm, then RequestPatch for slot B (A on a Micro, which has no other).
+					editorHeld = {0xf0, 0x33, 0x00, 0x06, 0x00, 0x03, 0x03, 0xf7, 0xf0, 0x33, static_cast<uint8_t>(0x5c | requestSlot), 0x06, 0x41, 0x35, static_cast<uint8_t>(0x7b + requestSlot), 0xf7};	// the checksum counts the slot
 				}
 				if(!editorHeld.empty() && keeper && !keeper->uploading())
 				{
@@ -201,7 +202,11 @@ int main()
 	};
 
 	std::string osNote;
-	g1app::Engine engine(rom, options.loadOs(osNote));
+	g1app::Engine engine(rom, options.loadOs(osNote), options.dspCount());
+	// The Micro Modular (G1_MODEL=micro) has slot A only and none of the rack's panel: the editor's
+	// upload goes to A, and the panel's steps (4 to 6) are the rack's.
+	const bool micro = options.dspCount() == g1::g_microDsps;
+	const size_t editorSlot = micro ? 0 : 1;
 	if(!osNote.empty())
 		std::printf("%s\n", osNote.c_str());
 	// G1_FLASH=file: start from that flash (a standalone's flash.bin) instead of the factory's.
@@ -218,6 +223,7 @@ int main()
 		check(engine.loadFlash(image), std::string("flash from ") + fl);
 	}
 	Bench bench{engine};
+	bench.requestSlot = static_cast<uint8_t>(editorSlot);
 	double peak = 0;
 	engine.mc().outputDsp().setBlockCallback([&](const int32_t _a, const int32_t _b, int32_t, int32_t)
 	{
@@ -226,6 +232,7 @@ int main()
 
 	// 1. Restore SimpleOSC into slot A. Before it, the G1 is silent; after it, OscA drones.
 	g1app::SlotKeeper first;
+	first.setSlotCount(options.dspCount() == g1::g_microDsps ? 1 : g1app::SlotKeeper::SlotCount);
 	g1app::SlotKeeper::Slots saved;
 	saved[0].sections = g_simpleOsc;
 	first.restore(saved);
@@ -247,6 +254,7 @@ int main()
 
 	// 2. A second keeper reads all four slots back from the G1.
 	g1app::SlotKeeper second;
+	second.setSlotCount(options.dspCount() == g1::g_microDsps ? 1 : g1app::SlotKeeper::SlotCount);
 	bench.keeper = &second;
 	check(bench.runUntilSettled(30000), "a second keeper reads the four slots and settles");
 	const auto got = second.slots();
@@ -258,7 +266,7 @@ int main()
 	//    own), and the keeper must notice and read slot B afterwards.
 	{
 		auto& mc = engine.mc();
-		const auto packets = g1app::SlotKeeper::uploadMessages(g_simpleOsc, 1);
+		const auto packets = g1app::SlotKeeper::uploadMessages(g_simpleOsc, static_cast<int>(editorSlot));
 		size_t sent = 0, acked = 0;
 		std::vector<uint8_t> fromG1, toEditor, toG1;
 		bool waiting = false, sawUploading = false;
@@ -298,11 +306,15 @@ int main()
 		probe.editorSent(packets[0], 1000);
 		check(probe.editorUploading(1000 + g1app::SlotKeeper::EditorUploadMs - 1) && !probe.editorUploading(1000 + g1app::SlotKeeper::EditorUploadMs), "the wait for an editor's next packet lapses after 30 s of silence");
 		why.clear();
-		check(samePatch(g_simpleOsc, second.slots()[1].sections, why), "the keeper reads slot B after the editor's upload" + (why.empty() ? std::string() : " (" + why + ")"));
+		check(samePatch(g_simpleOsc, second.slots()[editorSlot].sections, why), std::string("the keeper reads slot ") + static_cast<char>('A' + editorSlot) + " after the editor's upload" + (why.empty() ? std::string() : " (" + why + ")"));
 	}
+
+	if(micro)
+		std::printf("     the Micro: steps 4 to 6 (the rack's panel) are not run\n");
 
 	// 4. A panel knob turned on slot A: the OS reports it as an Info message, not a Parameter,
 	//    and the keeper must read slot A again so a project keeps the turn (issue #46).
+	if(!micro)
 	{
 		auto& mc = engine.mc();
 		g1::KnobMap knobs(mc);
@@ -322,6 +334,7 @@ int main()
 	// 5. Bend Range changed on the System menu's Patch side: the OS tells no one, so the keeper
 	//    keeps slot A as it was; asked to read it again (reread(), as the plugin does after the
 	//    menu), it has the new header (#46).
+	if(!micro)
 	{
 		auto& mc = engine.mc();
 		auto press = [&](const uint32_t _row, const uint32_t _bit)
@@ -353,6 +366,7 @@ int main()
 	// 6. Oct Up on the panel: the OS steps the active slot's shift, which the patch carries, and
 	//    MidiRouting moves the notes on that slot's channel; a note off follows its note on after
 	//    the shift has changed, and a note moved off the keyboard is not played, on or off.
+	if(!micro)
 	{
 		auto& mc = engine.mc();
 		auto press = [&](const uint32_t _row, const uint32_t _bit)

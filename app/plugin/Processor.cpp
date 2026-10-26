@@ -434,7 +434,11 @@ namespace g1plugin
 				m_microFallback = true;
 		}
 		auto engine = std::make_unique<g1app::Engine>(m_rom, os, dsps);
+		g1app::logEvent("engine: model " + std::string(modelToString(m_model)) + ", " + std::to_string(dsps) + " DSPs"
+			+ (m_microFallback ? ", NO Micro OS, running as a Regular: " : m_model == Model::Micro ? ", " : "")
+			+ (m_model == Model::Micro ? m_microNote : std::string()) + ", instance " + std::to_string(m_instance));
 		m_keeper = std::make_unique<g1app::SlotKeeper>();
+		m_keeper->setSlotCount(dsps == g1::g_microDsps ? 1 : g1app::SlotKeeper::SlotCount);
 		m_synthSettings.reset();
 		m_pendingSettings.reset();
 		m_settingsTries = 0;

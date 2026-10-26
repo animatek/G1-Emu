@@ -7,6 +7,18 @@ Older entries cite their commit by hand.
 
 ## 2026-10-26
 
+- [Fix] Claude: **the plugin's slot keeper on a Micro**: it asked for the four slots, and a Micro asked for
+  slot B stops answering on its PC Port, so the keeper never settled and an editor got nothing through
+  (NME did not find the Micro in Bitwig, while the standalone found it). It now asks for, restores and
+  waits on slot A only (`SlotKeeper::setSlotCount`). And an editor talking to an idle keeper gets its own
+  answers: the 300 ms tail after the keeper's last read, kept for late replies, took the ACKs of an
+  upload into the slot just read, every time on a Micro (its only slot) and now and then on the rack.
+  The plugin logs the model of each engine (`engine: model micro, 1 DSPs, ...`). Checked:
+  `g1slotkeepertest` passes with `G1_MODEL=micro` (it now builds the model's DSPs, uploads and asks for
+  slot A on a Micro and leaves out the rack's panel steps) and with `G1_MODEL=regular`; all 18 G1 tests
+  pass. Found with Javier: the Micro plugin in Bitwig, NME not connecting, 99 % load and dropouts in
+  the log; the standalone `g1gui` on the same settings connected and played. Not yet checked in Bitwig.
+
 - [New] Claude: **the Micro Modular model in the plugin**: one G1-Emu VST3 is a Regular, an Expanded or a
   Micro, picked in its Settings (Model) and saved with the project (`model="micro"`), so there are not two
   plugins. A Micro instance runs the Micro's OS on one DSP (found as in the standalone; without it the
@@ -17,7 +29,7 @@ Older entries cite their commit by hand.
   instance gives the same level and latency (784 frames), the editor is the box (640 x 360) and the knob and
   volume parameters hold; `g1runnertest-micro` (new): bit-identical output between block sizes. Not checked:
   the editor's PC Port and the slots (`--slots`) on a Micro, because this machine's `g1vst3check` finds no
-  virtual PC Port even for a Regular; a patch loaded from NME into a Micro instance. Local change, not committed.
+  virtual PC Port even for a Regular; a patch loaded from NME into a Micro instance.
 
 - [Fix] Claude: **on the Micro model the Micro's OS wins over `os =`**: a settings file whose `os =` names a
   rack OS (an update, a modified image from update mode) made the Micro model boot that rack OS on one
@@ -43,7 +55,7 @@ Older entries cite their commit by hand.
   `g1patchtest` takes `G1_MODEL=micro`, `G1_ADCALL` and `G1_MIDIRAW`. Checked: `ctest` 17 tests pass,
   among them the new `g1osimagetest` (the updater gives the extraction script's image byte for
   byte); `g1run` and `g1gui` with `model = micro` boot it from the `.exe`, and the snapshot shows
-  the box with the display at 1. Not in the plugin yet. Local change, not committed.
+  the box with the display at 1. Not in the plugin yet.
 
 ## 2026-10-25
 

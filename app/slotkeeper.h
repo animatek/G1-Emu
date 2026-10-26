@@ -17,6 +17,7 @@
 // NME's order), so restoring it needs no patch parser.
 
 #include <array>
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -38,6 +39,12 @@ namespace g1app
 			bool operator==(const Slot& _o) const { return sections == _o.sections; }
 		};
 		using Slots = std::array<Slot, SlotCount>;
+
+		// How many slots the G1 has: 4, or the Micro Modular's one. The others are never asked for, nor
+		// restored, nor waited on: a Micro answers a request for slot B with nothing, and the keeper
+		// never settled, so the PC Port stayed busy.
+		void setSlotCount(const size_t _n) { m_slotCount = std::min<size_t>(std::max<size_t>(_n, 1), SlotCount); }
+		size_t slotCount() const { return m_slotCount; }
 
 		// Worker thread, with the engine lock held. _nowMs is the G1's own time (its CPU cycles).
 		void editorSent(const std::vector<uint8_t>& _bytes, uint64_t _nowMs);	// already given to the G1
@@ -91,6 +98,8 @@ namespace g1app
 		bool m_hasRestore = false;
 		std::array<bool, SlotCount> m_dirty{true, true, true, true};	// fetch all once at boot
 
+		std::atomic<size_t> m_slotCount{SlotCount};
+		bool m_editorWaits = false;	// the editor spoke to an idle keeper: replies are its own
 		std::atomic<State> m_state{State::Boot};
 		std::array<bool, SlotCount> m_uploadPending{};	// restored slots not yet sent to the G1
 		uint64_t m_lastActivity = 0;	// the editor's last message, or the G1's last change report
