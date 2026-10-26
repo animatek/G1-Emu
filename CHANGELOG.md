@@ -7,6 +7,9 @@ Older entries cite their commit by hand.
 
 ## 2026-10-26
 
+- [Docs] Claude: **the release notes for alpha.26** (`docs/release-notes.md`): the Micro Modular
+  (#82), update mode from Settings, the MOD sticker, the plugin's threads, and what is known
+  (the Micro's buttons, the PC Port's notes, NME 0.23's four slots, switching the model).
 - [Fix] Claude: **the tests no longer take the model from the user's settings.** Eight tests read
   `settings.conf` for the ROM and took `model` with it: left on `micro`, they handed a 4-DSP G1 the
   Micro's OS, which waited for ever logging every read of `$FFF921`; ctest kept that output, filled
