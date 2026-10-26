@@ -103,13 +103,15 @@ namespace g1app
 	std::vector<uint8_t> HostOptions::loadOs(std::string& _note) const
 	{
 		std::string path = os;
-		if(const char* v = std::getenv("G1_OS"))
-			path = v;
+		const char* env = std::getenv("G1_OS");
+		if(env)
+			path = env;
 		_note.clear();
 		OsImage image;
-		if(path.empty() && dspCount() == g1::g_microDsps)
+		// The Micro runs its own OS, whatever `os` says (that one is the rack's, an update or a modified
+		// image): the rack's only knows four or eight DSPs. Only G1_OS, a decision for this run, wins.
+		if(!env && dspCount() == g1::g_microDsps)
 		{
-			// Its own OS: the rack's only knows four or eight DSPs.
 			if(!findMicroOs(microOs, image, _note))
 				return {};
 			return image.bytes;

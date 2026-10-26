@@ -7,6 +7,13 @@ Older entries cite their commit by hand.
 
 ## 2026-10-26
 
+- [Fix] Claude: **on the Micro model the Micro's OS wins over `os =`**: a settings file whose `os =` names a
+  rack OS (an update, a modified image from update mode) made the Micro model boot that rack OS on one
+  DSP: silence, and a rack's IAm (device byte 1) where NME looks for the Micro's 2. Only `G1_OS`, for one
+  run, still wins. Found trying it with NME on Javier's own settings. Checked: with that `os =` in place,
+  `g1gui` with `G1_MODEL=micro` boots the Micro's updater, NME says "Connected: Nord Micro Modular v3.3",
+  the patch loads into slot A and sounds (Javier).
+
 - [New] Claude: **the Micro Modular as a third model** (issue #82): one DSP and its own OS, picked in
   Settings beside Regular and Expanded (`model = micro`, `G1_MODEL=micro`). The Micro's OS boots on
   the rack's boot ROM and sounds like the rack (SimpleOSC -61.8 dBFS, Test Audio -54.1 dBFS at
