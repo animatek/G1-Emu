@@ -88,7 +88,10 @@ namespace g1
 	{
 	public:
 		static constexpr uint32_t g_pcTrail = 256;
-		explicit Microcontroller(const std::vector<uint8_t>& _rom, uint32_t _dspCount = g_regularDsps);
+		// _threaded: whether the DSPs run on their own threads (the default) or serially, as G1_THREADS=0
+		// does, which wins over this. The output is the same bit for bit; serial costs about half the CPU
+		// in total, threaded finishes a block sooner (see tools/bench/golden.sh).
+		explicit Microcontroller(const std::vector<uint8_t>& _rom, uint32_t _dspCount = g_regularDsps, bool _threaded = true);
 		~Microcontroller() override;
 
 		uint32_t exec() override;

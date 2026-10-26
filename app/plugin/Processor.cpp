@@ -433,10 +433,15 @@ namespace g1plugin
 			else
 				m_microFallback = true;
 		}
-		auto engine = std::make_unique<g1app::Engine>(m_rom, os, dsps);
+		// Every instance runs its DSPs on threads. Serial was tried for the second and later ones (it
+		// costs about half the CPU with the default patch) and failed with real patches: ButohDrone and
+		// ArpeggiRama need more than one core serially, and a second instance alone dropped out
+		// (Bitwig, 2026-10-26). G1_THREADS=0 still runs one serially, to try it.
+		auto engine = std::make_unique<g1app::Engine>(m_rom, os, dsps, true);
 		g1app::logEvent("engine: model " + std::string(modelToString(m_model)) + ", " + std::to_string(dsps) + " DSPs"
 			+ (m_microFallback ? ", NO Micro OS, running as a Regular: " : m_model == Model::Micro ? ", " : "")
-			+ (m_model == Model::Micro ? m_microNote : std::string()) + ", instance " + std::to_string(m_instance));
+			+ (m_model == Model::Micro ? m_microNote : std::string()) + ", instance " + std::to_string(m_instance)
+			+ (engine->mc().threaded() ? ", DSPs on threads" : ", DSPs serial"));
 		m_keeper = std::make_unique<g1app::SlotKeeper>();
 		m_keeper->setSlotCount(dsps == g1::g_microDsps ? 1 : g1app::SlotKeeper::SlotCount);
 		m_synthSettings.reset();

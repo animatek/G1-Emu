@@ -57,6 +57,22 @@ Older entries cite their commit by hand.
   byte); `g1run` and `g1gui` with `model = micro` boot it from the `.exe`, and the snapshot shows
   the box with the display at 1. Not in the plugin yet.
 
+- [Perf] Claude: **the serial second instance is withdrawn**: with real patches (ButohDrone,
+  ArpeggiRama) a serial instance needs more than one core, and in Bitwig the second one alone
+  dropped out (136 to 400 dropouts, load 86-99 %), nine instances all at 99 %. The 2026-10-26 entry
+  below measured an idle default patch, which is far cheaper than a real one. Every instance is on
+  threads again; the `_threaded` parameter stays, and `G1_THREADS=0` too.
+
+- [Perf] Claude: **the plugin runs its second and later instances with the DSPs serial**, not on
+  threads (`Engine` and `Microcontroller` take `_threaded`; `G1_THREADS` still wins). Measured with
+  `g1run` instances in real time (16 threads, default patch): 8 instances take 13.7 cores and reach
+  57 % of real time threaded, and take 7.9 cores and reach 100 % serial; 16 instances 28 % against
+  61 %. The output is bit for bit the same (`tools/bench/golden.sh`: ten patches identical,
+  threaded, serial and reference, also on the newer DSP56300 core `8b731966`, whose bench is within
+  noise of `da2ff232`). `g1vst3check` has no PC Ports in this environment, so every instance
+  counts as the first there and the automatic choice itself was not exercised: it is one line
+  (`m_instance <= 1`), logged as `plugin engine: ... DSPs on threads|serial`.
+
 ## 2026-10-25
 
 - [GUI] Claude: **a MOD sticker on the panel when the OS is not Clavia's as it came**: yellow,

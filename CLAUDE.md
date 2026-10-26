@@ -83,6 +83,10 @@ mono buses Out 1..4, off until the host turns them on (#27); a channel on both g
 `g1pluginfx` builds the same sources as **G1-Emu FX** (`G1_PLUGIN_FX=1`, VST3 category Fx, CLAP
 audio-effect): the only difference is that its In L/R is on from the start, for hosts that never
 offer an instrument's input (#76). Both share the instance numbers and the PC Port names.
+**Threads:** every instance runs its DSPs on threads. Serial for the second and later ones was tried
+and dropped (2026-10-26): it halves the CPU with the default patch, but real patches need more than
+a core serially and a second instance alone dropped out in Bitwig. `Engine` still takes `_threaded`;
+`G1_THREADS=0/1` overrides it.
 The host's transport reaches the G1 as MIDI clock (`app/plugin/hostclock.h`, #20): Start or Song
 Position + Continue, $F8 at 24 per beat and Stop, merged in frame order with the track's MIDI,
 whose own clock bytes are dropped while the host gives a transport. It moves the G1 only with its

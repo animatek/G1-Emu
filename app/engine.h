@@ -36,7 +36,8 @@ namespace g1app
 		// _os, if given, is the OS image to install instead of the ROM's factory OS (HostOptions::os:
 		// Clavia's 3.03b update, which the hardware runs). An image that cannot be one is ignored.
 		// _dspCount: 4 for a Regular, 8 for an Expanded (g1::g_regularDsps, g1::g_expandedDsps).
-		explicit Engine(const std::vector<uint8_t>& _rom, const std::vector<uint8_t>& _os = {}, uint32_t _dspCount = g1::g_regularDsps);
+		// _threaded: see g1::Microcontroller (G1_THREADS still wins).
+		explicit Engine(const std::vector<uint8_t>& _rom, const std::vector<uint8_t>& _os = {}, uint32_t _dspCount = g1::g_regularDsps, bool _threaded = true);
 
 		// Whether the OS in use is the one given, not the ROM's.
 		bool customOs() const { return m_customOs; }
