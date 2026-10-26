@@ -7,6 +7,12 @@ Older entries cite their commit by hand.
 
 ## 2026-10-26
 
+- [Perf] Claude: **the serial second instance is withdrawn**: with real patches (ButohDrone,
+  ArpeggiRama) a serial instance needs more than one core, and in Bitwig the second one alone
+  dropped out (136 to 400 dropouts, load 86-99 %), nine instances all at 99 %. The 2026-10-26 entry
+  below measured an idle default patch, which is far cheaper than a real one. Every instance is on
+  threads again; the `_threaded` parameter stays, and `G1_THREADS=0` too.
+
 - [Perf] Claude: **the plugin runs its second and later instances with the DSPs serial**, not on
   threads (`Engine` and `Microcontroller` take `_threaded`; `G1_THREADS` still wins). Measured with
   `g1run` instances in real time (16 threads, default patch): 8 instances take 13.7 cores and reach

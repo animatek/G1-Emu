@@ -391,12 +391,11 @@ namespace g1plugin
 		if(_state)
 			if(const auto xml = getXmlFromBinary(_state->getData(), static_cast<int>(_state->getSize())); xml && xml->hasTagName(g_stateTag))
 				m_expanded = xml->getStringAttribute("model") == "expanded";
-		// The first instance runs its DSPs on threads, which finish a block sooner; the others run them
-		// serially, which costs about half the CPU in total and sounds the same bit for bit. Past a few
-		// instances the threads' spinning is what keeps a host from reaching real time (8 instances: 57 %
-		// of it with threads, 100 % without). The instance number counts the ones alive in every process;
-		// without a PC Port (no number) the instance counts as the first. G1_THREADS=0/1 overrides it.
-		const bool threaded = m_instance <= 1;
+		// Every instance runs its DSPs on threads. Serial was tried for the second and later ones (it
+		// costs about half the CPU with the default patch) and failed with real patches: ButohDrone and
+		// ArpeggiRama need more than one core serially, and a second instance alone dropped out
+		// (Bitwig, 2026-10-26). G1_THREADS=0 still runs one serially, to try it.
+		const bool threaded = true;
 		auto engine = std::make_unique<g1app::Engine>(m_rom, m_os, m_expanded ? g1::g_expandedDsps : g1::g_regularDsps, threaded);
 		g1app::logEvent("plugin engine: instance " + std::to_string(m_instance) + ", DSPs " + (engine->mc().threaded() ? "on threads" : "serial"));
 		m_keeper = std::make_unique<g1app::SlotKeeper>();
