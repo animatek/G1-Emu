@@ -15,7 +15,8 @@ Older entries cite their commit by hand.
   for sector 13, his own stores since). `EmuHost::chooseFlashPath` now picks it again on every
   restart; one given on the command line stays. Both flashes copied aside first
   (`flash-before-model-switch-fix-2026-10-27.bin`, `flash-micro-before-...`). The plugin already
-  chose it per engine. Checked: (by Javier, switching both ways).
+  chose it per engine. Checked by Javier: switching between the Micro and the rack both ways boots
+  right every time.
 - [Docs] Claude: **release notes for alpha.27** (`docs/release-notes.md`): the Micro's box, buttons,
   knobs and bar, the plugin awake, the AU, and what is known.
 - [Fix] Claude: **the plugin no longer falls asleep in the host**: it reported a tail of 0 s, so a

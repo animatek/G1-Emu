@@ -10,9 +10,14 @@ a note while it is held (Note Trig); the lower one goes back and, with Shift, is
 can assign. Shift is also your computer's Shift key, as on the G1's panel. Knobs 1 and 3 were
 swapped: fixed.
 
-**Below the box**, what the hardware never had: **Presets** (the Micro's one bank of 99, click one to
-load it), **Restart**, **About**, and the tooltips. Changing the model in Settings now offers to
-restart at once.
+**Below the box, the G1's bars**: the status bar (the emulator's figures, Patreon, Report issue and
+the **Settings** gear) and the **extras tray**, which its arrow hides or shows: **Presets** (the
+Micro's one bank of 99, click one to load it), the tooltips, **About** and the power switch.
+
+**Switching models.** Changing the model in Settings now offers to restart at once, and the new
+model boots on its own flash: a switch between the Micro and the G1 could boot one on the other's
+flash, stuck at "3.0." or at full load until G1-Emu was opened again. Your G1's banks were not
+lost: what got written into its flash was the Micro's OS, which the G1 replaces on every start.
 
 **The plugin no longer falls asleep.** It told the host its sound ends when the notes do, so a host
 that puts silent plugins to sleep (Bitwig) stopped it while you edited, and an upload from the editor
