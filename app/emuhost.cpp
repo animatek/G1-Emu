@@ -130,10 +130,9 @@ namespace g1app
 		_log += "ROM: " + search.path + "\n";
 		m_rom = std::move(rom);
 
-		m_flashPath = _flashPath.empty() ? defaultFlashPath() : _flashPath;
-		// The Micro keeps its own flash: its OS and its patch storage are not the rack's.
-		if(_flashPath.empty() && m_options.dspCount() == g1::g_microDsps)
-			m_flashPath = (std::filesystem::path(m_flashPath).parent_path() / "flash-micro.bin").string();
+		m_flashChosen = !_flashPath.empty();
+		m_flashPath = _flashPath;
+		chooseFlashPath();
 		const char* up = std::getenv("G1_UPDATE");
 		boot(up && std::string(up) == "1", _log);
 
@@ -268,6 +267,17 @@ namespace g1app
 	// they were. The MIDI ports and the sound card stay open, so an editor keeps its connection.
 	// Not in update mode unless updateModeOnRestart() asked for it: a restart after an update is
 	// the first boot of the OS that came in.
+	// The flash of the model in use: the rack's flash.bin, or the Micro's own flash-micro.bin (its OS
+	// and its patch storage are not the rack's). One given on the command line is kept as it is.
+	void EmuHost::chooseFlashPath()
+	{
+		if(m_flashChosen)
+			return;
+		m_flashPath = defaultFlashPath();
+		if(m_options.dspCount() == g1::g_microDsps)
+			m_flashPath = (std::filesystem::path(m_flashPath).parent_path() / "flash-micro.bin").string();
+	}
+
 	bool EmuHost::restart(std::string& _log)
 	{
 		if(!running())
@@ -299,6 +309,10 @@ namespace g1app
 				_log += "the flash set aside as " + aside.string() + ", the banks from " + m_resetFlashFrom + "\n";
 		}
 
+		// Settings may have changed the model: the new one boots with its own flash. Keeping the
+		// path booted a Micro on the rack's flash.bin (it hung at "3.0.") and a rack on the Micro's
+		// (100% load), each then saving into the other's file (Javier, 2026-10-27).
+		chooseFlashPath();
 		std::array<uint8_t, 256> adc{};
 		for(size_t i = 0; i < adc.size(); ++i)
 			adc[i] = m_engine->mc().adc(static_cast<uint8_t>(i));

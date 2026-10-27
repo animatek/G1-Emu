@@ -142,6 +142,8 @@ namespace g1app
 		std::vector<uint8_t> m_rom;		// kept for a restart
 		Options m_options;
 		std::string m_flashPath;
+		bool m_flashChosen = false;	// given on the command line: kept whatever the model
+		void chooseFlashPath();
 		// G1_UPDATE=1: the G1 starts in its boot ROM's update mode (the OS length in the flash
 		// blanked, as on a G1 with no OS), for Clavia's own updater on the PC Port. At the end
 		// an OS that came in is kept as an image and used from then on (HostOptions::os).

@@ -7,6 +7,15 @@ Older entries cite their commit by hand.
 
 ## 2026-10-27
 
+- [Fix] Claude: **switching the model with Restart booted it on the other model's flash** (Javier:
+  a Micro stuck at "3.0.", a rack at 100% load, both fine after closing and opening G1-Emu). The
+  standalone chose `flash.bin` or `flash-micro.bin` only at start; a restart kept the path, so the
+  new model booted on the old one's flash and then saved into it: Javier's `flash.bin` held the
+  Micro's OS (harmless, the rack puts its own back on load; its banks matched the 19/10 copy but
+  for sector 13, his own stores since). `EmuHost::chooseFlashPath` now picks it again on every
+  restart; one given on the command line stays. Both flashes copied aside first
+  (`flash-before-model-switch-fix-2026-10-27.bin`, `flash-micro-before-...`). The plugin already
+  chose it per engine. Checked: (by Javier, switching both ways).
 - [Docs] Claude: **release notes for alpha.27** (`docs/release-notes.md`): the Micro's box, buttons,
   knobs and bar, the plugin awake, the AU, and what is known.
 - [Fix] Claude: **the plugin no longer falls asleep in the host**: it reported a tail of 0 s, so a
