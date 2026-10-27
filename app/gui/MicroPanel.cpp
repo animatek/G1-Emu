@@ -115,12 +115,14 @@ namespace g1gui
 		_g.drawText(m_label, labelArea, juce::Justification::centred);
 	}
 
-	MicroPanel::MicroPanel(PanelHost& _host) : m_host(_host), m_knobs{{MicroKnob({}, 255), MicroKnob({}, 0), MicroKnob({}, 0), MicroKnob({}, 0)}}
+	MicroPanel::MicroPanel(PanelHost& _host) : m_host(_host), m_knobs{{MicroKnob({}, 255), MicroKnob({}, 0), MicroKnob({}, 0), MicroKnob({}, 0)}},
+		m_presets(_host.presets(), [] { return 0; })
 	{
 		setSize(Width, Height);
 		auto& mc = m_host.mc();
-		// The volume's entry is the OS's; the edit knobs 1-3 are the first three.
-		static constexpr std::array<uint8_t, 4> entry{{g1::g_qspiVolume, 0, 1, 2}};
+		// The volume's entry is the OS's; the edit knobs 1-3 are the first three, the other way round:
+		// knob 1 is entry 2 and knob 3 entry 0 (Javier, 2026-10-27: they came out swapped).
+		static constexpr std::array<uint8_t, 4> entry{{g1::g_qspiVolume, 2, 1, 0}};
 		for(size_t i = 0; i < m_knobs.size(); ++i)
 		{
 			m_knobs[i].setValue(mc.qspiAdc(entry[i]), false);
@@ -148,6 +150,45 @@ namespace g1gui
 				juce::CallOutBox::launchAsynchronously(std::move(content), m_settings.getScreenBounds(), nullptr);
 		};
 		addAndMakeVisible(m_settings);
+		// The bar below the box: the Presets page (the Micro's one bank, into its one slot), the power
+		// switch it has no other way to reach, About and the tooltips.
+		m_presets.setBankCount(1);
+		m_presets.setHideEmpty(m_host.presetsHideEmpty());
+		m_presets.onHideEmptyChanged = [this](const bool _on) { m_host.setPresetsHideEmpty(_on); };
+		addChildComponent(m_presets);
+		m_presetsButton.setTooltip("The Micro's patches: click one to load it");
+		m_presetsButton.onClick = [this]
+		{
+			if(m_presets.isOpen())
+				m_presets.close();
+			else
+				m_presets.open(presetsFrame());
+		};
+		m_restart.setTooltip("Restart the Micro");
+		m_restart.onClick = [this]
+		{
+			juce::AlertWindow::showAsync(juce::MessageBoxOptions().withIconType(juce::MessageBoxIconType::QuestionIcon)
+				.withTitle("Restart the Micro?").withMessage(m_host.restartNote()).withButton("Restart").withButton("Cancel"),
+				[this](const int _result) { if(_result == 1) m_host.restart(); });
+		};
+		m_about.setTooltip("About G1-Emu: who made it, its licenses, and Animatek NME");
+		m_about.onClick = [this] { m_aboutView.open(*this, BoxHeight, getLocalBounds().withHeight(BoxHeight)); };
+		addChildComponent(m_aboutView);
+		m_tipsToggle.setTooltip("What each control does, beside the mouse");
+		m_tipsToggle.setColour(juce::ToggleButton::textColourId, g_ink);
+		m_tipsToggle.setToggleState(m_host.tooltips(), juce::dontSendNotification);
+		m_tooltips.enabled = m_host.tooltips();
+		m_tipsToggle.onClick = [this]
+		{
+			m_tooltips.enabled = m_tipsToggle.getToggleState();
+			if(!m_tooltips.enabled)
+				m_tooltips.hideTip();
+			m_host.setTooltips(m_tooltips.enabled);
+		};
+		for(auto* c : std::initializer_list<juce::Component*>{&m_presetsButton, &m_about, &m_tipsToggle})
+			addAndMakeVisible(*c);
+		if(m_host.canRestart())
+			addAndMakeVisible(m_restart);
 		m_status.setColour(juce::Label::textColourId, g_ink);
 		m_status.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain));
 		addAndMakeVisible(m_status);
@@ -183,9 +224,24 @@ namespace g1gui
 		}
 	}
 
+	// The Presets page laid out as on the G1's panel, wide and low, over the box's upper part.
+	juce::Rectangle<int> MicroPanel::presetsFrame() const
+	{
+		return {40, 30, getWidth() - 80, 300};
+	}
+
 	void MicroPanel::resized()
 	{
-		const auto p = getLocalBounds().toFloat();
+		auto bar = getLocalBounds().removeFromBottom(BarHeight).reduced(16, 9);
+		for(auto* b : std::initializer_list<juce::Component*>{&m_presetsButton, &m_restart, &m_about})
+		{
+			b->setBounds(bar.removeFromLeft(110));
+			bar.removeFromLeft(10);
+		}
+		m_tipsToggle.setBounds(bar.removeFromRight(120));
+		if(m_presets.isVisible())
+			m_presets.setBounds(presetsFrame());
+		const auto p = getLocalBounds().withHeight(BoxHeight).toFloat();
 		m_settings.setBounds(at(p, 0.835f, 0.215f, 0.12f, 0.06f).toNearestInt());
 		m_status.setBounds(at(p, 0.04f, 0.93f, 0.92f, 0.05f).toNearestInt());
 		// Shift, Volume and knobs 1-3 along the front, under their labels.
@@ -225,8 +281,10 @@ namespace g1gui
 
 	void MicroPanel::paint(juce::Graphics& _g)
 	{
-		const auto p = getLocalBounds().toFloat();
+		const auto p = getLocalBounds().withHeight(BoxHeight).toFloat();
 		_g.fillAll(g_body);
+		_g.setColour(g_plum);	// the bar below the box
+		_g.fillRect(getLocalBounds().removeFromBottom(BarHeight));
 
 		// The plum band with the model's name, and its sweep down on the right.
 		juce::Path band;

@@ -170,6 +170,9 @@ namespace g1gui
 		// Reads the bank shown again: something may have been stored in it (the panel's Store).
 		void refresh();
 
+		// How many banks the synth has: the rack's nine, or the Micro's one (Clavia's manual).
+		void setBankCount(int _count);
+
 		// Hide empty, as the host keeps it: set at the start, and told each time it is clicked.
 		void setHideEmpty(bool _on);
 		std::function<void(bool)> onHideEmptyChanged;

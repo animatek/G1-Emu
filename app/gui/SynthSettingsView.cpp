@@ -633,6 +633,15 @@ namespace g1gui
 		constexpr int g_numberW = 22;				// "07" before each name
 	}
 
+	void PresetsView::setBankCount(const int _count)
+	{
+		m_bank.clear(juce::dontSendNotification);
+		for(int b = 0; b < std::clamp(_count, 1, static_cast<int>(g1app::PresetsLink::Banks)); ++b)
+			m_bank.addItem("Bank " + juce::String(b + 1), b + 1);
+		m_bank.setSelectedId(1, juce::dontSendNotification);
+		m_bank.setEnabled(_count > 1);
+	}
+
 	PresetsView::PresetsView(g1app::PresetsLink& _link, std::function<int()> _activeSlot)
 		: m_link(_link), m_activeSlot(std::move(_activeSlot)), m_frame(G1Skin::presets_panel_png, G1Skin::presets_panel_pngSize)
 	{
@@ -710,6 +719,8 @@ namespace g1gui
 
 	void PresetsView::close(const bool _under)
 	{
+		if(!m_open)		// a fade out started on a closed page would hide it once opened again
+			return;
 		stopTimer();
 		m_open = false;
 		hidePage(*this, _under);

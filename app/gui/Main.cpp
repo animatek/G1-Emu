@@ -211,14 +211,15 @@ namespace g1gui
 				if(b)
 					b->triggerClick();
 			};
-			// The Micro Modular's box has no pages: its picture, then the Settings card from its button.
+			// The Micro Modular's box: its picture, the Settings card from its button, and its Presets page.
 			if(findNamed<MicroPanel>(w))
 			{
 				switch(m_step++)
 				{
 				case 0: save("1-micro-panel.png"); click("Settings"); break;
+				case 1: save("2-micro-settings.png"); click("Presets"); break;
 				default:
-					save("2-micro-settings.png");
+					save("3-micro-presets.png");
 					stopTimer();
 					juce::JUCEApplication::getInstance()->systemRequestedQuit();
 					return;

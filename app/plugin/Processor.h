@@ -1,5 +1,7 @@
 #pragma once
 
+#include <limits>
+
 // The G1 as a VST3 instrument: notes from the track, four outputs (1/2 and 3/4, like the back
 // panel), two inputs, and the G1's user state (patches and synth settings, never the OS) inside
 // the DAW project. The emulator runs on the Runner's thread, paced by the host's blocks.
@@ -112,7 +114,19 @@ namespace g1plugin
 		bool acceptsMidi() const override { return true; }
 		bool producesMidi() const override { return true; }	// the G1's MIDI OUT
 		bool isMidiEffect() const override { return false; }
-		double getTailLengthSeconds() const override { return 0.0; }
+		// A G1 sounds without notes (an LFO, a drone, a sequencer), so its tail is endless: a host
+		// that reads 0 puts the plugin to sleep while nothing comes in (Bitwig), the emulation stops
+		// with it, and an editor's upload stops halfway, leaving the patch half in (found with the
+		// Micro, 2026-10-27). Infinite is VST3's kInfiniteTail through JUCE. The CLAP wrapper (which
+		// leaves wrapperType alone) multiplies it by the rate into an int, which infinity overflows,
+		// and an AU hands it to the system as it is: those get about three hours, the most that fits
+		// at 192 kHz, endless all the same.
+		double getTailLengthSeconds() const override
+		{
+			if(wrapperType == wrapperType_VST3)
+				return std::numeric_limits<double>::infinity();
+			return (std::numeric_limits<int32_t>::max() - 192000.0) / 192000.0;
+		}
 
 		// VST3 carries no Program Change as MIDI: a host that has one for the plugin sets its
 		// program parameter instead. These 128 programs are Program Changes on channel 1 (slot A's

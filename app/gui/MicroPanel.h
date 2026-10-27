@@ -7,7 +7,9 @@
 // the buttons it reads on port F (setMicroButton). Shift is also the computer's Shift key, as on the
 // G1's panel.
 
+#include "Overlay.h"
 #include "Panel.h"
+#include "SynthSettingsView.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -54,7 +56,9 @@ namespace g1gui
 	class MicroPanel : public juce::Component, private juce::Timer
 	{
 	public:
-		static constexpr int Width = 960, Height = 572;	// the box's top, about 1.68 to 1
+		// The box's top, about 1.68 to 1, and a bar below it with what the hardware never had (as the
+		// G1's extras drawer): Presets, Restart, About and the tooltips.
+		static constexpr int Width = 960, BoxHeight = 572, BarHeight = 48, Height = BoxHeight + BarHeight;
 
 		explicit MicroPanel(PanelHost& _host);
 		~MicroPanel() override;
@@ -68,10 +72,16 @@ namespace g1gui
 	private:
 		void timerCallback() override;
 		void drawDigit(juce::Graphics& _g, juce::Rectangle<float> _r, uint8_t _segments) const;
+		juce::Rectangle<int> presetsFrame() const;
 
 		PanelHost& m_host;
 		std::array<MicroKnob, 4> m_knobs;	// volume, then 1-3
 		std::array<MicroButton, 3> m_buttons;	// Shift, and the two on the right
+		DelayedTooltips m_tooltips{this};
+		PresetsView m_presets;		// the Micro's one bank, loading into its one slot
+		juce::TextButton m_presetsButton{"Presets"}, m_restart{"Restart"}, m_about{"About"};
+		juce::ToggleButton m_tipsToggle{"Tooltips"};
+		AboutView m_aboutView;
 		juce::TextButton m_settings{"Settings"};
 		juce::Label m_status;
 		std::array<uint8_t, 2> m_digits{{0xff, 0xff}};	// as the OS drives them: a segment is lit when its bit is low

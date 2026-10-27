@@ -7,6 +7,26 @@ Older entries cite their commit by hand.
 
 ## 2026-10-27
 
+- [Docs] Claude: **release notes for alpha.27** (`docs/release-notes.md`): the Micro's box, buttons,
+  knobs and bar, the plugin awake, the AU, and what is known.
+- [Fix] Claude: **the plugin no longer falls asleep in the host**: it reported a tail of 0 s, so a
+  host that puts silent plugins to sleep (Bitwig) stopped calling it while nothing played, the
+  emulation stopped with it, and an editor's upload stopped halfway: NME's "Upload timeout at
+  packet 0", the Micro frozen, and a project that then reopened with the patch half in. Found by
+  Javier on a Micro in Bitwig; a stack of the frozen plugin showed every G1-Emu thread idle,
+  waiting for the host. A G1 sounds without notes, so the tail is now endless: VST3's
+  kInfiniteTail, and about three hours for the CLAP and the AU (the CLAP wrapper turns infinity
+  into an int; an AU hands it to the system as it is). Checked by Javier: editing and storing a
+  Micro's patches from NME in Bitwig, with nothing playing, no longer freezes.
+- [Fix] Claude: **the Micro's knobs 1 and 3 were swapped** (Javier): knob 1 is the QSPI ADC's
+  entry 2, knob 3 entry 0.
+- [GUI] Claude: **a bar below the Micro's box**, as the G1's extras drawer: **Presets** (the G1's
+  page with the Micro's one bank, Clavia's manual: "1 in Micro Modular"; `PresetsView::setBankCount`),
+  **Restart** (the power switch it had no other way to reach), **About** and the tooltips, which
+  the Micro's box never showed (it had no tooltip window). Closing a Presets page already closed
+  does nothing now: its fade out used to hide it once opened again. `G1_SNAPSHOTS` also takes the
+  Micro's Presets page. Checked: snapshots of the Micro's box and its Presets page (bank 1 alone,
+  the copy's three patches).
 - [New] Claude: **the plugin as an AU on macOS** (#7): `G1-Emu.component` (an instrument, aumu) and
   `G1-Emu FX.component` (a music effect, aumf, which takes MIDI), built with the VST3 and CLAP from
   the same sources and put into the macOS package. CI runs Apple's `auval -strict` on both. Not

@@ -213,7 +213,7 @@ want to hear about it.
   a Regular's) for small patches and slower computers. G1-Emu does not ship that OS: point
   Settings' **Micro OS** at Clavia's Micro Modular OS updater (the `.exe`; it is read as it is, nothing to
   extract) or leave it in the ROM folder. It has its own box (volume, three edit knobs and the
-  two-digit display; its buttons work, Shift also from the computer's Shift key) and its own flash (`flash-micro.bin`). Start or
+  two-digit display; its buttons work, Shift also from the computer's Shift key; below it, Presets with its one bank, Restart and About) and its own flash (`flash-micro.bin`). Start or
   Restart to switch (`model = micro`, `G1_MODEL=micro`). The plugin has it too, in its Settings, so one plugin is a G1 or a Micro.
 - **Settings** (in the window): the ROM, the model, audio driver and device, output level, whether outputs 1/2
   connect themselves, the raw MIDI card, and the notice above. The console reads the same settings;
