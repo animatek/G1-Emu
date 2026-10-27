@@ -362,6 +362,12 @@ namespace g1gui
 		std::optional<juce::VBlankAttachment> m_leaving;	// while it lingers and fades
 	};
 
+	// Shared by the G1's panel and the Micro's box: the status bar's line (the emulator's figures,
+	// _peakHold the output's held peak) and Report issue (a new GitHub issue with the setup filled
+	// in, and the log shown to attach).
+	juce::String statusText(const g1app::HostStats& _s, double _peakHold);
+	void reportIssue(PanelHost& _host);
+
 	class Panel : public juce::Component, private juce::Timer
 	{
 	public:

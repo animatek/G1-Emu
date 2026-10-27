@@ -20,6 +20,12 @@ Older entries cite their commit by hand.
   Micro's patches from NME in Bitwig, with nothing playing, no longer freezes.
 - [Fix] Claude: **the Micro's knobs 1 and 3 were swapped** (Javier): knob 1 is the QSPI ADC's
   entry 2, knob 3 entry 0.
+- [GUI] Claude: **the Micro's bars are the G1's** (Javier: "the same bar, so it all hangs
+  together"): below the box, the G1's status bar (the same figures, `statusText`, and Patreon and
+  Report issue, `reportIssue(PanelHost&)`, both now shared with the G1's panel) and its extras tray,
+  always open: Settings (moved down from the box's corner), Presets and the tooltips; About and the
+  power switch at the right. The Presets page sits higher and wider, over the whole plum band.
+  Checked: snapshots of the Micro's box and Presets; the G1's status bar unchanged.
 - [GUI] Claude: **a bar below the Micro's box**, as the G1's extras drawer: **Presets** (the G1's
   page with the Micro's one bank, Clavia's manual: "1 in Micro Modular"; `PresetsView::setBankCount`),
   **Restart** (the power switch it had no other way to reach), **About** and the tooltips, which

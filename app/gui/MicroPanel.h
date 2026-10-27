@@ -56,9 +56,11 @@ namespace g1gui
 	class MicroPanel : public juce::Component, private juce::Timer
 	{
 	public:
-		// The box's top, about 1.68 to 1, and a bar below it with what the hardware never had (as the
-		// G1's extras drawer): Presets, Restart, About and the tooltips.
-		static constexpr int Width = 960, BoxHeight = 572, BarHeight = 48, Height = BoxHeight + BarHeight;
+		// The box's top, about 1.68 to 1, and below it the G1's bars: the status bar (the emulator's
+		// figures, Patreon, Report issue) and the extras tray, always open (Settings, Presets, the
+		// tooltips, About and the power switch).
+		static constexpr int Width = 960, BoxHeight = 572, StatusHeight = 36, ExtrasHeight = 60;
+		static constexpr int Height = BoxHeight + StatusHeight + ExtrasHeight;
 
 		explicit MicroPanel(PanelHost& _host);
 		~MicroPanel() override;
@@ -79,9 +81,13 @@ namespace g1gui
 		std::array<MicroButton, 3> m_buttons;	// Shift, and the two on the right
 		DelayedTooltips m_tooltips{this};
 		PresetsView m_presets;		// the Micro's one bank, loading into its one slot
-		juce::TextButton m_presetsButton{"Presets"}, m_restart{"Restart"}, m_about{"About"};
+		juce::TextButton m_presetsButton{"Presets"}, m_about{"About"};
 		juce::ToggleButton m_tipsToggle{"Tooltips"};
+		IconButton m_patreon{"Patreon", IconButton::Icon::Patreon}, m_report{"Report", IconButton::Icon::Report};
+		IconButton m_power{"Restart", IconButton::Icon::Restart};
+		ExtrasDrawer m_drawer;		// the tray, painted as the G1's
 		AboutView m_aboutView;
+		double m_peakHold = 0;
 		juce::TextButton m_settings{"Settings"};
 		juce::Label m_status;
 		std::array<uint8_t, 2> m_digits{{0xff, 0xff}};	// as the OS drives them: a segment is lit when its bit is low

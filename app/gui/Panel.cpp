@@ -2364,9 +2364,33 @@ namespace g1gui
 		});
 	}
 
-	void Panel::reportIssue()
+	void Panel::reportIssue() { g1gui::reportIssue(m_host); }
+
+	juce::String statusText(const g1app::HostStats& _s, const double _peakHold)
 	{
-		const auto s = m_host.stats();
+		juce::String dsp;
+		for(uint32_t d = 0; d < _s.dspCount; ++d)
+			dsp << (_s.dspFailed[d] ? "x" : _s.dspOn[d] ? "o" : "-");
+		// String::formatted uses wide printf on Windows: never pass UTF-8 pointers to %s.
+		juce::String status = juce::String::formatted("speed %5.1f%%   load %3.0f%%", _s.speed, _s.load);
+#ifdef __linux__
+		status += juce::String::formatted("   CPU %.1f cores", _s.cpuCores);
+#endif
+		status += "   DSP " + dsp + "   output 1/2 ";
+		status += _peakHold > 1e-6 ? juce::String::formatted("%+.0f dB", 20.0 * std::log10(_peakHold)) : "silence";
+		// The byte counters, not just the port names: when an editor says "no response from
+		// synth", the first thing anybody needs to know is whether its bytes ever arrived.
+		// PC in stuck at 0 means they did not; in moving and out stuck means we do not answer.
+		return status + "   dropouts " + juce::String(static_cast<juce::int64>(_s.xruns)) + "   |  " + juce::String(_s.audio)
+			+ juce::String::formatted("  |  PC Port in/out %llu/%llu   MIDI in/out %llu/%llu",
+				static_cast<unsigned long long>(_s.pcIn), static_cast<unsigned long long>(_s.pcOut),
+				static_cast<unsigned long long>(_s.midiIn), static_cast<unsigned long long>(_s.midiOut))
+			+ (_s.rawMidi.empty() ? juce::String() : "  |  raw: " + juce::String(_s.rawMidi));
+	}
+
+	void reportIssue(PanelHost& _host)
+	{
+		const auto s = _host.stats();
 		juce::String body;
 		body << "**What happens**\n\n\n**How to reproduce it**\n\n\n"
 			 << "**The patch**, if one is involved: attach its .pch, the very file you loaded (zip it if "
@@ -2718,16 +2742,7 @@ namespace g1gui
 			--m_midiHold;
 
 		m_peakHold = std::max(static_cast<double>(s.peak), m_peakHold * 0.9);
-		juce::String dsp;
-		for(uint32_t d = 0; d < s.dspCount; ++d)
-			dsp << (s.dspFailed[d] ? "x" : s.dspOn[d] ? "o" : "-");
-		// String::formatted uses wide printf on Windows: never pass UTF-8 pointers to %s.
-		juce::String status = juce::String::formatted("speed %5.1f%%   load %3.0f%%", s.speed, s.load);
-#ifdef __linux__
-		status += juce::String::formatted("   CPU %.1f cores", s.cpuCores);
-#endif
-		status += "   DSP " + dsp + "   output 1/2 ";
-		status += m_peakHold > 1e-6 ? juce::String::formatted("%+.0f dB", 20.0 * std::log10(m_peakHold)) : "silence";
+		juce::String status = statusText(s, m_peakHold);
 
 		// Issue #64: the DAW's own meter watches its audio callback, which the emulator does not
 		// run in; it can read near-idle while the G1 is actually dropping audio. Visible here
@@ -2746,14 +2761,7 @@ namespace g1gui
 		if(overload)
 			status = "OVERLOAD   " + status;
 
-		m_status.setText(status + "   dropouts " + juce::String(static_cast<juce::int64>(s.xruns)) + "   |  " + juce::String(s.audio)
-			// The byte counters, not just the port names: when an editor says "no response from
-			// synth", the first thing anybody needs to know is whether its bytes ever arrived.
-			// PC in stuck at 0 means they did not; in moving and out stuck means we do not answer.
-			+ juce::String::formatted("  |  PC Port in/out %llu/%llu   MIDI in/out %llu/%llu",
-				static_cast<unsigned long long>(s.pcIn), static_cast<unsigned long long>(s.pcOut),
-				static_cast<unsigned long long>(s.midiIn), static_cast<unsigned long long>(s.midiOut))
-			+ (s.rawMidi.empty() ? juce::String() : "  |  raw: " + juce::String(s.rawMidi))
+		m_status.setText(status
 			+ (s.dspProblem.empty() ? juce::String() : "  |  " + juce::String(s.dspProblem)), juce::dontSendNotification);
 	}
 

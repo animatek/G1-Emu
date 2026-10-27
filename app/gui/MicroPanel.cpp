@@ -164,8 +164,8 @@ namespace g1gui
 			else
 				m_presets.open(presetsFrame());
 		};
-		m_restart.setTooltip("Restart the Micro");
-		m_restart.onClick = [this]
+		m_power.setTooltip("Restart the Micro");
+		m_power.onClick = [this]
 		{
 			juce::AlertWindow::showAsync(juce::MessageBoxOptions().withIconType(juce::MessageBoxIconType::QuestionIcon)
 				.withTitle("Restart the Micro?").withMessage(m_host.restartNote()).withButton("Restart").withButton("Cancel"),
@@ -175,7 +175,7 @@ namespace g1gui
 		m_about.onClick = [this] { m_aboutView.open(*this, BoxHeight, getLocalBounds().withHeight(BoxHeight)); };
 		addChildComponent(m_aboutView);
 		m_tipsToggle.setTooltip("What each control does, beside the mouse");
-		m_tipsToggle.setColour(juce::ToggleButton::textColourId, g_ink);
+		m_tipsToggle.setColour(juce::ToggleButton::textColourId, juce::Colour(0xffe8e8f0));
 		m_tipsToggle.setToggleState(m_host.tooltips(), juce::dontSendNotification);
 		m_tooltips.enabled = m_host.tooltips();
 		m_tipsToggle.onClick = [this]
@@ -185,12 +185,18 @@ namespace g1gui
 				m_tooltips.hideTip();
 			m_host.setTooltips(m_tooltips.enabled);
 		};
-		for(auto* c : std::initializer_list<juce::Component*>{&m_presetsButton, &m_about, &m_tipsToggle})
+		m_patreon.setTooltip("Support G1-Emu and Animatek NME on Patreon");
+		m_patreon.onClick = [] { juce::URL("https://www.patreon.com/c/animatek").launchInDefaultBrowser(); };
+		m_report.setTooltip("Open a new issue on GitHub, with this build and setup filled in");
+		m_report.onClick = [this] { reportIssue(m_host); };
+		addAndMakeVisible(m_drawer);
+		m_settings.toFront(false);	// added before the tray, which would cover it
+		for(auto* c : std::initializer_list<juce::Component*>{&m_presetsButton, &m_about, &m_tipsToggle, &m_patreon, &m_report})
 			addAndMakeVisible(*c);
 		if(m_host.canRestart())
-			addAndMakeVisible(m_restart);
-		m_status.setColour(juce::Label::textColourId, g_ink);
-		m_status.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain));
+			addAndMakeVisible(m_power);
+		m_status.setColour(juce::Label::textColourId, juce::Colours::white);	// the G1's status bar
+		m_status.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 12.5f, juce::Font::plain));
 		addAndMakeVisible(m_status);
 		startTimerHz(30);
 	}
@@ -218,32 +224,39 @@ namespace g1gui
 		static int tick = 0;
 		if(++tick % 15 == 0)
 		{
-			const auto s = m_host.stats();
-			m_status.setText(juce::String::formatted("Micro Modular, 1 DSP   speed %.0f%%  load %.0f%%  cpu %.1f cores", s.speed, s.load, s.cpuCores),
-				juce::dontSendNotification);
+			const auto st = m_host.stats();
+			m_peakHold = std::max(static_cast<double>(st.peak), m_peakHold * 0.9);
+			m_status.setText(statusText(st, m_peakHold), juce::dontSendNotification);
 		}
 	}
 
-	// The Presets page laid out as on the G1's panel, wide and low, over the box's upper part.
+	// The Presets page laid out as on the G1's panel, wide and low, over the box's upper part: the
+	// whole plum band under it, not half.
 	juce::Rectangle<int> MicroPanel::presetsFrame() const
 	{
-		return {40, 30, getWidth() - 80, 300};
+		return {14, 10, getWidth() - 28, 326};	// down to just above the knobs' labels
 	}
 
 	void MicroPanel::resized()
 	{
-		auto bar = getLocalBounds().removeFromBottom(BarHeight).reduced(16, 9);
-		for(auto* b : std::initializer_list<juce::Component*>{&m_presetsButton, &m_restart, &m_about})
-		{
-			b->setBounds(bar.removeFromLeft(110));
-			bar.removeFromLeft(10);
-		}
-		m_tipsToggle.setBounds(bar.removeFromRight(120));
+		// The status bar below the box, as the G1's: the figures, then Patreon and Report issue.
+		const int bar = BoxHeight + 3;
+		m_status.setBounds(14, bar, getWidth() - 28 - 2 * 32, 30);
+		m_patreon.setBounds(getWidth() - 14 - 26 - 32, bar + 3, 26, 24);
+		m_report.setBounds(getWidth() - 14 - 26, bar + 3, 26, 24);
+		// The extras tray, as the G1's: Settings, Presets and the tooltips after its label; About and
+		// the power switch at the right.
+		const int tray = BoxHeight + StatusHeight;
+		m_drawer.setBounds(0, tray, getWidth(), ExtrasHeight);
+		m_settings.setBounds(140, tray + 15, 100, 28);
+		m_presetsButton.setBounds(250, tray + 15, 100, 28);
+		m_tipsToggle.setBounds(370, tray + 15, 120, 28);
+		const int right = getWidth() - 12 - 10;
+		m_power.setBounds(right - 28, tray + 15, 28, 28);
+		m_about.setBounds((m_host.canRestart() ? m_power.getX() - 10 : right) - 80, tray + 15, 80, 28);
 		if(m_presets.isVisible())
 			m_presets.setBounds(presetsFrame());
 		const auto p = getLocalBounds().withHeight(BoxHeight).toFloat();
-		m_settings.setBounds(at(p, 0.835f, 0.215f, 0.12f, 0.06f).toNearestInt());
-		m_status.setBounds(at(p, 0.04f, 0.93f, 0.92f, 0.05f).toNearestInt());
 		// Shift, Volume and knobs 1-3 along the front, under their labels.
 		m_buttons[0].setBounds(at(p, 0.065f, 0.765f, 0.085f, 0.075f).toNearestInt());
 		m_knobs[0].setBounds(at(p, 0.17f, 0.71f, 0.09f, 0.18f).toNearestInt());
@@ -283,8 +296,8 @@ namespace g1gui
 	{
 		const auto p = getLocalBounds().withHeight(BoxHeight).toFloat();
 		_g.fillAll(g_body);
-		_g.setColour(g_plum);	// the bar below the box
-		_g.fillRect(getLocalBounds().removeFromBottom(BarHeight));
+		_g.setColour(juce::Colour(Panel::FaceColour));	// the G1's bars below the box
+		_g.fillRect(getLocalBounds().withTrimmedTop(BoxHeight));
 
 		// The plum band with the model's name, and its sweep down on the right.
 		juce::Path band;
