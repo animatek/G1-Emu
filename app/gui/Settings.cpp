@@ -113,14 +113,23 @@ namespace g1gui
 		addAndMakeVisible(m_romFolder);
 
 		// Regular or Expanded: the G1 with the expansion board has 8 DSPs instead of 4, and the same
-		// OS gives each patch about twice the voices. A new G1 is needed, so it takes effect on the
-		// next start or Restart.
+		// OS gives each patch about twice the voices. A new G1 is needed: changing it offers to restart
+		// now, or it takes effect on the next start or Restart.
 		m_model.addItem("Regular  (4 DSPs)", 1);
 		m_model.addItem("Expanded  (8 DSPs, twice the voices)", 2);
 		m_model.addItem("Micro Modular  (1 DSP, its own OS)", 3);
 		m_model.setSelectedId(o.micro ? 3 : o.expanded ? 2 : 1, juce::dontSendNotification);
 		m_model.setTooltip("The G1 with or without the expansion board, or the Micro Modular (one DSP, light on the CPU); on the next start or Restart");
-		m_model.onChange = [this] { apply(); };
+		m_model.onChange = [this]
+		{
+			apply();
+			// A model other than the running one: offer the restart now (the Micro's box has no power
+			// button, and from the G1's panel it saves a step).
+			const auto wanted = m_model.getSelectedId() == 3 ? g1::g_microDsps : m_model.getSelectedId() == 2 ? g1::g_expandedDsps : g1::g_regularDsps;
+			if(wanted != m_host.mc().dspCount())
+				askThenRestart("Model", "The G1 restarts as the " + juce::String(g1app::HostOptions::modelName(wanted)) + ".\n\nYour banks are "
+					"not touched; each model keeps its own flash where it has one.", "Restart now", [] {});
+		};
 		addAndMakeVisible(m_model);
 
 		// The Micro runs its own OS, which G1-Emu does not ship: Clavia's updater for it (the .exe) is

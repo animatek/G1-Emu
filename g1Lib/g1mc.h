@@ -45,6 +45,9 @@ namespace g1
 	static constexpr uint32_t g_lcdData = 0x202006;		// HD44780 LCD: data bus
 	static constexpr uint32_t g_lcdControl = 0x202007;		// LCD: bit 0 = RS, bit 1 = E
 	static constexpr uint8_t g_qspiVolume = 3;				// the Micro's volume: its QSPI ADC queue entry
+	// The Micro's buttons: their bits on port F (Microcontroller::setMicroButton).
+	static constexpr uint32_t g_microUpperBit = 1, g_microLowerBit = 2, g_microShiftBit = 3;
+	static constexpr uint8_t g_microButtonBits = 0x0e;
 	static constexpr uint8_t g_adcVolume = 0x30;			// multiplexer code of the master volume
 	static constexpr uint32_t g_flashAddress = 0x300000;	// CS7, 1 MB, 8 bits: the installed OS
 	static constexpr uint32_t g_flashSize = Flash::Size;
@@ -207,6 +210,7 @@ namespace g1
 		uint8_t m_adcSelect = 0, m_adcResult = 0;
 		uint8_t m_microSegments = 0;
 		std::array<std::atomic<uint8_t>, 2> m_microDigits{};	// the Micro's 7-segment display: what each digit last showed
+		std::atomic<uint8_t> m_microButtons{0};	// the Micro's buttons on port F, 1 = pressed (setMicroButton)
 		std::array<uint8_t, 16> m_qspiAdc{};	// the Micro's knobs, read through the QSPI: one value per queue entry
 		uint8_t m_ledLatch = 0, m_panelRows = 0xff;
 		std::array<std::atomic<uint8_t>, 4> m_leds{};
@@ -281,6 +285,18 @@ namespace g1
 		// the rack's multiplexer: queue entry _entry answers with _value (0-255).
 		void setQspiAdc(uint8_t _entry, uint8_t _value) { m_qspiAdc[_entry & 15] = _value; }
 		uint8_t qspiAdc(uint8_t _entry) const { return m_qspiAdc[_entry & 15]; }
+		// The Micro's buttons, on the 68331's port F, active low (a bit reads 0 while its button is
+		// held: the OS's is-held test, $102CA2-$102CDC, answers yes for a clear bit). The OS turns a
+		// change of bit 3 into event $405 (Shift), bit 1 into $40E (the upper button: the next patch;
+		// with Shift, a C4 at velocity 96 while it is held, Note Trig) and bit 2 into $410 (the lower
+		// button: the previous patch; with Shift, a switch a patch can use; held at power-on, the OS
+		// skips part of its start, $100A8A). Micro OS $102C0A and $1113B2. Can be used from another
+		// thread.
+		void setMicroButton(uint32_t _bit, bool _pressed)
+		{
+			const auto mask = static_cast<uint8_t>(1u << (_bit & 7));
+			_pressed ? m_microButtons.fetch_or(mask) : m_microButtons.fetch_and(static_cast<uint8_t>(~mask));
+		}
 		// The Micro's display: the segment bits of digit _digit (0 or 1), as the OS last drove them.
 		uint8_t microDigit(uint32_t _digit) const { return m_microDigits[_digit & 1].load(std::memory_order_relaxed); }
 		uint8_t adc(uint8_t _select) const { return m_adc[_select]; }

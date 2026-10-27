@@ -1,18 +1,26 @@
-# The G1 as a VST3 instrument (docs/instance-hosting.md, issue #7). It is built on g1Core only:
-# no ALSA, no JACK, no MIDI ports of its own. The window is g1gui's panel.
+# The G1 as a VST3 instrument, and an AU on macOS (docs/instance-hosting.md, issue #7). It is built
+# on g1Core only: no ALSA, no JACK, no MIDI ports of its own. The window is g1gui's panel.
 #
 # Built twice from the same sources: g1plugin, the instrument (G1-Emu), and g1pluginfx, the same
 # G1 as an effect (G1-Emu FX), whose audio input is on from the start so a host lets it sit on an
 # audio track and feeds the G1's two inputs (issue #76). An instrument's input is off until the
 # host turns it on, and most hosts never offer it.
 function(g1_add_plugin _target _name _code _fx)
+	# AU too on macOS (asked for in #7): an instrument (aumu), and G1-Emu FX as a music effect (aumf),
+	# the AU type for an effect that takes MIDI.
+	set(formats VST3)
+	if(APPLE)
+		list(APPEND formats AU)
+	endif()
 	if(_fx)
 		set(isSynth FALSE)
+		set(auType kAudioUnitType_MusicEffect)
 		set(categories Fx)
 		set(clapId "net.animatek.g1-emu-fx")
 		set(clapFeatures audio-effect)
 	else()
 		set(isSynth TRUE)
+		set(auType kAudioUnitType_MusicDevice)
 		set(categories Instrument Synth)
 		set(clapId "net.animatek.g1-emu")
 		set(clapFeatures instrument synthesizer)
@@ -28,9 +36,10 @@ function(g1_add_plugin _target _name _code _fx)
 		NEEDS_MIDI_OUTPUT TRUE	# the G1's MIDI OUT (Runner::takeMidiOut)
 		IS_MIDI_EFFECT FALSE
 		VST3_CATEGORIES ${categories}
+		AU_MAIN_TYPE ${auType}
 		COPY_PLUGIN_AFTER_BUILD FALSE
 		VST3_AUTO_MANIFEST FALSE
-		FORMATS VST3)
+		FORMATS ${formats})
 
 	target_sources(${_target} PRIVATE Processor.cpp Processor.h Editor.cpp Editor.h runner.cpp runner.h
 		../gui/Panel.cpp ../gui/Panel.h ../gui/MicroPanel.cpp ../gui/MicroPanel.h ../gui/SynthSettingsView.cpp ../gui/SynthSettingsView.h ../gui/Overlay.cpp ../gui/Overlay.h ../gui/LcdFont.h)

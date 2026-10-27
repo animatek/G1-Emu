@@ -132,6 +132,19 @@ jobs:
       # What the binary claims about itself is the whole point of the flags above, so it is
       # checked rather than assumed: both slices present, and a minimum macOS that is not the
       # runner's.
+      # The AUs through Apple's own validator, installed where a host finds them: aumu (the
+      # instrument) and aumf (G1-Emu FX), manufacturer Atek. No ROM here, so they play silence.
+      - name: Validate the AUs (auval)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build/app/plugin/g1plugin_artefacts/Release/AU/G1-Emu.component ~/Library/Audio/Plug-Ins/Components/
+          cp -R "build/app/plugin/g1pluginfx_artefacts/Release/AU/G1-Emu FX.component" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          auval -a | grep -i atek || true
+          auval -strict -v aumu G1Em Atek
+          auval -strict -v aumf G1Fx Atek
+
       - name: Check the macOS binary
         if: runner.os == 'macOS'
         run: |
@@ -154,6 +167,10 @@ jobs:
           cp -R build/app/plugin/g1plugin_artefacts/Release/CLAP/G1-Emu.clap package/
           cp -R "build/app/plugin/g1pluginfx_artefacts/Release/VST3/G1-Emu FX.vst3" package/
           cp -R "build/app/plugin/g1pluginfx_artefacts/Release/CLAP/G1-Emu FX.clap" package/
+          if [ "$RUNNER_OS" = macOS ]; then
+            cp -R build/app/plugin/g1plugin_artefacts/Release/AU/G1-Emu.component package/
+            cp -R "build/app/plugin/g1pluginfx_artefacts/Release/AU/G1-Emu FX.component" package/
+          fi
           cp G1-Emu/README.md G1-Emu/LICENSE package/
           tar -czf G1-Emu-${{ matrix.artifact }}.tar.gz -C package .
 

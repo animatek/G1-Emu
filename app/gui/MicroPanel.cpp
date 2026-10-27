@@ -9,9 +9,59 @@ namespace g1gui
 {
 	namespace
 	{
-		const juce::Colour g_body(0xffc8322b), g_strip(0xff2a2a4a), g_ink(0xfff0e6df);
+		const juce::Colour g_body(0xffd8302c), g_plum(0xff4a1a3c), g_ink(0xfff0e6df);
 		const juce::Colour g_lit(0xffff3b2e), g_unlit(0xff4a1210), g_glass(0xff1c0707);
 		constexpr float g_sweep = 0.75f * juce::MathConstants<float>::pi;	// the knob turns +-135 degrees
+
+		// Where things are on the box's top, as fractions of the panel (x, y, width, height).
+		juce::Rectangle<float> at(const juce::Rectangle<float> _panel, const float _x, const float _y, const float _w, const float _h)
+		{
+			return {_panel.getX() + _x * _panel.getWidth(), _panel.getY() + _y * _panel.getHeight(),
+				_w * _panel.getWidth(), _h * _panel.getHeight()};
+		}
+
+		// A label in a plum-framed box, as the box prints them: white ink on plum (or plum on red).
+		void labelBox(juce::Graphics& _g, const juce::Rectangle<float> _r, const juce::String& _text, const bool _filled, const float _font)
+		{
+			if(_filled)
+			{
+				_g.setColour(g_plum);
+				_g.fillRect(_r);
+			}
+			_g.setColour(g_plum);
+			_g.drawRect(_r, 1.5f);
+			_g.setColour(_filled ? g_ink : g_plum);
+			_g.setFont(juce::FontOptions(_font, juce::Font::bold));
+			_g.drawFittedText(_text, _r.toNearestInt(), juce::Justification::centred, 1);
+		}
+
+		// Knobs 1-3, then the display's and the right buttons' column: the number over what Shift
+		// makes of it (the box's two rows of labels).
+		struct Column { float x, w; const char* top; const char* bottom; };
+		constexpr std::array<Column, 5> g_columns{{
+			{0.285f, 0.140f, "1", "Master Tune"}, {0.425f, 0.140f, "2", "MIDI Channel"},
+			{0.565f, 0.140f, "3", "Patch Select"}, {0.705f, 0.120f, "", "Patch"}, {0.825f, 0.105f, "Note Trig", "4"}}};
+	}
+
+	void MicroButton::update()
+	{
+		const bool held = m_mouse || m_key;
+		if(held == m_held)
+			return;
+		m_held = held;
+		repaint();
+		if(onHeld)
+			onHeld(held);
+	}
+
+	void MicroButton::paint(juce::Graphics& _g)
+	{
+		// Held, it sinks a little and its face lightens.
+		const auto r = getLocalBounds().toFloat().reduced(m_held ? 4.0f : 2.0f);
+		_g.setColour(juce::Colour(m_held ? 0xff2a2a2a : 0xff121212));
+		_g.fillRoundedRectangle(r, 6.0f);
+		_g.setColour(juce::Colour(m_held ? 0xff6a6a6a : 0xff3c3c3c));
+		_g.drawRoundedRectangle(r.reduced(3.0f), 5.0f, 1.5f);
 	}
 
 	MicroKnob::MicroKnob(const juce::String& _label, const int _default) : m_label(_label), m_value(_default), m_default(_default)
@@ -47,7 +97,7 @@ namespace g1gui
 	void MicroKnob::paint(juce::Graphics& _g)
 	{
 		auto area = getLocalBounds().toFloat();
-		auto labelArea = area.removeFromBottom(22.0f);
+		auto labelArea = m_label.isEmpty() ? juce::Rectangle<float>() : area.removeFromBottom(22.0f);
 		const auto d = std::min(area.getWidth(), area.getHeight()) - 8.0f;
 		const auto knob = juce::Rectangle<float>(d, d).withCentre(area.getCentre());
 		_g.setColour(juce::Colour(0xff1d1d1d));
@@ -65,7 +115,7 @@ namespace g1gui
 		_g.drawText(m_label, labelArea, juce::Justification::centred);
 	}
 
-	MicroPanel::MicroPanel(PanelHost& _host) : m_host(_host), m_knobs{{MicroKnob("Volume", 255), MicroKnob("1", 0), MicroKnob("2", 0), MicroKnob("3", 0)}}
+	MicroPanel::MicroPanel(PanelHost& _host) : m_host(_host), m_knobs{{MicroKnob({}, 255), MicroKnob({}, 0), MicroKnob({}, 0), MicroKnob({}, 0)}}
 	{
 		setSize(Width, Height);
 		auto& mc = m_host.mc();
@@ -77,6 +127,19 @@ namespace g1gui
 			m_knobs[i].onChange = [this, i](const int _v) { m_host.mc().setQspiAdc(entry[i], static_cast<uint8_t>(_v)); };
 			m_knobs[i].setTooltip(i == 0 ? "The master volume" : "Edit knob " + juce::String(i) + " (what the patch assigned to it)");
 			addAndMakeVisible(m_knobs[i]);
+		}
+		// Shift (also the computer's Shift key), then the two on the right, which select patches.
+		static constexpr std::array<uint32_t, 3> bit{{g1::g_microShiftBit, g1::g_microUpperBit, g1::g_microLowerBit}};
+		static constexpr std::array<const char*, 3> tip{{
+			"Shift (also the computer's Shift key): with it, the knobs are Master Tune, MIDI Channel and Patch Select,\n"
+			"the upper button plays a note and the lower one is the patch's switch",
+			"The next patch. With Shift: Note Trig, a note while it is held",
+			"The previous patch. With Shift: the switch a patch can assign (4)"}};
+		for(size_t i = 0; i < m_buttons.size(); ++i)
+		{
+			m_buttons[i].onHeld = [this, i](const bool _held) { m_host.mc().setMicroButton(bit[i], _held); };
+			m_buttons[i].setTooltip(tip[i]);
+			addAndMakeVisible(m_buttons[i]);
 		}
 		m_settings.setTooltip(m_host.settingsTooltip());
 		m_settings.onClick = [this]
@@ -91,11 +154,20 @@ namespace g1gui
 		startTimerHz(30);
 	}
 
-	MicroPanel::~MicroPanel() = default;
+	MicroPanel::~MicroPanel()
+	{
+		for(auto& b : m_buttons)	// nothing stays pressed in the G1 once its panel goes
+			b.onHeld = nullptr;
+		for(const auto bit : {g1::g_microShiftBit, g1::g_microUpperBit, g1::g_microLowerBit})
+			m_host.mc().setMicroButton(bit, false);
+	}
 
 	void MicroPanel::timerCallback()
 	{
 		auto& mc = m_host.mc();
+		// The computer's Shift key holds the box's Shift, read from the system so it works with the
+		// mouse over the panel without the focus (a plugin window), as on the G1's panel.
+		m_buttons[0].setKeyHeld(juce::ModifierKeys::getCurrentModifiersRealtime().isShiftDown() && (hasKeyboardFocus(true) || isMouseOver(true)));
 		const std::array<uint8_t, 2> now{{mc.microDigit(0), mc.microDigit(1)}};
 		if(now != m_digits)
 		{
@@ -113,17 +185,20 @@ namespace g1gui
 
 	void MicroPanel::resized()
 	{
-		auto area = getLocalBounds().reduced(24);
-		auto top = area.removeFromTop(34);
-		m_settings.setBounds(top.removeFromRight(110));
-		area.removeFromTop(20);
-		auto bottom = area.removeFromBottom(24);
-		m_status.setBounds(bottom);
-		// The display on the right of the knobs, as on the box: volume, then 1-3 across, the display last.
-		auto knobs = area.removeFromLeft(area.getWidth() * 2 / 3);
-		const auto w = knobs.getWidth() / 4;
-		for(auto& k : m_knobs)
-			k.setBounds(knobs.removeFromLeft(w).reduced(6, 30));
+		const auto p = getLocalBounds().toFloat();
+		m_settings.setBounds(at(p, 0.835f, 0.215f, 0.12f, 0.06f).toNearestInt());
+		m_status.setBounds(at(p, 0.04f, 0.93f, 0.92f, 0.05f).toNearestInt());
+		// Shift, Volume and knobs 1-3 along the front, under their labels.
+		m_buttons[0].setBounds(at(p, 0.065f, 0.765f, 0.085f, 0.075f).toNearestInt());
+		m_knobs[0].setBounds(at(p, 0.17f, 0.71f, 0.09f, 0.18f).toNearestInt());
+		for(size_t i = 1; i < 4; ++i)
+		{
+			const auto& c = g_columns[i - 1];
+			m_knobs[i].setBounds(at(p, c.x + c.w / 2 - 0.045f, 0.71f, 0.09f, 0.18f).toNearestInt());
+		}
+		// The two buttons on the right, one over the other.
+		m_buttons[1].setBounds(at(p, 0.84f, 0.705f, 0.085f, 0.075f).toNearestInt());
+		m_buttons[2].setBounds(at(p, 0.84f, 0.81f, 0.085f, 0.075f).toNearestInt());
 	}
 
 	void MicroPanel::drawDigit(juce::Graphics& _g, const juce::Rectangle<float> _r, const uint8_t _segments) const
@@ -150,23 +225,41 @@ namespace g1gui
 
 	void MicroPanel::paint(juce::Graphics& _g)
 	{
+		const auto p = getLocalBounds().toFloat();
 		_g.fillAll(g_body);
-		auto area = getLocalBounds().reduced(24);
-		area.removeFromTop(54);
-		area.removeFromBottom(24);
-		_g.setColour(g_strip);
-		_g.fillRoundedRectangle(area.toFloat(), 10.0f);
-		_g.setColour(g_ink);
-		_g.setFont(juce::FontOptions(24.0f, juce::Font::bold));
-		_g.drawText("MICRO MODULAR", 24, 22, 300, 30, juce::Justification::centredLeft);
 
-		// The display's glass, on the right: the digit the OS lights second (its 2) is the left one.
-		auto display = area.removeFromRight(area.getWidth() / 3).toFloat().reduced(18.0f, 40.0f);
+		// The plum band with the model's name, and its sweep down on the right.
+		juce::Path band;
+		const auto b = at(p, 0.0f, 0.19f, 1.0f, 0.36f);
+		band.startNewSubPath(b.getX(), b.getY());
+		band.lineTo(b.getRight(), b.getY());
+		band.lineTo(b.getRight(), b.getBottom());
+		band.lineTo(b.getX() + 0.08f * b.getWidth(), b.getBottom());
+		band.quadraticTo(b.getX(), b.getBottom(), b.getX(), b.getBottom() - 0.25f * b.getHeight());
+		band.closeSubPath();
+		_g.setColour(g_plum);
+		_g.fillPath(band);
+		_g.setColour(g_body);
+		_g.setFont(juce::FontOptions(34.0f, juce::Font::bold));
+		_g.drawText("MICRO MODULAR", at(p, 0.05f, 0.24f, 0.6f, 0.09f), juce::Justification::centredLeft);
+
+		// The labels over the controls: Shift and Volume, then each column's number over what Shift
+		// makes of it.
+		labelBox(_g, at(p, 0.06f, 0.655f, 0.1f, 0.05f), "Shift", true, 15.0f);
+		labelBox(_g, at(p, 0.16f, 0.655f, 0.11f, 0.05f), "Volume", false, 15.0f);
+		for(const auto& c : g_columns)
+		{
+			labelBox(_g, at(p, c.x, 0.605f, c.w, 0.05f), c.top, false, 15.0f);
+			labelBox(_g, at(p, c.x, 0.655f, c.w, 0.05f), c.bottom, *c.top != 0, 15.0f);
+		}
+
+		// The display's glass, under "Patch": the digit the OS lights second (its 2) is the left one.
+		auto display = at(p, 0.725f, 0.72f, 0.08f, 0.15f);
 		_g.setColour(g_glass);
-		_g.fillRoundedRectangle(display, 6.0f);
-		display = display.reduced(14.0f);
-		const float dw = (display.getWidth() - 20.0f) / 2.0f;
-		drawDigit(_g, {display.getX(), display.getY(), dw - 8.0f, display.getHeight()}, m_digits[1]);
-		drawDigit(_g, {display.getX() + dw + 20.0f, display.getY(), dw - 8.0f, display.getHeight()}, m_digits[0]);
+		_g.fillRoundedRectangle(display, 4.0f);
+		display = display.reduced(display.getWidth() * 0.12f, display.getHeight() * 0.14f);
+		const float dw = display.getWidth() / 2.0f;
+		drawDigit(_g, {display.getX(), display.getY(), dw - 7.0f, display.getHeight()}, m_digits[1]);
+		drawDigit(_g, {display.getX() + dw + 2.0f, display.getY(), dw - 7.0f, display.getHeight()}, m_digits[0]);
 	}
 }

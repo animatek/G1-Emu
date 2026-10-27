@@ -95,16 +95,24 @@ volume read zero, `Y:$5F` was never written and the output was silence: that was
 each queue entry with a value; **entry 3 is the volume** (found by trying them), entries 0-2 are
 the other knobs and do nothing to the sound so far (`G1_QSPIADC=ff,00,00,00` is the test hook).
 
-**The Micro's buttons** (Shift, Patch, Note Trig) are not on the QSPI. The OS reads the 68331's port F
-(`$FFFA19`); **active high**, idle 0: pressing combinations of bits 0-2 makes the display change (bits
-0 and 2 together showed `C4`, the note it plays; others blank it or showed `On`/`OF`), but a single bit
-from a fresh boot changed nothing visible, so which bit is which is not mapped. The display is **active
-low**, a-g on bits 0-6 and the dot on bit 7 (`$F9` is `1`); the OS lights digit 1 (the right one) and
-digit 2 (the left one) in turn.
+**The Micro's buttons** (Shift, and the two that select patches) are not on the QSPI: they are on
+the 68331's port F (`$FFFA19`), **bits 1-3, active low** (corrected 2026-10-27; read as active high
+before, which made the OS see all three held from power-on). The OS's is-held test (`$102CA2`,
+`$102CB6`, `$102CCA`: `andi #mask; subq #1; addx`) answers yes for a clear bit. Its poll (`$102C0A`)
+turns a change of bit 1 into event `$40E`, bit 2 into `$410` and bit 3 into `$405`, handled at
+`$1113B2`: `$405` is **Shift** (it keeps `$17BF8C`, Shift held), `$40E` the **upper button** (the
+next patch; with Shift a C4 at velocity 96, on while held, off on release: Note Trig, as Clavia's
+manual says) and `$410` the **lower button** (the previous patch; with Shift, a switch a patch can
+assign). At power-on the OS asks whether `$410` is held (`$100A8A`) and, if so, skips part of its
+start (`$120D0A`, `$120B48`); released, it sets up its flash on a first start (10 sectors erased in
+`g1boot`). With a rack's flash loaded into a Micro, that start never ends: each model keeps its own
+flash (`flash-micro.bin`), and the tests do the same. The display is **active low**, a-g on bits
+0-6 and the dot on bit 7 (`$F9` is `1`); the OS lights digit 1 (the right one) and digit 2 (the
+left one) in turn.
 
 Open: notes through the PC Port's play-note path do not track pitch on the Micro while MIDI notes on
 channel 1 do (`G1_MIDINOTE=1`: 524 Hz for note 72, the rack's 522); the 7-segment display and the
-buttons are not emulated; where an end user gets the Micro's OS image (the rack's `os =` setting
+buttons are emulated since 2026-10-27; where an end user gets the Micro's OS image (the rack's `os =` setting
 has the same question).
 
 ## Boot and memory map

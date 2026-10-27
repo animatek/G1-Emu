@@ -5,6 +5,29 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-10-27
+
+- [New] Claude: **the plugin as an AU on macOS** (#7): `G1-Emu.component` (an instrument, aumu) and
+  `G1-Emu FX.component` (a music effect, aumf, which takes MIDI), built with the VST3 and CLAP from
+  the same sources and put into the macOS package. CI runs Apple's `auval -strict` on both. Not
+  tried in a Mac DAW here. README: where to install it.
+- [GUI] Claude: **the Micro's box laid out as the real one** (Javier's photo and Clavia's manual):
+  the model's name on the plum band; Shift, Volume and the edit knobs 1-3 with what Shift makes of
+  them (Master Tune, MIDI Channel, Patch Select); the display under "Patch"; the two buttons on the
+  right under "Note Trig / 4". 960 x 572, the box's proportions.
+- [Fix] Claude: **the Micro's buttons work**: they are active low on port F (bits 1-3), and G1-Emu
+  had them reading 0, so the OS saw all three held from power-on and none ever did anything; it
+  also skipped part of its start, as with the lower button held. Now Shift (also the computer's
+  Shift key, as on the G1's panel), the upper button (next patch; with Shift, Note Trig) and the
+  lower one (previous patch; with Shift, the patch's switch) are `Microcontroller::setMicroButton`.
+  Read in the Micro's OS (NOTES.md, "Micro Modular in G1-Emu"). Checked: the Micro boots, sets up
+  its own flash and shows its patch number in `g1boot`; every test passes (7-25), the Micro's
+  included; the buttons by hand: (to be confirmed by Javier).
+- [Fix] Claude: **changing the model in Settings offers to restart now**: the Micro's box has no
+  power button, so from it the change only came on the next start of G1-Emu.
+- [Test] Claude: `g1runnertest` takes the model's own flash (`flash-micro.bin` on a Micro), as the
+  plugin does: a rack's flash in a Micro now keeps its OS busy for ever (see above).
+
 ## 2026-10-26
 
 - [Docs] Claude: **the release notes for alpha.26** (`docs/release-notes.md`): the Micro Modular

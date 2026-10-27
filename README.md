@@ -73,6 +73,7 @@ rescan:
 | System | VST3 | CLAP |
 | --- | --- | --- |
 | macOS | `~/Library/Audio/Plug-Ins/VST3` | `~/Library/Audio/Plug-Ins/CLAP` |
+| macOS, AU (`G1-Emu.component`) | `~/Library/Audio/Plug-Ins/Components` | |
 | Windows | `C:\Program Files\Common Files\VST3` | `C:\Program Files\Common Files\CLAP` |
 | Linux | `~/.vst3` | `~/.clap` |
 
@@ -82,6 +83,7 @@ plugin, run in Terminal (then rescan):
 ```bash
 xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/G1-Emu.vst3
 xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/G1-Emu.clap
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/G1-Emu.component
 xattr -dr com.apple.quarantine /path/to/G1-Emu.app
 ```
 
@@ -211,7 +213,7 @@ want to hear about it.
   a Regular's) for small patches and slower computers. G1-Emu does not ship that OS: point
   Settings' **Micro OS** at Clavia's Micro Modular OS updater (the `.exe`; it is read as it is, nothing to
   extract) or leave it in the ROM folder. It has its own box (volume, three edit knobs and the
-  two-digit display; its buttons are not there yet) and its own flash (`flash-micro.bin`). Start or
+  two-digit display; its buttons work, Shift also from the computer's Shift key) and its own flash (`flash-micro.bin`). Start or
   Restart to switch (`model = micro`, `G1_MODEL=micro`). The plugin has it too, in its Settings, so one plugin is a G1 or a Micro.
 - **Settings** (in the window): the ROM, the model, audio driver and device, output level, whether outputs 1/2
   connect themselves, the raw MIDI card, and the notice above. The console reads the same settings;

@@ -57,6 +57,13 @@ namespace g1
 		{
 			Mc68k::write16(0xfffd00 + 2u * (_queue & 15u), static_cast<uint16_t>(m_qspiAdc[_queue & 15u] << 1));
 		});
+		// The Micro's buttons come in on port F (setMicroButton), active low: released, their bits read
+		// 1. Reading 0 there made the Micro's OS see all three held from power-on, so none ever did
+		// anything. The rack's OS never reads it.
+		getPortF().setReadRXCallback([this](const mc68k::Port&, const uint8_t _c)
+		{
+			return static_cast<uint8_t>((_c | g1::g_microButtonBits) & ~m_microButtons.load(std::memory_order_relaxed));
+		});
 		if(const char* q = std::getenv("G1_QSPIADC"))	// "ff,00,00,00": test hook
 		{
 			uint32_t i = 0;

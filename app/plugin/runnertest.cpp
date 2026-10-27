@@ -28,6 +28,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <thread>
@@ -214,7 +215,13 @@ int main(int _argc, char** _argv)
 		return 77;
 	}
 	{
-		std::ifstream f(g1app::defaultFlashPath(), std::ios::binary);
+		// The model's own flash, as the plugin takes it (Processor): the Micro's is flash-micro.bin. A
+		// rack's flash in a Micro sends its OS (with the buttons released, as they are now) into
+		// sorting out a flash that is not its own, and the test then never ends.
+		auto flashPath = std::filesystem::path(g1app::defaultFlashPath());
+		if(g1app::HostOptions().dspCount() == g1::g_microDsps)
+			flashPath = flashPath.parent_path() / "flash-micro.bin";
+		std::ifstream f(flashPath, std::ios::binary);
 		setup.flash.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
 		if(setup.flash.size() != g1::Flash::Size)
 			setup.flash.clear();

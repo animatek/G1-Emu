@@ -1,10 +1,11 @@
 #pragma once
 
-// The panel of the Micro Modular model: the red box with its four knobs (volume and the three
-// edit knobs) and the two-digit 7-segment display, on one DSP and its own OS. It reads the display
-// the OS drives (Microcontroller::microDigit) and writes the knobs the OS reads through the QSPI
-// (setQspiAdc). The buttons are not here yet: where they sit on the 68331's port F is not mapped
-// (NOTES.md, "Micro Modular in G1-Emu").
+// The panel of the Micro Modular model, laid out as the box's top: the model's name, and in front,
+// left to right, Shift, Volume, the edit knobs 1-3 (with what Shift makes of them), the two-digit
+// 7-segment display and the two buttons on the right. It reads the display the OS drives
+// (Microcontroller::microDigit) and writes the knobs the OS reads through the QSPI (setQspiAdc) and
+// the buttons it reads on port F (setMicroButton). Shift is also the computer's Shift key, as on the
+// G1's panel.
 
 #include "Panel.h"
 
@@ -35,10 +36,25 @@ namespace g1gui
 		int m_value = 0, m_default = 0, m_dragStart = 0;
 	};
 
+	// One of the box's buttons: held while the mouse is down on it (or, for Shift, while the
+	// computer's Shift key is).
+	class MicroButton : public juce::Component, public juce::SettableTooltipClient
+	{
+	public:
+		std::function<void(bool)> onHeld;
+		void setKeyHeld(bool _held) { m_key = _held; update(); }
+		void paint(juce::Graphics& _g) override;
+		void mouseDown(const juce::MouseEvent&) override { m_mouse = true; update(); }
+		void mouseUp(const juce::MouseEvent&) override { m_mouse = false; update(); }
+	private:
+		void update();
+		bool m_mouse = false, m_key = false, m_held = false;
+	};
+
 	class MicroPanel : public juce::Component, private juce::Timer
 	{
 	public:
-		static constexpr int Width = 640, Height = 360;
+		static constexpr int Width = 960, Height = 572;	// the box's top, about 1.68 to 1
 
 		explicit MicroPanel(PanelHost& _host);
 		~MicroPanel() override;
@@ -55,6 +71,7 @@ namespace g1gui
 
 		PanelHost& m_host;
 		std::array<MicroKnob, 4> m_knobs;	// volume, then 1-3
+		std::array<MicroButton, 3> m_buttons;	// Shift, and the two on the right
 		juce::TextButton m_settings{"Settings"};
 		juce::Label m_status;
 		std::array<uint8_t, 2> m_digits{{0xff, 0xff}};	// as the OS drives them: a segment is lit when its bit is low
