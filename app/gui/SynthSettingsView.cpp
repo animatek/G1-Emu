@@ -633,6 +633,13 @@ namespace g1gui
 		constexpr int g_numberW = 22;				// "07" before each name
 	}
 
+	// The footer's top: the G1's, 41 above the frame's bottom (242 in its 283), and as much higher as
+	// a lower frame needs (the Micro's box, 2026-10-27), so its row is never cut off.
+	int PresetsView::footerY() const
+	{
+		return std::min(g_footerY, getHeight() - 41);
+	}
+
 	void PresetsView::setBankCount(const int _count)
 	{
 		m_bank.clear(juce::dontSendNotification);
@@ -744,7 +751,7 @@ namespace g1gui
 				m_card.refresh();
 		}
 		else
-			repaint(getLocalBounds().withTop(g_footerY));	// "Reading..." comes and goes
+			repaint(getLocalBounds().withTop(footerY()));	// "Reading..." comes and goes
 	}
 
 	// The file, read and made into packets at once: what cannot be read is said here, before
@@ -860,7 +867,7 @@ namespace g1gui
 		const auto c = getLocalBounds();
 		m_frame.draw(_g, c.toFloat());
 
-		for(const int y : {g_titleRuleY, g_footerY})
+		for(const int y : {g_titleRuleY, footerY()})
 		{
 			const auto rule = juce::Rectangle<int>(c.getX() + g_frameEdge, c.getY() + y - 1, c.getWidth() - 2 * g_frameEdge, 3);
 			_g.setColour(g_rule);
@@ -871,7 +878,7 @@ namespace g1gui
 
 		_g.setColour(g_label);
 		_g.setFont(juce::FontOptions(g_textSize));
-		_g.drawText(footer(), c.getX() + g_margin, c.getY() + g_footerY + 4, m_loadPch.getX() - 8 - g_margin, c.getHeight() - g_footerY - 8,
+		_g.drawText(footer(), c.getX() + g_margin, c.getY() + footerY() + 4, m_loadPch.getX() - 8 - g_margin, c.getHeight() - footerY() - 8,
 			juce::Justification::centredLeft, true);
 	}
 
@@ -886,9 +893,9 @@ namespace g1gui
 		const int left = c.getCentreX() - (hideW + gap + countW) / 2;
 		m_hideEmpty.setBounds(left, c.getY() + g_titleY - 1, hideW, g_rowH + 2);	// JUCE sizes its text to its height
 		m_count.setBounds(left + hideW + gap, c.getY() + g_titleY, countW, g_rowH);
-		m_viewport.setBounds(c.getX() + g_margin - 6, c.getY() + g_listTop, c.getWidth() - 2 * g_margin + 12, g_footerY - g_listTop - 6);
-		m_close.setBounds(c.getRight() - g_margin - g_closeW, c.getY() + g_footerY + 8, g_closeW, g_rowH + 6);
-		m_loadPch.setBounds(m_close.getX() - 8 - 84, c.getY() + g_footerY + 8, 84, g_rowH + 6);
+		m_viewport.setBounds(c.getX() + g_margin - 6, c.getY() + g_listTop, c.getWidth() - 2 * g_margin + 12, footerY() - g_listTop - 6);
+		m_close.setBounds(c.getRight() - g_margin - g_closeW, c.getY() + footerY() + 8, g_closeW, g_rowH + 6);
+		m_loadPch.setBounds(m_close.getX() - 8 - 84, c.getY() + footerY() + 8, 84, g_rowH + 6);
 		m_card.setBounds(m_viewport.getBounds().reduced(60, 18));
 		showBank();
 	}

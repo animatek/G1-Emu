@@ -134,11 +134,19 @@ namespace g1gui
 		// Any size, in the panel's proportions, which change with the extras drawer.
 		void showPanel()
 		{
-			// The Micro Modular model has a box of its own: one size.
+			// The Micro Modular model has a box of its own: one size, taller with its extras tray open.
 			if(m_host.mc().dspCount() == g1::g_microDsps)
 			{
-				setContentOwned(new MicroPanel(m_panelHost), true);
-				m_constrainer.setSizeLimits(MicroPanel::Width, MicroPanel::Height, MicroPanel::Width, MicroPanel::Height);
+				auto* micro = new MicroPanel(m_panelHost);
+				const auto fit = [this, micro]
+				{
+					const int h = micro->preferredHeight();
+					m_constrainer.setSizeLimits(MicroPanel::Width, h, MicroPanel::Width, h);
+					setContentComponentSize(MicroPanel::Width, h);
+				};
+				micro->onHeightChanged = fit;
+				setContentOwned(micro, true);
+				fit();
 				return;
 			}
 			auto* view = new PanelView(m_panelHost);
@@ -216,7 +224,11 @@ namespace g1gui
 			{
 				switch(m_step++)
 				{
-				case 0: save("1-micro-panel.png"); click("Settings"); break;
+				case 0:
+					save("1-micro-panel.png");
+					if(auto* gear = findNamed<IconButton>(w, "Settings"))	// the gear, as on the G1
+						gear->triggerClick();
+					break;
 				case 1: save("2-micro-settings.png"); click("Presets"); break;
 				default:
 					save("3-micro-presets.png");

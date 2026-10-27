@@ -77,11 +77,17 @@ namespace g1plugin
 		if(m_engine->mc().dspCount() == g1::g_microDsps)
 		{
 			m_micro = std::make_unique<g1gui::MicroPanel>(static_cast<g1gui::PanelHost&>(*this));
-			const auto aspect = static_cast<double>(g1gui::MicroPanel::Width) / g1gui::MicroPanel::Height;
-			getConstrainer()->setFixedAspectRatio(aspect);
-			getConstrainer()->setSizeLimits(g1gui::MicroPanel::Width, g1gui::MicroPanel::Height, g1gui::MicroPanel::Width, g1gui::MicroPanel::Height);
+			// One size, taller with its extras tray open: the editor follows the box.
+			const auto fit = [this]
+			{
+				const int h = m_micro->preferredHeight();
+				getConstrainer()->setFixedAspectRatio(static_cast<double>(g1gui::MicroPanel::Width) / h);
+				getConstrainer()->setSizeLimits(g1gui::MicroPanel::Width, h, g1gui::MicroPanel::Width, h);
+				setSize(g1gui::MicroPanel::Width, h);
+			};
+			m_micro->onHeightChanged = fit;
 			addAndMakeVisible(*m_micro);
-			setSize(g1gui::MicroPanel::Width, g1gui::MicroPanel::Height);
+			fit();
 			return;
 		}
 		m_panel = std::make_unique<g1gui::PanelView>(static_cast<g1gui::PanelHost&>(*this));

@@ -185,6 +185,8 @@ namespace g1gui
 		void loadPch(const juce::File& _file);
 
 	private:
+		int footerY() const;	// where the footer row starts: lower frames get it higher
+
 		// The names, in columns top to bottom, as many rows as the bank needs; it scrolls.
 		class List : public juce::Component
 		{

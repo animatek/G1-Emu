@@ -57,10 +57,15 @@ namespace g1gui
 	{
 	public:
 		// The box's top, about 1.68 to 1, and below it the G1's bars: the status bar (the emulator's
-		// figures, Patreon, Report issue) and the extras tray, always open (Settings, Presets, the
-		// tooltips, About and the power switch).
+		// figures; Extras, Patreon, Report issue and Settings) and the extras tray, which the
+		// Extras arrow shows or hides as on the G1 (Presets, the tooltips, About, the power switch).
 		static constexpr int Width = 960, BoxHeight = 572, StatusHeight = 36, ExtrasHeight = 60;
-		static constexpr int Height = BoxHeight + StatusHeight + ExtrasHeight;
+		static constexpr int Height = BoxHeight + StatusHeight + ExtrasHeight;	// with the tray open
+
+		// The height it wants now (the tray open or not), and a call when that changes, for the
+		// window or the plugin's editor to follow.
+		int preferredHeight() const { return BoxHeight + StatusHeight + (m_extrasOpen ? ExtrasHeight : 0); }
+		std::function<void()> onHeightChanged;
 
 		explicit MicroPanel(PanelHost& _host);
 		~MicroPanel() override;
@@ -88,7 +93,11 @@ namespace g1gui
 		ExtrasDrawer m_drawer;		// the tray, painted as the G1's
 		AboutView m_aboutView;
 		double m_peakHold = 0;
-		juce::TextButton m_settings{"Settings"};
+		IconButton m_settings{"Settings", IconButton::Icon::Settings};	// the emulator's, on a card as on the G1
+		IconButton m_extras{"Extras", IconButton::Icon::ExtrasOpen};
+		CardView m_settingsCard;
+		bool m_extrasOpen = true;
+		void setExtrasOpen(bool _open);
 		juce::Label m_status;
 		std::array<uint8_t, 2> m_digits{{0xff, 0xff}};	// as the OS drives them: a segment is lit when its bit is low
 	};

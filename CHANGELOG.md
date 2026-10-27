@@ -20,6 +20,15 @@ Older entries cite their commit by hand.
   Micro's patches from NME in Bitwig, with nothing playing, no longer freezes.
 - [Fix] Claude: **the Micro's knobs 1 and 3 were swapped** (Javier): knob 1 is the QSPI ADC's
   entry 2, knob 3 entry 0.
+- [GUI] Claude: **the Micro's bars work as the G1's** (Javier): Settings is the gear on the status
+  bar, on the G1's card ("Emulator Settings"), no longer a button in the tray; the Extras arrow
+  hides or shows the tray, kept as the G1 keeps it, and the window and the plugin's editor follow
+  the box's height (`MicroPanel::preferredHeight`, `onHeightChanged`). The Presets page sits where
+  Javier drew it, from near the top to just above the plum band's bottom; its footer row is now
+  placed from the frame's bottom (`PresetsView::footerY`: 242 in the G1's 283, unchanged there),
+  so a lower frame keeps it whole. The status line squeezes into one line. Checked: snapshots of
+  the Micro (tray closed, the gear's card, Presets with its footer) and of the G1's Presets page,
+  the same as before.
 - [GUI] Claude: **the Micro's bars are the G1's** (Javier: "the same bar, so it all hangs
   together"): below the box, the G1's status bar (the same figures, `statusText`, and Patreon and
   Report issue, `reportIssue(PanelHost&)`, both now shared with the G1's panel) and its extras tray,

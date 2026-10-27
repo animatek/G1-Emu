@@ -118,7 +118,8 @@ namespace g1gui
 	MicroPanel::MicroPanel(PanelHost& _host) : m_host(_host), m_knobs{{MicroKnob({}, 255), MicroKnob({}, 0), MicroKnob({}, 0), MicroKnob({}, 0)}},
 		m_presets(_host.presets(), [] { return 0; })
 	{
-		setSize(Width, Height);
+		m_extrasOpen = m_host.extrasOpen();
+		setSize(Width, preferredHeight());
 		auto& mc = m_host.mc();
 		// The volume's entry is the OS's; the edit knobs 1-3 are the first three, the other way round:
 		// knob 1 is entry 2 and knob 3 entry 0 (Javier, 2026-10-27: they came out swapped).
@@ -143,13 +144,21 @@ namespace g1gui
 			m_buttons[i].setTooltip(tip[i]);
 			addAndMakeVisible(m_buttons[i]);
 		}
+		// Settings (the gear) and Extras (the arrow), as on the G1's status bar.
 		m_settings.setTooltip(m_host.settingsTooltip());
 		m_settings.onClick = [this]
 		{
-			if(auto content = m_host.createSettings())
-				juce::CallOutBox::launchAsynchronously(std::move(content), m_settings.getScreenBounds(), nullptr);
+			m_settingsCard.open(*this, BoxHeight, juce::Rectangle<int>(0, 0, Width, BoxHeight), "Emulator Settings", m_host.createSettings());
 		};
 		addAndMakeVisible(m_settings);
+		addChildComponent(m_settingsCard);
+		m_extras.setTooltip("Extras: what the hardware never had");
+		m_extras.onClick = [this]
+		{
+			setExtrasOpen(!m_extrasOpen);
+			m_host.setExtrasOpen(m_extrasOpen);
+		};
+		addAndMakeVisible(m_extras);
 		// The bar below the box: the Presets page (the Micro's one bank, into its one slot), the power
 		// switch it has no other way to reach, About and the tooltips.
 		m_presets.setBankCount(1);
@@ -190,14 +199,15 @@ namespace g1gui
 		m_report.setTooltip("Open a new issue on GitHub, with this build and setup filled in");
 		m_report.onClick = [this] { reportIssue(m_host); };
 		addAndMakeVisible(m_drawer);
-		m_settings.toFront(false);	// added before the tray, which would cover it
 		for(auto* c : std::initializer_list<juce::Component*>{&m_presetsButton, &m_about, &m_tipsToggle, &m_patreon, &m_report})
 			addAndMakeVisible(*c);
 		if(m_host.canRestart())
 			addAndMakeVisible(m_power);
 		m_status.setColour(juce::Label::textColourId, juce::Colours::white);	// the G1's status bar
 		m_status.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 12.5f, juce::Font::plain));
+		m_status.setMinimumHorizontalScale(0.5f);	// one line, squeezed: the box is narrower than the G1's panel
 		addAndMakeVisible(m_status);
+		setExtrasOpen(m_extrasOpen);	// as it was left (the window or the plugin keeps it)
 		startTimerHz(30);
 	}
 
@@ -230,27 +240,40 @@ namespace g1gui
 		}
 	}
 
-	// The Presets page laid out as on the G1's panel, wide and low, over the box's upper part: the
-	// whole plum band under it, not half.
+	// The tray shown or hidden, and the window told: it is the G1's drawer without the slide.
+	void MicroPanel::setExtrasOpen(const bool _open)
+	{
+		m_extrasOpen = _open;
+		m_extras.setIcon(_open ? IconButton::Icon::ExtrasClose : IconButton::Icon::ExtrasOpen);
+		for(auto* c : std::initializer_list<juce::Component*>{&m_drawer, &m_presetsButton, &m_tipsToggle, &m_about, &m_power})
+			c->setVisible(_open && (c != &m_power || m_host.canRestart()));
+		setSize(Width, preferredHeight());
+		if(onHeightChanged)
+			onHeightChanged();
+	}
+
+	// The Presets page laid out as on the G1's panel, wide and low, over the box's upper part: from
+	// near its top to just above the plum band's bottom edge, the knobs and their labels clear.
 	juce::Rectangle<int> MicroPanel::presetsFrame() const
 	{
-		return {14, 10, getWidth() - 28, 326};	// down to just above the knobs' labels
+		return {40, 26, getWidth() - 80, 244};	// where Javier drew it: down to the plum band's bottom
 	}
 
 	void MicroPanel::resized()
 	{
 		// The status bar below the box, as the G1's: the figures, then Patreon and Report issue.
 		const int bar = BoxHeight + 3;
-		m_status.setBounds(14, bar, getWidth() - 28 - 2 * 32, 30);
-		m_patreon.setBounds(getWidth() - 14 - 26 - 32, bar + 3, 26, 24);
-		m_report.setBounds(getWidth() - 14 - 26, bar + 3, 26, 24);
-		// The extras tray, as the G1's: Settings, Presets and the tooltips after its label; About and
-		// the power switch at the right.
+		m_status.setBounds(14, bar, getWidth() - 28 - 4 * 32, 30);
+		m_extras.setBounds(getWidth() - 14 - 26 - 96, bar + 3, 26, 24);
+		m_patreon.setBounds(getWidth() - 14 - 26 - 64, bar + 3, 26, 24);
+		m_report.setBounds(getWidth() - 14 - 26 - 32, bar + 3, 26, 24);
+		m_settings.setBounds(getWidth() - 14 - 26, bar + 3, 26, 24);
+		// The extras tray, as the G1's: Presets and the tooltips after its label; About and the power
+		// switch at the right.
 		const int tray = BoxHeight + StatusHeight;
 		m_drawer.setBounds(0, tray, getWidth(), ExtrasHeight);
-		m_settings.setBounds(140, tray + 15, 100, 28);
-		m_presetsButton.setBounds(250, tray + 15, 100, 28);
-		m_tipsToggle.setBounds(370, tray + 15, 120, 28);
+		m_presetsButton.setBounds(140, tray + 15, 100, 28);
+		m_tipsToggle.setBounds(260, tray + 15, 120, 28);
 		const int right = getWidth() - 12 - 10;
 		m_power.setBounds(right - 28, tray + 15, 28, 28);
 		m_about.setBounds((m_host.canRestart() ? m_power.getX() - 10 : right) - 80, tray + 15, 80, 28);
