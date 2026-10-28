@@ -5,6 +5,19 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-10-28
+
+- [Core] Claude: **the DSP core pin moves from `da2ff232` to `8b731966`** (upstream
+  `dsp56300/dsp56300`, 15 commits; CI and `docs/windows-build.md` now check out the commit the local
+  clone is already on). The 24 overlays in `cmake/Dsp56300.cmake` still apply. Worth having: HDI08
+  takes its pending HF0/HF1 host flags in one exchange (a flag stored between the load and the reset
+  was lost — the G1's reload handshake, cross-thread), the JIT's serial status poll fast-forward now
+  covers the two-instruction `btst` + branch form the Nord Lead 2X spins on, and a JIT block that
+  starts at the last address of an untouched block-cache region no longer writes into the page every
+  untouched region shares. The rest are interpreter, debugger and test changes, plus an ESSI-clock
+  change upstream made and then reverted. Checked: `overlaycheck.py` 24/24 against `8b731966`, a
+  full Release build, and `ctest -L g1` green (18/18, `g1dspcheck` included, blocks 1 and 32).
+
 ## 2026-10-27
 
 - [Fix] Claude: **switching the model with Restart booted it on the other model's flash** (Javier:

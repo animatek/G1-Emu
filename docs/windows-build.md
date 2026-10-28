@@ -10,7 +10,7 @@ ignored build directories. They use the same dsp56300 commit and Gearmulator tag
 
 ```powershell
 git clone --recurse-submodules https://github.com/dsp56300/dsp56300.git build-windows-deps/dsp56300
-git -C build-windows-deps/dsp56300 checkout --recurse-submodules da2ff232d965c9c3da587820baae38e2b29a5879
+git -C build-windows-deps/dsp56300 checkout --recurse-submodules 8b731966f9792789adc39fe180a8cf68508f816a
 git clone --branch mdmm-v0.1.0-alpha.13 --depth 1 --recurse-submodules --shallow-submodules https://github.com/joelanders/gearmulator-md-mm.git build-windows-deps/gearmulator-md-mm
 # Reuse ../Nomad2026/JUCE if it already contains JUCE 8.0.12.
 cmake -S . -B build-windows -G "Visual Studio 17 2022" -A x64 -DGEARMULATOR_DIR="$PWD/build-windows-deps/gearmulator-md-mm" -DG1_DSP56300_DIR="$PWD/build-windows-deps/dsp56300" -DG1_JUCE_DIR="$PWD/../Nomad2026/JUCE" -DG1_BACKEND=juce

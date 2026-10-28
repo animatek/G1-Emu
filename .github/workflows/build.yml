@@ -73,7 +73,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: dsp56300/dsp56300
-          ref: da2ff232d965c9c3da587820baae38e2b29a5879
+          ref: 8b731966f9792789adc39fe180a8cf68508f816a
           path: dsp56300
           submodules: recursive
 
