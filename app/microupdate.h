@@ -10,7 +10,7 @@
 //   the editor's greeting is answered with an IAm that says update mode (7F where the OS puts its
 //   serial's top bits); then 70 (header), 71 (112 data bytes in 128), 73 (the sum of the data);
 //   a good sum is answered F0 33 00 06 7F F7, and the display flashes "St"
-//   one of the two patch buttons stores the OS, Shift cancels
+//   one of the two patch buttons stores the OS and the display reads "rd" (Clavia's updater says so); Shift cancels
 //
 // The stream is the rack's (g1update.py, OsUpdate.h in NME): every message F0 33 7F 06 <cmd> ... F7,
 // the data scrambled (swapped bit pairs, XORed with 17 growing by 17) and packed 7 bytes into 8.

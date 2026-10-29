@@ -7,6 +7,7 @@ Older entries cite their commit by hand.
 
 ## 2026-10-29
 
+- [App] Claude: the Micro's update-mode stand-in reads **rd** once the OS is stored, not `--` (Javier, running Clavia's own updater against it: its last page says the display reads "rd"). Checked: builds, g1microupdatetest still stores the image; the display not seen after the change.
 - [App] Claude: **update mode for the Micro, as a test stand-in** (Javier: "a test update mode that does that operation for the
   Micro, and I send the ROM from NME"). Settings > OS... > Update mode now works with the Micro model: the box's display says
   `Ud`, the editor's greeting is answered as an update utility's, the stream NME sends (70 header, 71 data, 73 sum) is

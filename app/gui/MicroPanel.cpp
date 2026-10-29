@@ -243,7 +243,7 @@ namespace g1gui
 			m_osModified = modified;
 			repaint();
 		}
-		// In update mode the display is the stand-in's: Ud, a flashing St, "--" once stored
+		// In update mode the display is the stand-in's: Ud, a flashing St, "rd" once stored
 		std::array<uint8_t, 2> now{{mc.microDigit(0), mc.microDigit(1)}};
 		if(auto* update = m_host.microUpdate())
 			now = update->digits(juce::Time::getMillisecondCounter());

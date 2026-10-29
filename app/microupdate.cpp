@@ -7,7 +7,7 @@ namespace g1app
 	namespace
 	{
 		// The display's letters, active low: a, b, c, d, e, f, g are bits 0-6
-		constexpr uint8_t g_blank = 0xff, g_U = 0xc1, g_d = 0xa1, g_S = 0x92, g_t = 0x87, g_E = 0x86, g_r = 0xaf, g_dash = 0xbf;
+		constexpr uint8_t g_blank = 0xff, g_U = 0xc1, g_d = 0xa1, g_S = 0x92, g_t = 0x87, g_E = 0x86, g_r = 0xaf;
 
 		// 8 bytes into 7: the first carries the low bit of each of the next seven (LSB first), each of which is (b << 1) | bit
 		std::vector<uint8_t> unpack(const uint8_t* _p, const size_t _count)
@@ -176,7 +176,7 @@ namespace g1app
 		case State::Waiting:
 		case State::Receiving: return {{g_d, g_U}};
 		case State::Ready:     return (_nowMs / 500) % 2 ? std::array<uint8_t, 2>{{g_blank, g_blank}} : std::array<uint8_t, 2>{{g_t, g_S}};
-		case State::Stored:    return {{g_dash, g_dash}};
+		case State::Stored:    return {{g_d, g_r}};		// "rd": Clavia's updater says the display reads it once the OS is written
 		case State::Failed:    return {{g_r, g_E}};
 		}
 		return {{g_blank, g_blank}};
