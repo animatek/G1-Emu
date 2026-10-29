@@ -7,6 +7,18 @@ Older entries cite their commit by hand.
 
 ## 2026-10-29
 
+- [Plugin] Claude: **switching between the Micro and a rack no longer hangs the G1** (Javier, in Bitwig: "al pasar de Micro a
+  G1 se cuelga el sinte y no inicia", display blank, speed 9.9%, load 100%, the DSPs never loaded). `Processor::setModel` restarted
+  the instance with its own state, flash included, so the new G1 got the old one's banks and system data: a rack booted on the
+  Micro's flash, the same fault the standalone had (`d879fcd`). Between the Micro and a rack the new G1 now starts as a new
+  instance does, from the standalone's flash of its own model (`flash.bin` or `flash-micro.bin`), or from the state it had in this
+  instance before, parked when it was left; Regular and Expanded share the rack's flash and keep the state as before. Checked:
+  builds (VST3 and CLAP, both plugins); `g1vst3check` fails the same four checks with and without it (no PC ports, no patches in
+  the standalone's banks here); not yet tried in Bitwig.
+- [Plugin] Claude: **a ROM row in the plugin's Settings.** The plugin read its ROM from `settings.conf` and had no way to change
+  it unless none was found, so after the standalone chose another (the G1-Mods one, here) the plugin was stuck with it. Settings
+  now shows the ROM in use and **Choose...**, which restarts this G1 with the new one (`Processor::useRom`, as when no ROM is
+  found); the picker opens in the ROM's own folder. Not yet tried in Bitwig.
 - [Docs] Claude: **release notes for alpha.28** (`docs/release-notes.md`): the ROM restart, the Micro's silent outputs 3/4
   (#83), the keyboard note for Windows (#84) and the core pin move. Not tagged yet.
 - [App] Claude: **the Micro model sends nothing to outputs 3/4** (issue #83). With the Micro's OS, a patch whose Output

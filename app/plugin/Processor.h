@@ -26,6 +26,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <array>
+#include <map>
 #include <atomic>
 #include <cmath>
 #include <memory>
@@ -147,6 +148,7 @@ namespace g1plugin
 		int generation() const { return m_generation.load(); }
 		g1app::HostStats stats();
 		const std::string& romProblem() const { return m_romProblem; }
+		const std::string& romPath() const { return m_romPath; }
 		std::string describe();		// for the Settings box: ROM, latency, where the banks came from
 
 		// The ROM picked by hand: remembered in the settings file, like the standalone does.
@@ -270,6 +272,8 @@ namespace g1plugin
 
 		std::vector<uint8_t> m_rom;
 		std::string m_romPath, m_romProblem;
+		// A model change between the Micro and a rack leaves the old G1 here, whole, for when it comes back
+		std::map<Model, juce::MemoryBlock> m_parked;
 
 		std::mutex m_lifecycle;					// m_engine and m_runner are swapped under it
 		std::unique_ptr<g1app::Engine> m_engine;

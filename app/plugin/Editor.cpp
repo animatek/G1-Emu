@@ -131,8 +131,9 @@ namespace g1plugin
 
 	void Editor::chooseRom()
 	{
+		const juce::File inUse(m_processor.romPath());
 		m_chooser = std::make_unique<juce::FileChooser>("Choose the Nord Modular rack ROM",
-			juce::File(g1app::publicRomFolder()), "*.bin;*.BIN");
+			inUse.existsAsFile() ? inUse.getParentDirectory() : juce::File(g1app::publicRomFolder()), "*.bin;*.BIN");
 		m_chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
 			[this](const juce::FileChooser& _c)
 		{
@@ -176,9 +177,24 @@ namespace g1plugin
 		class InstanceView : public juce::Component
 		{
 		public:
-			InstanceView(juce::RangedAudioParameter& _gain, const juce::String& _instance, const Processor::Model _model, std::function<void(Processor::Model)> _setModel)
+			InstanceView(juce::RangedAudioParameter& _gain, const juce::String& _instance, const Processor::Model _model, std::function<void(Processor::Model)> _setModel,
+				const juce::String& _romPath, std::function<void()> _chooseRom)
 				: m_gainAttachment(_gain, m_gain)
 			{
+				// The ROM: the same file the standalone reads (settings.conf), so picking another here restarts this
+				// G1 with it and is what the standalone starts with next time. The plugin had no way to change it.
+				label(m_romLabel, "ROM");
+				m_romPath.setText(_romPath.isEmpty() ? "none" : _romPath, juce::dontSendNotification);
+				m_romPath.setTooltip(_romPath);
+				m_romPath.setColour(juce::Label::textColourId, juce::Colour(0xffc8ccd0));
+				m_romPath.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 11.5f, juce::Font::plain));
+				m_romPath.setMinimumHorizontalScale(0.6f);
+				addAndMakeVisible(m_romPath);
+				m_romChoose.setButtonText("Choose...");
+				m_romChoose.setTooltip("Pick another rack ROM: this G1 restarts with it");
+				m_romChoose.onClick = std::move(_chooseRom);
+				addAndMakeVisible(m_romChoose);
+
 				// Regular, Expanded (8 DSPs, about twice the voices) or Micro Modular (one DSP, its own
 				// OS): a new G1, so the change restarts it, keeping the project's patches as a restart does.
 				label(m_modelLabel, "Model");
@@ -230,7 +246,10 @@ namespace g1plugin
 			{
 				m_modelLabel.setBounds(0, 0, 130, GainRowH);
 				m_model.setBounds(136, 0, 320, GainRowH);
-				constexpr int gainY = GainRowH + 8, textY = gainY + GainRowH + 6;
+				constexpr int romY = GainRowH + 8, gainY = romY + GainRowH + 8, textY = gainY + GainRowH + 6;
+				m_romLabel.setBounds(0, romY, 130, GainRowH);
+				m_romChoose.setBounds(getWidth() - 100, romY, 100, GainRowH);
+				m_romPath.setBounds(136, romY, getWidth() - 136 - 100 - 8, GainRowH);
 				m_gainLabel.setBounds(0, gainY, 130, GainRowH);
 				m_gain.setBounds(136, gainY, getWidth() - 136, GainRowH);
 				m_text.setBounds(-6, textY, getWidth() + 12, getHeight() - textY - g1gui::CardView::CloseH - 10);
@@ -244,7 +263,8 @@ namespace g1plugin
 				_l.setJustificationType(juce::Justification::centredRight);
 			}
 			static constexpr int Width = 760, Height = 412, GainRowH = 24;
-			juce::Label m_modelLabel, m_gainLabel;
+			juce::Label m_modelLabel, m_gainLabel, m_romLabel, m_romPath;
+			juce::TextButton m_romChoose;
 			juce::ComboBox m_model;
 			juce::Slider m_gain;
 			juce::SliderParameterAttachment m_gainAttachment;
@@ -259,6 +279,11 @@ namespace g1plugin
 			[e = juce::Component::SafePointer<Editor>(this)](const Processor::Model _model)
 			{
 				juce::MessageManager::callAsync([e, _model] { if(e) e->m_processor.setModel(_model); });
+			},
+			juce::String(m_processor.romPath()),
+			[e = juce::Component::SafePointer<Editor>(this)]
+			{
+				juce::MessageManager::callAsync([e] { if(e) e->chooseRom(); });
 			});
 	}
 }

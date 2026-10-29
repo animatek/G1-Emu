@@ -919,8 +919,35 @@ namespace g1plugin
 
 	void Processor::setModel(const Model _m)
 	{
-		if(std::exchange(m_model, _m) == _m)
+		const auto was = m_model;
+		if(was == _m)
 			return;
+		// The Micro's flash is not a rack's: its banks and system data are another layout, and a rack
+		// that started on them hung at boot, display blank and the DSPs never loaded (Javier, 2026-10-29;
+		// the standalone had the same fault, fixed in d879fcd). So between the Micro and a rack the new G1
+		// is not built from the old one's state: it starts as a new instance does, from the standalone's
+		// flash of its own model, or from the state it had here before, parked when it was left. A
+		// Regular and an Expanded share the rack's flash, and keep the state as before.
+		if((was == Model::Micro) != (_m == Model::Micro))
+		{
+			if(m_engine && !m_unstarted)
+				m_parked[was] = snapshotState();
+			else
+				m_parked.erase(was);
+			m_model = _m;
+			savePreferences();
+			juce::MemoryBlock next;
+			if(const auto it = m_parked.find(_m); it != m_parked.end())
+			{
+				next = std::move(it->second);
+				m_parked.erase(it);
+			}
+			else
+				next = settingsOnlyState();	// the model attribute is the new one
+			setStateInformation(next.getData(), static_cast<int>(next.getSize()));
+			return;
+		}
+		m_model = _m;
 		savePreferences();
 		restart();	// the state now says the new model, and the new G1 is built from it
 	}
