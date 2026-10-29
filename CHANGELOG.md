@@ -5,6 +5,16 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-10-29
+
+- [App] Claude: **choosing a ROM in Settings offers to restart the G1 with it** (Javier). The ROM was read once
+  at start, so picking one only wrote it down and the G1 went on with the old one until G1-Emu was closed and
+  opened again (the G1-Mods ROM, with its MOD badge, was the case). Now Choose... asks "Restart with this ROM";
+  Cancel keeps the choice for the next start, as before. `EmuHost::restart` reads the ROM the settings name if it
+  is not the one in use (and keeps the old one, with a line in the log, if the new file does not serve). Checked:
+  builds; the tests that were built pass except `g1presetstest`, which fails the same way without this change;
+  the restart itself was not driven by hand.
+
 ## 2026-10-28
 
 - [Core] Claude: **the DSP core pin moves from `da2ff232` to `8b731966`** (upstream

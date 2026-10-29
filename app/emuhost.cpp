@@ -313,6 +313,21 @@ namespace g1app
 		// path booted a Micro on the rack's flash.bin (it hung at "3.0.") and a rack on the Micro's
 		// (100% load), each then saving into the other's file (Javier, 2026-10-27).
 		chooseFlashPath();
+		// A ROM picked in the settings since the last boot is the one to boot now: the ROM is read
+		// once at start, and a restart used to go on with the old one (Javier, 2026-10-29).
+		if(!m_options.rom.empty() && m_options.rom != m_options.romInUse)
+		{
+			std::vector<uint8_t> rom;
+			const auto check = inspectRom(m_options.rom, rom);
+			if(check.ok())
+			{
+				m_rom = std::move(rom);
+				m_options.romInUse = m_options.rom;
+				_log += "ROM: " + m_options.rom + "\n";
+			}
+			else
+				_log += "the ROM " + m_options.rom + " does not serve (" + check.what() + "): kept the one in use\n";
+		}
 		std::array<uint8_t, 256> adc{};
 		for(size_t i = 0; i < adc.size(); ++i)
 			adc[i] = m_engine->mc().adc(static_cast<uint8_t>(i));

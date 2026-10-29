@@ -375,8 +375,9 @@ namespace g1gui
 		repaint();
 	}
 
-	// Picking a ROM only writes it down: the emulator is already running on the old one, and
-	// swapping it under a booted OS is not something the hardware does either.
+	// Picking a ROM writes it down, and offers to restart the G1 with it at once: the emulator is
+	// running on the old one, and swapping it under a booted OS is not something the hardware does
+	// either, but a G1 switched off and on is. Cancel keeps it for the next start.
 	void SettingsView::chooseRom()
 	{
 		m_chooser = std::make_unique<juce::FileChooser>("Choose the Nord Modular rack ROM",
@@ -400,6 +401,11 @@ namespace g1gui
 			m_romPath.setText(file.getFullPathName(), juce::dontSendNotification);
 			m_romPath.setTooltip(file.getFullPathName());
 			apply();
+			if(file.getFullPathName().toStdString() == m_host.options().romInUse)
+				return;
+			askThenRestart("The ROM", "The G1 restarts with\n" + file.getFileName() + "\n\nYour banks are not touched. "
+				"The OS in the ROM is the one that runs, unless the settings name another OS (Settings > OS...). "
+				"Cancel keeps the choice for the next start.", "Restart with this ROM", [] {});
 		});
 	}
 
