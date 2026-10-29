@@ -1,55 +1,49 @@
-# G1-Emu v0.1.0-alpha.27
+# G1-Emu v0.1.0-alpha.28
 
-**The Micro Modular, finished off**, and **G1-Emu as an Audio Unit on macOS** (#7).
+**Picking a ROM now restarts G1-Emu with it**, **the Micro no longer makes a harsh sound on outputs 3/4**, and a
+note on where a **MIDI keyboard** goes in the Windows standalone.
 
-**The Micro's box, as the real one.** Shift, Volume and the three edit knobs with what Shift makes of
-them (Master Tune, MIDI Channel, Patch Select), the display, and the two buttons that select patches.
-**The buttons work now**: G1-Emu read them the wrong way round, so the Micro thought all three were
-held from power-on and ignored them. The upper button goes to the next patch and, with Shift, plays
-a note while it is held (Note Trig); the lower one goes back and, with Shift, is the switch a patch
-can assign. Shift is also your computer's Shift key, as on the G1's panel. Knobs 1 and 3 were
-swapped: fixed.
+**A new ROM takes effect at once.** G1-Emu read its ROM once, at start, so choosing another one in
+**Settings > ROM > Choose...** only wrote it down and the G1 went on with the old one until you closed
+G1-Emu and opened it again. Now Choose... asks **Restart with this ROM**; accept and the G1 switches off
+and on with the new ROM, your banks untouched. Cancel keeps the choice for the next start, as before. If
+the file does not serve, it keeps the ROM in use and says so in the log. It is what you want when you try
+a ROM you built yourself (the **MOD** badge of a modified one shows as soon as it restarts).
 
-**Below the box, the G1's bars**: the status bar (the emulator's figures, Patreon, Report issue and
-the **Settings** gear) and the **extras tray**, which its arrow hides or shows: **Presets** (the
-Micro's one bank of 99, click one to load it), the tooltips, **About** and the power switch.
+**The Micro's outputs 3/4 are silent** (#83). The Micro has one stereo output, but its OS also puts a tone
+on two more slots when a patch's Output module is set to **3/4** (36 dB louder than outputs 1/2, and a
+copy of the right channel on output 4). In the plugin's Out 3/4 bus that was a harsh, louder sound. The
+Micro model now sends nothing to outputs 3/4, in the standalone and in the plugin: the sound stays on 1/2
+whatever the Output module says. The Regular and the Expanded are unchanged.
 
-**Switching models.** Changing the model in Settings now offers to restart at once, and the new
-model boots on its own flash: a switch between the Micro and the G1 could boot one on the other's
-flash, stuck at "3.0." or at full load until G1-Emu was opened again. Your G1's banks were not
-lost: what got written into its flash was the Micro's OS, which the G1 replaces on every start.
+**A MIDI keyboard in the Windows standalone** (#84). Nothing was wrong, but nothing said where it goes: on
+Windows the standalone cannot create a MIDI port, so pick your keyboard in **Settings > MIDI in** and
+restart G1-Emu. `WINDOWS.md` has the steps now, and the README points to them.
 
-**The plugin no longer falls asleep.** It told the host its sound ends when the notes do, so a host
-that puts silent plugins to sleep (Bitwig) stopped it while you edited, and an upload from the editor
-stopped halfway: "Upload timeout", a frozen synth, and a project that reopened broken. A G1 sounds
-without notes, and now says so. It uses a little CPU even when nothing plays, as the standalone does.
+**Inside:** the DSP core moves to the commit the builds here were already on. Three fixes come with it: the
+HDI08 takes its pending host flags in one exchange (a flag stored between the load and the reset was lost,
+which the G1's reload handshake could hit), the JIT's serial status poll fast-forward covers the
+two-instruction form, and a JIT block at the last address of an untouched region no longer writes into a
+shared page.
 
-**Audio Unit on macOS** (asked for in #7): `G1-Emu.component` (instrument) and `G1-Emu FX.component`
-(effect), in the macOS package next to the VST3 and the CLAP. Copy them to
-`~/Library/Audio/Plug-Ins/Components`. They pass Apple's `auval -strict`; we have not played them
-in a Mac DAW yet, so please tell us how they go.
-
-Your ROM, banks, settings and projects are not affected. The Micro sets up its own flash again on its
-first start with this version (it skipped part of its start before): patches stored in the Micro
-with alpha.26 may be gone.
+Your ROM, banks, settings and projects are not affected.
 
 ## Please test
 
-- **macOS:** the AU in Logic, GarageBand or any AU host: does it load, play, and keep its state in a
-  project? Tell us in #7.
-- **The Micro:** its buttons, Presets, and editing it from the editor inside your DAW.
+- **The Micro on outputs 3/4** (#83): a patch with its Output module on 3/4 should sound as on 1/2, with
+  nothing on the Out 3/4 bus.
+- **Choose a ROM and restart** in Settings, standalone and plugin: does it come back with the new one?
+- **A keyboard on Windows** (#84): Settings > MIDI in, then play. Does the `MIDI in` counter count?
 
 If something breaks up or stays silent, attach the log (`%APPDATA%\Animatek\G1-Emu\g1-emu.log` on
 Windows, `~/.local/share/Animatek/G1-Emu/g1-emu.log` on Linux and macOS), with your CPU and DAW.
 
 ## Known
 
-- **Micro and the editor:** Animatek NME 0.23 shows four slots and nine banks for a Micro; use slot A
-  and bank 1. The next NME knows the Micro's one slot.
+- **Micro and the editor:** Animatek NME 0.25 knows the Micro's one slot and three knobs; the Slot-select
+  dialog still shows four buttons and the bank list nine: use slot A and bank 1.
 - Notes sent over the PC Port (an editor's keyboard) do not follow the pitch on the Micro: play from
   the MIDI port or the DAW.
-- A project saved with alpha.26 while a Micro's upload was stuck may reopen frozen: remove that
-  instance and insert a new one.
 - On a computer that cannot run the Expanded in real time it breaks up: use the Regular there.
 - On Windows the plugin has no PC Port of its own (it uses the direct link); the standalone still
   needs loopMIDI for the editor when the direct link is not used.

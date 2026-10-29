@@ -7,6 +7,8 @@ Older entries cite their commit by hand.
 
 ## 2026-10-29
 
+- [Docs] Claude: **release notes for alpha.28** (`docs/release-notes.md`): the ROM restart, the Micro's silent outputs 3/4
+  (#83), the keyboard note for Windows (#84) and the core pin move. Not tagged yet.
 - [App] Claude: **the Micro model sends nothing to outputs 3/4** (issue #83). With the Micro's OS, a patch whose Output
   module is set to 3/4 put the tone on the host's output 3 **36 dB louder** than on 1/2 (measured with `g1patchtest`
   on the Micro: outputs 1/2 at -54.1 dBFS and output 3 at -18.0 dBFS, which the plugin's Out 3/4 bus made a harsh,
