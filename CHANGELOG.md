@@ -7,6 +7,11 @@ Older entries cite their commit by hand.
 
 ## 2026-10-29
 
+- [Docs] Claude: **where to put a MIDI keyboard in the standalone** (issue #84). The Settings window has had a **MIDI in**
+  box on Windows for a while, but nothing said that the keyboard goes there (and `WINDOWS.md` said to leave it on
+  Automatic, which on Windows leaves the performance MIDI unconnected). `WINDOWS.md` has a section for it and the
+  README's "Play it" step points at it. Checked: the boxes and their tooltips in `Settings.cpp`; no code changed,
+  and not tried with a keyboard on Windows.
 - [App] Claude: **choosing a ROM in Settings offers to restart the G1 with it** (Javier). The ROM was read once
   at start, so picking one only wrote it down and the G1 went on with the old one until G1-Emu was closed and
   opened again (the G1-Mods ROM, with its MOD badge, was the case). Now Choose... asks "Restart with this ROM";
