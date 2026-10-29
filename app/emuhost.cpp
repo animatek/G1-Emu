@@ -250,7 +250,16 @@ namespace g1app
 		else
 			_log += std::string("new flash with ") + (m_engine->customOs() ? "the OS image" : "the factory OS") + " (will be saved in " + m_flashPath + ")\n";
 		m_updateMode = _update;
-		if(_update)
+		m_microUpdate.reset();
+		if(_update && m_engine->mc().dspCount() == g1::g_microDsps)
+		{
+			// The Micro's update utility is in a boot ROM we do not have: this is a stand-in that does what it is
+			// known to do (app/microupdate.h), for trying an OS update from an editor.
+			m_microUpdate = std::make_unique<MicroUpdate>();
+			_log += "UPDATE MODE (Micro): the display says Ud. Send the OS from the editor (NME: Device > Update Synth OS);\n"
+				"when the display flashes St, press one of the patch buttons to store it, then restart the Micro.\n";
+		}
+		else if(_update)
 		{
 			// The loader finds no OS (length $FFFFFFFF) and runs its Update utility, which waits for
 			// an update (Clavia's updater sends it to the PC Port). Only the length goes: the banks stay, and so does the OS until
@@ -285,7 +294,7 @@ namespace g1app
 		m_quit = true;
 		m_thread.join();
 		if(m_updateMode)
-			keepReceivedOs();
+			m_microUpdate ? keepMicroOs() : keepReceivedOs();
 		saveFlash();
 		if(std::exchange(m_resetFlash, false))
 		{
@@ -421,7 +430,7 @@ namespace g1app
 		m_thread.join();
 		m_link.stop();   // the editor sees the link close, as when the emulator is gone
 		if(m_updateMode)
-			keepReceivedOs();
+			m_microUpdate ? keepMicroOs() : keepReceivedOs();
 		saveFlash();
 		finishWav();
 #ifdef G1_BACKEND_JUCE
@@ -512,6 +521,33 @@ namespace g1app
 		std::fprintf(stderr, "update mode: an OS of %zu bytes came in; kept as %s and set as os in the settings\n", os.size(), path.c_str());
 	}
 
+	// The Micro's update was stored (a patch button at St): the OS is kept and set as the Micro's, and a restart runs it.
+	void EmuHost::keepMicroOs()
+	{
+		std::vector<uint8_t> os;
+		if(!m_microUpdate || !m_microUpdate->storedImage(os))
+		{
+			std::fprintf(stderr, "Micro update mode: %s; nothing changes\n", m_microUpdate ? m_microUpdate->describe().c_str() : "no update");
+			return;
+		}
+		char stamp[32];
+		const auto now = std::time(nullptr);
+		std::strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", std::localtime(&now));
+		const auto dir = std::filesystem::path(m_flashPath).parent_path() / "os";
+		std::filesystem::create_directories(dir);
+		const auto path = (dir / ("received-micro-" + std::string(stamp) + ".bin")).string();
+		{
+			std::ofstream f(path, std::ios::binary);
+			f.write(reinterpret_cast<const char*>(os.data()), static_cast<std::streamsize>(os.size()));
+		}
+		HostOptions options;
+		options.load(defaultSettingsPath());
+		options.microOs = path;
+		options.save(defaultSettingsPath());
+		m_options.microOs = path;
+		std::fprintf(stderr, "Micro update mode: an OS of %zu bytes was stored; kept as %s and set as the Micro OS in the settings\n", os.size(), path.c_str());
+	}
+
 	void EmuHost::saveFlash()
 	{
 		if(!m_engine)
@@ -562,7 +598,7 @@ namespace g1app
 
 		std::vector<std::vector<uint8_t>> incoming;
 		std::vector<uint8_t> routed;	// the MIDI port's bytes, the notes moved by their slot's octave shift
-		std::vector<uint8_t> out, toEditor, toG1, linkIn;
+		std::vector<uint8_t> out, toEditor, toG1, linkIn, microReply;
 		constexpr uint64_t msCycles = g1::g_ucClock / 1000;	// the G1's own time, for the settings link
 
 		// G1_MIDI_LOG=1: every chunk in and out of both ports, with its first bytes. The G1's
@@ -602,7 +638,10 @@ namespace g1app
 				logMidi("in ", "PC Port", incoming[m_pcPort]);
 				pcLog.write(reinterpret_cast<const char*>(incoming[m_pcPort].data()), static_cast<std::streamsize>(incoming[m_pcPort].size()));
 				pcLog.flush();
-				mc.getPcPort().receive(incoming[m_pcPort]);
+				if(m_microUpdate)
+					m_microUpdate->feed(incoming[m_pcPort], microReply);
+				else
+					mc.getPcPort().receive(incoming[m_pcPort]);
 				m_synthSettings.editorSent(incoming[m_pcPort], mc.ucCycles() / msCycles);
 				m_presets.editorSent(incoming[m_pcPort], mc.ucCycles() / msCycles);
 				incoming[m_pcPort].clear();
@@ -614,7 +653,10 @@ namespace g1app
 			{
 				m_pcIn += linkIn.size();
 				logMidi("in ", "Link", linkIn);
-				mc.getPcPort().receive(linkIn);
+				if(m_microUpdate)
+					m_microUpdate->feed(linkIn, microReply);
+				else
+					mc.getPcPort().receive(linkIn);
 				m_synthSettings.editorSent(linkIn, mc.ucCycles() / msCycles);
 				m_presets.editorSent(linkIn, mc.ucCycles() / msCycles);
 			}
@@ -664,6 +706,11 @@ namespace g1app
 			m_health.tick(mc, nowMs);
 			out.clear();
 			mc.getPcPort().takeTx(out);
+			if(m_microUpdate)		// the OS running underneath says nothing: the stand-in answers
+			{
+				out.swap(microReply);
+				microReply.clear();
+			}
 			toEditor.clear();
 			m_synthSettings.g1Sent(out, nowMs, toEditor);
 			out.swap(toEditor);

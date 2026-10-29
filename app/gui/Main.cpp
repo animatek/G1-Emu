@@ -53,6 +53,7 @@ namespace g1gui
 		void setSelectedControllers(const bool _on) override { m_host.setSelectedControllers(_on); save(); }
 		bool octaveShift() const override { return m_host.octaveShift(); }
 		void setOctaveShift(const bool _on) override { m_host.setOctaveShift(_on); save(); }
+		g1app::MicroUpdate* microUpdate() override { return m_host.microUpdate(); }
 		bool canRestart() const override { return true; }
 		void restart() override { if(onRestart) onRestart(); }
 		juce::String restartNote() const override

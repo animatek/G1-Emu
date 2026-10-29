@@ -141,7 +141,19 @@ namespace g1gui
 			"The previous patch. With Shift: the switch a patch can assign (4)"}};
 		for(size_t i = 0; i < m_buttons.size(); ++i)
 		{
-			m_buttons[i].onHeld = [this, i](const bool _held) { m_host.mc().setMicroButton(bit[i], _held); };
+			m_buttons[i].onHeld = [this, i](const bool _held)
+			{
+				// In update mode the patch buttons store the OS and Shift cancels, as at "St" on a real Micro
+				if(auto* update = m_host.microUpdate())
+				{
+					if(_held && i == 0)
+						update->cancel();
+					else if(_held)
+						update->press();
+					return;
+				}
+				m_host.mc().setMicroButton(bit[i], _held);
+			};
 			m_buttons[i].setTooltip(tip[i]);
 			addAndMakeVisible(m_buttons[i]);
 		}
@@ -231,7 +243,10 @@ namespace g1gui
 			m_osModified = modified;
 			repaint();
 		}
-		const std::array<uint8_t, 2> now{{mc.microDigit(0), mc.microDigit(1)}};
+		// In update mode the display is the stand-in's: Ud, a flashing St, "--" once stored
+		std::array<uint8_t, 2> now{{mc.microDigit(0), mc.microDigit(1)}};
+		if(auto* update = m_host.microUpdate())
+			now = update->digits(juce::Time::getMillisecondCounter());
 		if(now != m_digits)
 		{
 			m_digits = now;

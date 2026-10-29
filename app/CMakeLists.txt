@@ -20,7 +20,7 @@ message(STATUS "g1Host: ${G1_BACKEND} audio and MIDI backend")
 # No devices and no threads of its own: the plugin builds on it without the backends below.
 add_library(g1Core STATIC engine.cpp engine.h hostconfig.cpp hostconfig.h hostlog.cpp hostlog.h diaglog.cpp diaglog.h romfinder.cpp romfinder.h
 	slotkeeper.cpp slotkeeper.h synthsettings.cpp synthsettings.h presetslink.cpp presetslink.h audiobridge.h directlink.cpp directlink.h
-	midirouting.cpp midirouting.h osimage.cpp osimage.h)
+	midirouting.cpp midirouting.h osimage.cpp osimage.h microupdate.cpp microupdate.h)
 target_include_directories(g1Core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # So a clone works with no setup: the repo's own Roms/ is one of the folders searched.
 target_compile_definitions(g1Core PRIVATE G1_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -185,3 +185,6 @@ if(G1_HAVE_JUCE)
 	add_subdirectory(gui)
 	add_subdirectory(plugin)
 endif()
+
+add_executable(g1microupdatetest microupdatetest.cpp)
+target_link_libraries(g1microupdatetest PRIVATE g1Core)

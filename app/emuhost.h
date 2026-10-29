@@ -16,6 +16,7 @@
 
 #include "engine.h"
 #include "hostconfig.h"
+#include "microupdate.h"
 #include "midirouting.h"
 #include "presetslink.h"
 #include "synthsettings.h"
@@ -84,6 +85,9 @@ namespace g1app
 		// that came in, if any.
 		void updateModeOnRestart() { m_updateOnRestart = true; }
 		bool updateMode() const { return m_updateMode; }
+		// A Micro in update mode (Settings > OS... > Update mode with the Micro model): the box's display and
+		// buttons talk to it, and the PC Port is its alone. Null otherwise. app/microupdate.h.
+		MicroUpdate* microUpdate() { return m_microUpdate.get(); }
 
 		// The G1. The panel (getLcd, ledRow, setButton, setAdc) can be used from another thread.
 		g1::Microcontroller& mc() { return m_engine->mc(); }
@@ -148,6 +152,8 @@ namespace g1app
 		// blanked, as on a G1 with no OS), for Clavia's own updater on the PC Port. At the end
 		// an OS that came in is kept as an image and used from then on (HostOptions::os).
 		bool m_updateMode = false;
+		std::unique_ptr<MicroUpdate> m_microUpdate;
+		void keepMicroOs();
 		void keepReceivedOs();
 		std::thread m_thread;
 		std::atomic<bool> m_quit{false};

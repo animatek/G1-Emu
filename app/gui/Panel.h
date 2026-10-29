@@ -11,6 +11,7 @@
 #include "hostconfig.h"
 #include "g1Lib/g1knobs.h"
 #include "SynthSettingsView.h"
+#include "../microupdate.h"
 #include "Overlay.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -77,6 +78,9 @@ namespace g1gui
 		// Switching the G1 off and on, where the host can: the panel shows its Restart button only
 		// then. The host deletes this panel and makes a new one, so it must do it later, not inside
 		// the call.
+		// A Micro in update mode (the stand-in of app/microupdate.h): the box shows its display and its buttons
+		// answer it. Null where there is none (the plugin has no update mode).
+		virtual g1app::MicroUpdate* microUpdate() { return nullptr; }
 		virtual bool canRestart() const { return false; }
 		virtual void restart() {}
 		virtual juce::String restartNote() const { return {}; }	// what a restart keeps and loses, for the question

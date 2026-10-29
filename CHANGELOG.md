@@ -7,6 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-10-29
 
+- [App] Claude: **update mode for the Micro, as a test stand-in** (Javier: "a test update mode that does that operation for the
+  Micro, and I send the ROM from NME"). Settings > OS... > Update mode now works with the Micro model: the box's display says
+  `Ud`, the editor's greeting is answered as an update utility's, the stream NME sends (70 header, 71 data, 73 sum) is
+  received and checked, the display flashes `St` and a patch button stores the OS (Shift cancels); a restart then runs it
+  as the Micro OS. It is **not the Micro's own boot-ROM code** (nobody has it; Clavia's updater carries only the OS): it
+  does what Clavia's updater text says, with the rack's stream assumed. Replaces the greyed-out entry of 2c3a858.
+  `app/microupdate.*`; `g1microupdatetest <os> <stream>` (the stream from G1-Mods' `g1update.py build`, in 97-byte
+  pieces) stores byte for byte the 393,184-byte modded Micro OS. Checked: builds, that test; not tried by hand in the window.
 - [App] Claude: **an OS picked where the ROM goes offers to become the Micro's OS**, and **update mode is off for the Micro** (Javier,
   again, with G1-Mods' Micro OS: the hint from before did not get him there, and he then tried NME's Update Synth OS against the
   Micro, which showed the progress bar and did nothing, its display stuck). Choose... in the ROM row, in the standalone and in the

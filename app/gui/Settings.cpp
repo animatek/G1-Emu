@@ -324,13 +324,11 @@ namespace g1gui
 		m_os.onClick = [this]
 		{
 			juce::PopupMenu menu;
-			// The Micro's OS is not installed through the PC Port: the update utility that waits for it is the rack's
-			// boot ROM's, with a display the Micro box does not have, and an editor that sent one got nowhere (Javier,
-			// 2026-10-29). Its OS is the Micro OS box's.
+			// The Micro has no boot ROM here, so its update mode is a stand-in (app/microupdate.h): the display and
+			// buttons Clavia's updater describes (Ud, St), not the Micro's own code. Its OS can also be chosen
+			// in the Micro OS box.
 			const bool micro = m_host.options().micro;
-			if(micro)
-				menu.addItem("Update mode is the rack's: the Micro's OS goes in Settings > Micro OS", false, false, [] {});
-			menu.addItem("Update mode (install an OS)...", !m_host.updateMode() && !micro, false, [this]
+			menu.addItem(micro ? "Update mode (test): the Micro waits for an OS..." : "Update mode (install an OS)...", !m_host.updateMode(), false, [this]
 			{
 				askThenRestart("Update mode", "The G1 restarts waiting for an OS, as a real G1 does with Shift + Store held at "
 					"power-on: the display says Update utility.\n\nSend the OS to the PC Port with Clavia's updater (tick Safe,"
