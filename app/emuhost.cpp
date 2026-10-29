@@ -374,8 +374,13 @@ namespace g1app
 #endif
 
 		// One sample per block of the last DSP (96 kHz): the four outputs.
-		mc.outputDsp().setBlockCallback([this](const int32_t _o1, const int32_t _o2, const int32_t _o3, const int32_t _o4)
+		const bool micro = mc.dspCount() == g1::g_microDsps;
+		mc.outputDsp().setBlockCallback([this, micro](const int32_t _o1, const int32_t _o2, const int32_t _o3raw, const int32_t _o4raw)
 		{
+			// The Micro has the one stereo output. Slots 3 and 4 of its OS carry an Out 3/4 destination (and a copy
+			// of the right channel) that no jack of the Micro has: left on, they reached the host's outputs 3/4
+			// 36 dB louder than outputs 1/2, as a harsh sound (issue #83). The Micro is silent there.
+			const int32_t _o3 = micro ? g_dc : _o3raw, _o4 = micro ? g_dc : _o4raw;
 			m_health.output(_o1 - g_dc, _o2 - g_dc);
 			// Raced ahead, the boot's frames would fill the card's queue past its cushion, and the
 			// trimming leaves it four times as deep: that much latency for good.

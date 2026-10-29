@@ -7,6 +7,14 @@ Older entries cite their commit by hand.
 
 ## 2026-10-29
 
+- [App] Claude: **the Micro model sends nothing to outputs 3/4** (issue #83). With the Micro's OS, a patch whose Output
+  module is set to 3/4 put the tone on the host's output 3 **36 dB louder** than on 1/2 (measured with `g1patchtest`
+  on the Micro: outputs 1/2 at -54.1 dBFS and output 3 at -18.0 dBFS, which the plugin's Out 3/4 bus made a harsh,
+  louder sound), and output 4 carried a copy of the right channel whatever the destination. The Regular behaves as
+  it should (1/2 or 3/4 at the same level). The Micro has one stereo output and no jack for those, so in the standalone
+  and the plugin the Micro's outputs 3 and 4 are silent. Checked: the Regular and Micro measurements above, the
+  whole build and `ctest -L g1` (`g1presetstest` fails the same way without this change); the silenced path was not
+  driven end to end with a patch.
 - [Docs] Claude: **where to put a MIDI keyboard in the standalone** (issue #84). The Settings window has had a **MIDI in**
   box on Windows for a while, but nothing said that the keyboard goes there (and `WINDOWS.md` said to leave it on
   Automatic, which on Windows leaves the performance MIDI unconnected). `WINDOWS.md` has a section for it and the

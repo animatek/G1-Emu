@@ -43,10 +43,12 @@ namespace g1app
 
 		auto& mc = m_engine.mc();
 		// The outputs come out of the last DSP: 3 on a Regular, 7 on an Expanded.
-		mc.outputDsp().setBlockCallback([this](const int32_t _o1, const int32_t _o2, const int32_t _o3, const int32_t _o4)
+		// The Micro has the one stereo output: what its OS puts on slots 3 and 4 is silence for the host (issue #83)
+		const bool micro = mc.dspCount() == g1::g_microDsps;
+		mc.outputDsp().setBlockCallback([this, micro](const int32_t _o1, const int32_t _o2, const int32_t _o3, const int32_t _o4)
 		{
 			constexpr auto dc = Engine::OutputDc;
-			m_bridge.push(_o1 - dc, _o2 - dc, _o3 - dc, _o4 - dc);
+			m_bridge.push(_o1 - dc, _o2 - dc, micro ? 0 : _o3 - dc, micro ? 0 : _o4 - dc);
 			m_health.output(_o1 - dc, _o2 - dc);
 		});
 		mc.getDsp(0).setInputProvider([this](int32_t& _l, int32_t& _r) { m_bridge.pullInput(_l, _r); });
