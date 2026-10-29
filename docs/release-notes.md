@@ -10,6 +10,15 @@ and on with the new ROM, your banks untouched. Cancel keeps the choice for the n
 the file does not serve, it keeps the ROM in use and says so in the log. It is what you want when you try
 a ROM you built yourself (the **MOD** badge of a modified one shows as soon as it restarts).
 
+**The Micro shows when its OS is modified, and takes an OS update.** A Micro OS built with G1-Mods
+(modules added) gets a **MOD** badge on the box, and Animatek NME 0.25 or later reports it as a modded OS. To
+load one: **Settings > Micro OS > Choose...**, or pick the file in the ROM box and answer **Use it as the
+Micro OS** (it used to say only that it was not a ROM). Or send it as an update: **Settings > OS... > Update
+mode (test)** (the display says `Ud`), then NME's *Update Synth OS*; when the display flashes `St`, press a
+patch button, and `rd` means it is stored. It takes the stream Clavia's own Micro updater sends (we checked
+by running that updater against it), but it is a stand-in for the Micro's boot ROM: **what a real Micro does with
+an update is not known**, so this is for the emulator.
+
 **The Micro's outputs 3/4 are silent** (#83). The Micro has one stereo output, but its OS also puts a tone
 on two more slots when a patch's Output module is set to **3/4** (36 dB louder than outputs 1/2, and a
 copy of the right channel on output 4). In the plugin's Out 3/4 bus that was a harsh, louder sound. The
@@ -32,6 +41,9 @@ Your ROM, banks, settings and projects are not affected.
 
 - **The Micro on outputs 3/4** (#83): a patch with its Output module on 3/4 should sound as on 1/2, with
   nothing on the Out 3/4 bus.
+- **The Micro's update mode (test)**: *Settings > OS... > Update mode (test)* with the Micro model, then
+  *Update Synth OS* in NME or Clavia's Micro updater: does the display go `Ud`, `St`, `rd`, and the next start
+  run that OS?
 - **Choose a ROM and restart** in Settings, standalone and plugin: does it come back with the new one?
 - **A keyboard on Windows** (#84): Settings > MIDI in, then play. Does the `MIDI in` counter count?
 

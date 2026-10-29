@@ -7,6 +7,7 @@ Older entries cite their commit by hand.
 
 ## 2026-10-29
 
+- [Docs] Claude: README (Micro Modular) and the alpha.28 notes cover the MOD badge, the OS picked in the ROM box offering to be the Micro OS, and the Micro's update mode (test) with its limit (a stand-in; a real Micro's behaviour unknown); a line more under Please test. Checked: read back; not built (text only).
 - [App] Claude: the Micro's update-mode stand-in reads **rd** once the OS is stored, not `--` (Javier, running Clavia's own updater against it: its last page says the display reads "rd"). Checked: builds, g1microupdatetest still stores the image; the display not seen after the change.
 - [App] Claude: **update mode for the Micro, as a test stand-in** (Javier: "a test update mode that does that operation for the
   Micro, and I send the ROM from NME"). Settings > OS... > Update mode now works with the Micro model: the box's display says

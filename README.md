@@ -217,6 +217,12 @@ want to hear about it.
   extract) or leave it in the ROM folder. It has its own box (volume, three edit knobs and the
   two-digit display; its buttons work, Shift also from the computer's Shift key; below it, Presets with its one bank, Restart and About) and its own flash (`flash-micro.bin`). Start or
   Restart to switch (`model = micro`, `G1_MODEL=micro`). The plugin has it too, in its Settings, so one plugin is a G1 or a Micro.
+  A Micro OS with modules added (G1-Mods) shows a **MOD** badge on the box. Pick it in **Settings > Micro OS**; picked
+  in the ROM box by mistake, G1-Emu offers to use it as the Micro OS. To send it from an editor, as to a real synth,
+  use **Settings > OS... > Update mode (test)** (the display says `Ud`), run NME's *Update Synth OS* (or Clavia's own
+  Micro updater), and when the display flashes `St` press a patch button: it reads `rd`, and the next start runs it.
+  That update mode is a stand-in for the Micro's boot ROM, which is not available; it takes the same stream Clavia's
+  updater sends, but what a real Micro does with it is not known.
 - **Settings** (in the window): the ROM, the model, audio driver and device, output level, whether outputs 1/2
   connect themselves, the raw MIDI card, and the notice above. The console reads the same settings;
   the `G1_*` environment variables win over them.
