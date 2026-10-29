@@ -108,6 +108,19 @@ namespace g1app
 		return true;
 	}
 
+	std::string osImageHint(const std::string& _path)
+	{
+		OsImage os;
+		std::string why;
+		if(!readOsFile(_path, os, why))
+			return {};
+		return std::string("That is an OS image") + (os.fromUpdater ? " (a Clavia updater)" : "") + ", not a ROM. "
+			+ (os.isMicro() || !os.fromUpdater
+				? "A Micro Modular's OS goes in Settings > Micro OS (the Choose... in its own row, below the model). "
+				: "")
+			+ "To install an OS into a G1, use Settings > OS... > Update mode and NME's Device > Update Synth OS.";
+	}
+
 	bool findMicroOs(const std::string& _setting, OsImage& _out, std::string& _note)
 	{
 		_note.clear();

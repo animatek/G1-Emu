@@ -393,8 +393,9 @@ namespace g1gui
 			const auto check = g1app::inspectRom(file.getFullPathName().toStdString(), data);
 			if(!check.ok())
 			{
+				const auto hint = g1app::osImageHint(file.getFullPathName().toStdString());
 				juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Not the ROM G1-Emu needs",
-					file.getFullPathName() + "\n\n" + juce::String(check.what()));
+					file.getFullPathName() + "\n\n" + (hint.empty() ? juce::String(check.what()) : juce::String(hint)));
 				return;
 			}
 			m_host.options().rom = file.getFullPathName().toStdString();

@@ -153,6 +153,8 @@ namespace g1plugin
 
 		// The ROM picked by hand: remembered in the settings file, like the standalone does.
 		void useRom(const juce::File& _file);
+		std::string microOsPath() const;							// settings.conf's microOs, shared with the standalone
+		bool setMicroOs(const juce::File& _file, std::string& _why);	// false with the reason when it is not a Micro's OS
 
 		// Switches the G1 off and on (the panel's Restart): its state as it is now goes back in as a
 		// project's would, so a new G1 boots with the same banks, slots, knobs and programs.

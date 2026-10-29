@@ -31,6 +31,10 @@ namespace g1app
 	// A file that is an updater or a bare OS image. _why says what is wrong when it returns false.
 	bool readOsFile(const std::string& _path, OsImage& _out, std::string& _why);
 
+	// For a file picked as a ROM that is not one: if it is an OS image or an updater (what G1-Mods' builder
+	// gives for a Micro, what update mode saves), a sentence saying where it goes. Empty when it is neither.
+	std::string osImageHint(const std::string& _path);
+
 	// The Micro Modular's OS: _setting (the settings file's `microOs`, an updater or an image) if it
 	// is there, else the first Micro updater or `micro-os.bin` in the ROM folders (and their `Micro`
 	// folder). _note says which was used, or what was looked for and not found.

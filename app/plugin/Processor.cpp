@@ -369,7 +369,8 @@ namespace g1plugin
 		const auto check = g1app::inspectRom(_file.getFullPathName().toStdString(), rom);
 		if(!check.ok())
 		{
-			m_romProblem = _file.getFullPathName().toStdString() + "\n    " + check.what() + "\n\n" + m_romProblem;
+			const auto hint = g1app::osImageHint(_file.getFullPathName().toStdString());
+			m_romProblem = _file.getFullPathName().toStdString() + "\n    " + (hint.empty() ? std::string(check.what()) : hint) + "\n\n" + m_romProblem;
 			++m_generation;		// the editor shows the new message
 			return;
 		}
@@ -915,6 +916,33 @@ namespace g1plugin
 			return;
 		}
 		_dest = snapshotState();
+	}
+
+	// The Micro's OS, an updater or an image, as the standalone's Settings > Micro OS keeps it: the same
+	// `microOs` of the settings file, so both use it; a Micro instance restarts with it.
+	std::string Processor::microOsPath() const
+	{
+		g1app::HostOptions options;
+		options.load(g1app::defaultSettingsPath());
+		return options.microOs;
+	}
+
+	bool Processor::setMicroOs(const juce::File& _file, std::string& _why)
+	{
+		g1app::OsImage image;
+		if(!g1app::readOsFile(_file.getFullPathName().toStdString(), image, _why) || (image.fromUpdater && !image.isMicro()))
+		{
+			if(_why.empty())
+				_why = "That updater is for another model: \"" + image.model + "\".";
+			return false;
+		}
+		g1app::HostOptions options;
+		options.load(g1app::defaultSettingsPath());
+		options.microOs = _file.getFullPathName().toStdString();
+		options.save(g1app::defaultSettingsPath());
+		if(m_model == Model::Micro)
+			restart();		// the new OS is read when the G1 is built again
+		return true;
 	}
 
 	void Processor::setModel(const Model _m)

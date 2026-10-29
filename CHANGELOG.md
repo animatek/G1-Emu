@@ -7,6 +7,16 @@ Older entries cite their commit by hand.
 
 ## 2026-10-29
 
+- [App] Claude: **the Micro's box wears the MOD sticker when its OS is modified** (Javier: "si el micro está patcheado tenemos que
+  ponerle la pegatina"). `g1::osModified` looked for the version's instruction only at the rack's two addresses; the Micro's
+  3.03b has it at `$10486E` (G1-Mods' `NOTES.md`, "The Micro Modular"), so a Micro with the modules read as unknown and got no
+  sticker. It reads there too, and `MicroPanel` draws the same sticker as the G1's by its name. Not seen on screen yet.
+- [App] Claude: **a file picked as a ROM that is an OS image says so** (Javier picked G1-Mods' Micro OS where the ROM goes and got
+  "not 512 KB"; the Micro OS box was one row down). `osImageHint()` says it is an OS image and where it goes (Settings > Micro
+  OS, or update mode), in the standalone's Settings and in the plugin's ROM row. And **the plugin's Settings has a Micro OS
+  row** (Choose..., the same `microOs` as the standalone's, a Micro instance restarts with it): the plugin had no way to point
+  at a Micro's OS, so a Micro there ran the stock one and NME saw no mods. Checked: builds (standalone and plugins), `ctest -L g1`
+  (`g1presetstest` fails the same way without it); not tried by hand.
 - [Plugin] Claude: **switching between the Micro and a rack no longer hangs the G1** (Javier, in Bitwig: "al pasar de Micro a
   G1 se cuelga el sinte y no inicia", display blank, speed 9.9%, load 100%, the DSPs never loaded). `Processor::setModel` restarted
   the instance with its own state, flash included, so the new G1 got the old one's banks and system data: a rack booted on the

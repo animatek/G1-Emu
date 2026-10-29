@@ -143,6 +143,26 @@ namespace g1plugin
 		});
 	}
 
+	// The Micro's OS: Clavia's updater, or an image (the G1-Mods builder's, say). The same setting as the
+	// standalone's Settings > Micro OS.
+	void Editor::chooseMicroOs()
+	{
+		const juce::File inUse(m_processor.microOsPath());
+		m_chooser = std::make_unique<juce::FileChooser>("Choose the Micro Modular's OS (Clavia's updater, or an OS image)",
+			inUse.existsAsFile() ? inUse.getParentDirectory() : juce::File(g1app::publicRomFolder()), "*.exe;*.EXE;*.bin;*.BIN");
+		m_chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+			[this](const juce::FileChooser& _c)
+		{
+			const auto file = _c.getResult();
+			if(file == juce::File())
+				return;
+			std::string why;
+			if(!m_processor.setMicroOs(file, why))
+				juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Not the Micro Modular's OS",
+					file.getFullPathName() + "\n\n" + juce::String(why));
+		});
+	}
+
 	g1app::HostStats Editor::stats() { return m_processor.stats(); }
 	bool Editor::extrasOpen() const { return m_processor.extrasOpen(); }
 	g1app::SynthSettingsLink& Editor::synthSettings() { return m_processor.synthSettings(); }
@@ -178,9 +198,22 @@ namespace g1plugin
 		{
 		public:
 			InstanceView(juce::RangedAudioParameter& _gain, const juce::String& _instance, const Processor::Model _model, std::function<void(Processor::Model)> _setModel,
-				const juce::String& _romPath, std::function<void()> _chooseRom)
+				const juce::String& _romPath, std::function<void()> _chooseRom,
+				const juce::String& _microOsPath, std::function<void()> _chooseMicroOs)
 				: m_gainAttachment(_gain, m_gain)
 			{
+				// The Micro's own OS, when this is a Micro: shared with the standalone's Settings > Micro OS.
+				label(m_microLabel, "Micro OS");
+				m_microPath.setText(_microOsPath.isEmpty() ? "none (looked for in the ROM folder)" : juce::File(_microOsPath).getFileName(), juce::dontSendNotification);
+				m_microPath.setTooltip(_microOsPath);
+				m_microPath.setColour(juce::Label::textColourId, juce::Colour(0xffc8ccd0));
+				m_microPath.setFont(juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 11.5f, juce::Font::plain));
+				m_microPath.setMinimumHorizontalScale(0.6f);
+				addAndMakeVisible(m_microPath);
+				m_microChoose.setButtonText("Choose...");
+				m_microChoose.setTooltip("Clavia's Micro Modular OS updater, or an OS image (G1-Mods' builder gives one): a Micro restarts with it");
+				m_microChoose.onClick = std::move(_chooseMicroOs);
+				addAndMakeVisible(m_microChoose);
 				// The ROM: the same file the standalone reads (settings.conf), so picking another here restarts this
 				// G1 with it and is what the standalone starts with next time. The plugin had no way to change it.
 				label(m_romLabel, "ROM");
@@ -246,10 +279,13 @@ namespace g1plugin
 			{
 				m_modelLabel.setBounds(0, 0, 130, GainRowH);
 				m_model.setBounds(136, 0, 320, GainRowH);
-				constexpr int romY = GainRowH + 8, gainY = romY + GainRowH + 8, textY = gainY + GainRowH + 6;
+				constexpr int romY = GainRowH + 8, microY = romY + GainRowH + 8, gainY = microY + GainRowH + 8, textY = gainY + GainRowH + 6;
 				m_romLabel.setBounds(0, romY, 130, GainRowH);
 				m_romChoose.setBounds(getWidth() - 100, romY, 100, GainRowH);
 				m_romPath.setBounds(136, romY, getWidth() - 136 - 100 - 8, GainRowH);
+				m_microLabel.setBounds(0, microY, 130, GainRowH);
+				m_microChoose.setBounds(getWidth() - 100, microY, 100, GainRowH);
+				m_microPath.setBounds(136, microY, getWidth() - 136 - 100 - 8, GainRowH);
 				m_gainLabel.setBounds(0, gainY, 130, GainRowH);
 				m_gain.setBounds(136, gainY, getWidth() - 136, GainRowH);
 				m_text.setBounds(-6, textY, getWidth() + 12, getHeight() - textY - g1gui::CardView::CloseH - 10);
@@ -263,8 +299,8 @@ namespace g1plugin
 				_l.setJustificationType(juce::Justification::centredRight);
 			}
 			static constexpr int Width = 760, Height = 412, GainRowH = 24;
-			juce::Label m_modelLabel, m_gainLabel, m_romLabel, m_romPath;
-			juce::TextButton m_romChoose;
+			juce::Label m_modelLabel, m_gainLabel, m_romLabel, m_romPath, m_microLabel, m_microPath;
+			juce::TextButton m_romChoose, m_microChoose;
 			juce::ComboBox m_model;
 			juce::Slider m_gain;
 			juce::SliderParameterAttachment m_gainAttachment;
@@ -284,6 +320,11 @@ namespace g1plugin
 			[e = juce::Component::SafePointer<Editor>(this)]
 			{
 				juce::MessageManager::callAsync([e] { if(e) e->chooseRom(); });
+			},
+			juce::String(m_processor.microOsPath()),
+			[e = juce::Component::SafePointer<Editor>(this)]
+			{
+				juce::MessageManager::callAsync([e] { if(e) e->chooseMicroOs(); });
 			});
 	}
 }

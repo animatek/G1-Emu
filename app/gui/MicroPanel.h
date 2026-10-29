@@ -99,6 +99,7 @@ namespace g1gui
 		bool m_extrasOpen = true;
 		void setExtrasOpen(bool _open);
 		juce::Label m_status;
+		bool m_osModified = false;	// the OS is not Clavia's as it came (g1osversion.h): the MOD sticker
 		std::array<uint8_t, 2> m_digits{{0xff, 0xff}};	// as the OS drives them: a segment is lit when its bit is low
 	};
 }

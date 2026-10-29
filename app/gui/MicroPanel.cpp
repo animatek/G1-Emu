@@ -1,6 +1,7 @@
 #include "MicroPanel.h"
 
 #include "g1Lib/g1mc.h"
+#include "g1Lib/g1osversion.h"
 
 #include <algorithm>
 #include <cmath>
@@ -225,6 +226,11 @@ namespace g1gui
 		// The computer's Shift key holds the box's Shift, read from the system so it works with the
 		// mouse over the panel without the focus (a plugin window), as on the G1's panel.
 		m_buttons[0].setKeyHeld(juce::ModifierKeys::getCurrentModifiersRealtime().isShiftDown() && (hasKeyboardFocus(true) || isMouseOver(true)));
+		if(const bool modified = g1::osModified(mc); modified != m_osModified)
+		{
+			m_osModified = modified;
+			repaint();
+		}
 		const std::array<uint8_t, 2> now{{mc.microDigit(0), mc.microDigit(1)}};
 		if(now != m_digits)
 		{
@@ -336,6 +342,26 @@ namespace g1gui
 		_g.setColour(g_body);
 		_g.setFont(juce::FontOptions(34.0f, juce::Font::bold));
 		_g.drawText("MICRO MODULAR", at(p, 0.05f, 0.24f, 0.6f, 0.09f), juce::Justification::centredLeft);
+
+		// A modified OS (one that says another version than Clavia's 3.03) gets the sticker the G1 has,
+		// stuck on a little askew by the name.
+		if(m_osModified)
+		{
+			const auto r = at(p, 0.66f, 0.225f, 0.14f, 0.105f);
+			juce::Graphics::ScopedSaveState state(_g);
+			_g.addTransform(juce::AffineTransform::rotation(-0.10f, r.getCentreX(), r.getCentreY()));
+			_g.setColour(juce::Colours::black.withAlpha(0.35f));
+			_g.fillRoundedRectangle(r.translated(2.0f, 3.0f), 6.0f);
+			_g.setColour(juce::Colours::white);
+			_g.fillRoundedRectangle(r, 6.0f);
+			const auto inner = r.reduced(3.0f);
+			_g.setColour(juce::Colour(0xffffcc00));
+			_g.fillRoundedRectangle(inner, 4.0f);
+			_g.setColour(juce::Colour(0xff1a1a1a));
+			_g.drawRoundedRectangle(inner.reduced(2.0f), 3.0f, 1.5f);
+			_g.setFont(juce::FontOptions(inner.getHeight() * 0.62f, juce::Font::bold));
+			_g.drawText("MOD", inner, juce::Justification::centred, false);
+		}
 
 		// The labels over the controls: Shift and Volume, then each column's number over what Shift
 		// makes of it.

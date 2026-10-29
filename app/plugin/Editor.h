@@ -32,6 +32,7 @@ namespace g1plugin
 		void timerCallback() override;
 		void rebuild();
 		void chooseRom();
+		void chooseMicroOs();
 
 		// PanelHost
 		g1::Microcontroller& mc() override { return m_engine->mc(); }
