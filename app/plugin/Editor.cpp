@@ -2,6 +2,7 @@
 
 #include "Processor.h"
 
+#include "osimage.h"
 #include "romfinder.h"
 
 namespace g1plugin
@@ -138,8 +139,32 @@ namespace g1plugin
 			[this](const juce::FileChooser& _c)
 		{
 			const auto file = _c.getResult();
-			if(file != juce::File())
-				m_processor.useRom(file);	// the generation changes: the timer rebuilds
+			if(file == juce::File())
+				return;
+			// A Micro's OS picked where the ROM goes: offer to use it as the Micro's OS, which is what was meant
+			g1app::OsImage os;
+			std::string why;
+			std::vector<uint8_t> romBytes;
+			if(!g1app::inspectRom(file.getFullPathName().toStdString(), romBytes).ok() && g1app::readOsFile(file.getFullPathName().toStdString(), os, why)
+				&& (!os.fromUpdater || os.isMicro()))
+			{
+				juce::AlertWindow::showAsync(juce::MessageBoxOptions().withIconType(juce::MessageBoxIconType::QuestionIcon)
+					.withTitle("That is an OS, not a ROM")
+					.withMessage(file.getFullPathName() + "\n\nThis is an OS image, which is not what the ROM box takes. If it is the Micro Modular's "
+						"OS (G1-Mods' builder gives one), use it as the Micro OS: a Micro instance restarts with it.")
+					.withButton("Use it as the Micro OS").withButton("Cancel"),
+					[e = juce::Component::SafePointer<Editor>(this), file](const int _result)
+					{
+						if(_result != 1 || !e)
+							return;
+						std::string reason;
+						if(!e->m_processor.setMicroOs(file, reason))
+							juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Not the Micro Modular's OS",
+								file.getFullPathName() + "\n\n" + juce::String(reason));
+					});
+				return;
+			}
+			m_processor.useRom(file);	// the generation changes: the timer rebuilds
 		});
 	}
 

@@ -324,7 +324,13 @@ namespace g1gui
 		m_os.onClick = [this]
 		{
 			juce::PopupMenu menu;
-			menu.addItem("Update mode (install an OS)...", !m_host.updateMode(), false, [this]
+			// The Micro's OS is not installed through the PC Port: the update utility that waits for it is the rack's
+			// boot ROM's, with a display the Micro box does not have, and an editor that sent one got nowhere (Javier,
+			// 2026-10-29). Its OS is the Micro OS box's.
+			const bool micro = m_host.options().micro;
+			if(micro)
+				menu.addItem("Update mode is the rack's: the Micro's OS goes in Settings > Micro OS", false, false, [] {});
+			menu.addItem("Update mode (install an OS)...", !m_host.updateMode() && !micro, false, [this]
 			{
 				askThenRestart("Update mode", "The G1 restarts waiting for an OS, as a real G1 does with Shift + Store held at "
 					"power-on: the display says Update utility.\n\nSend the OS to the PC Port with Clavia's updater (tick Safe,"
@@ -393,7 +399,32 @@ namespace g1gui
 			const auto check = g1app::inspectRom(file.getFullPathName().toStdString(), data);
 			if(!check.ok())
 			{
-				const auto hint = g1app::osImageHint(file.getFullPathName().toStdString());
+				const auto path = file.getFullPathName().toStdString();
+				const auto hint = g1app::osImageHint(path);
+				g1app::OsImage os;
+				std::string osWhy;
+				// A Micro's OS (an image, or a Micro updater) picked where the ROM goes: say so, and offer to use it
+				// as the Micro's OS, which is what was meant (Javier, twice, 2026-10-29).
+				if(g1app::readOsFile(path, os, osWhy) && (!os.fromUpdater || os.isMicro()))
+				{
+					juce::AlertWindow::showAsync(juce::MessageBoxOptions().withIconType(juce::MessageBoxIconType::QuestionIcon)
+						.withTitle("That is an OS, not a ROM")
+						.withMessage(file.getFullPathName() + "\n\nThis is an OS image, which is not what the ROM box takes. If it is the Micro Modular's "
+							"OS (G1-Mods' builder gives one), use it as the Micro OS: it is kept in the settings, and the Micro model "
+							"starts with it.")
+						.withButton("Use it as the Micro OS").withButton("Cancel"),
+						[v = juce::Component::SafePointer<SettingsView>(this), path](const int _result)
+						{
+							if(_result != 1 || !v)
+								return;
+							v->m_host.options().microOs = path;
+							v->showMicroOs();
+							v->apply();
+							if(v->m_host.options().micro && v->m_restart)
+								v->m_restart();		// a Micro that is running restarts with it
+						});
+					return;
+				}
 				juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Not the ROM G1-Emu needs",
 					file.getFullPathName() + "\n\n" + (hint.empty() ? juce::String(check.what()) : juce::String(hint)));
 				return;

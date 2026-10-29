@@ -7,6 +7,13 @@ Older entries cite their commit by hand.
 
 ## 2026-10-29
 
+- [App] Claude: **an OS picked where the ROM goes offers to become the Micro's OS**, and **update mode is off for the Micro** (Javier,
+  again, with G1-Mods' Micro OS: the hint from before did not get him there, and he then tried NME's Update Synth OS against the
+  Micro, which showed the progress bar and did nothing, its display stuck). Choose... in the ROM row, in the standalone and in the
+  plugin, now asks "Use it as the Micro OS" when the file is a Micro's OS (an image or a Micro updater) and, if confirmed, sets it
+  (the plugin and a running Micro restart with it). The OS menu's "Update mode" is greyed out for the Micro with the reason: the
+  update utility that waits for an OS is the rack's boot ROM's, and its OS goes in Settings > Micro OS. Checked: builds (standalone and
+  plugins); not tried by hand.
 - [App] Claude: **the Micro's box wears the MOD sticker when its OS is modified** (Javier: "si el micro está patcheado tenemos que
   ponerle la pegatina"). `g1::osModified` looked for the version's instruction only at the rack's two addresses; the Micro's
   3.03b has it at `$10486E` (G1-Mods' `NOTES.md`, "The Micro Modular"), so a Micro with the modules read as unknown and got no
