@@ -99,7 +99,9 @@ they do not come with it (see [the next section](#two-things-a-nord-modular-need
 - **The Presets page**, in the standalone and the plugin: press **Presets** (right of slot D). It
   lists the synth's banks 1 to 9, and **a click loads a patch** into the active slot. **Load
   .pch...** sends a patch file from your disk to the synth, with no editor: stored in a bank and
-  position you pick, or **Load only** into the slot. Press Presets again, or Escape, to go back.
+  position you pick, or **Load only** into the slot. **Store slot...** stores what the active slot
+  holds now at a bank and position (the Micro has no Store button, as the real one). Press Presets
+  again, or Escape, to go back.
 - **An editor**, to load, make and edit patches: [Animatek NME](https://github.com/animatek/Animatek-NME)
   0.21 or later **finds every running G1-Emu by itself** (window or plugin, on every system, with
   no MIDI port to set up: the direct link). Other editors connect through the PC Port (see
@@ -216,7 +218,7 @@ want to hear about it.
   Settings' **Micro OS** at Clavia's Micro Modular OS updater (the `.exe`; it is read as it is, nothing to
   extract) or leave it in the ROM folder. It has its own box (volume, three edit knobs and the
   two-digit display; its buttons work, Shift also from the computer's Shift key; below it, Presets with its one bank, Restart and About) and its own flash (`flash-micro.bin`). Start or
-  Restart to switch (`model = micro`, `G1_MODEL=micro`). The plugin has it too, in its Settings, so one plugin is a G1 or a Micro.
+  Restart to switch (`model = micro`, `G1_MODEL=micro`). In a DAW the Micro is a plugin of its own, **G1-Emu Micro**.
   An OS picked in the ROM box by mistake is offered as the Micro OS.
 - **Settings** (in the window): the ROM, the model, audio driver and device, output level, whether outputs 1/2
   connect themselves, the raw MIDI card, and the notice above. The console reads the same settings;
@@ -284,18 +286,25 @@ with its submodules in `~/src/clap-juce-extensions` (or `-DG1_CLAP_DIR=...`); wi
 VST3 is built.
 
 - **Outputs 1/2 and 3/4** as two stereo buses, and **In L/R** as an optional input.
-- **Regular, Expanded or Micro Modular** in the plugin's Settings, saved with the project (the Micro needs Clavia's Micro OS updater in the ROM folder, as in the standalone; it has its own box and its own flash, `flash-micro.bin`): changing it restarts
-  that instance's G1, which keeps its patches. A new instance takes the last model chosen.
+- **Regular or Expanded** in the plugin's Settings, saved with the project: changing it restarts that
+  instance's G1, which keeps its patches. A new instance takes the last model chosen.
+- **G1-Emu Micro** is the Micro Modular as a plugin of its own: one DSP, its own OS (Clavia's Micro
+  OS updater in the ROM folder, or picked in its Settings, as in the standalone), its own box and
+  memory (`flash-micro.bin`), bank 1 only, as the real one. G1-Emu is never a Micro and G1-Emu Micro
+  never a rack: put the one you want on the track.
 - **G1-Emu FX** is the same G1 as an effect, to put on an audio track: its **In L/R** is on from the
   start and feeds the G1's two inputs, so a patch with the Audio In module processes the track. It
   still takes notes and the editor like the instrument. Most DAWs never offer an instrument's
   input, which is why there are two.
 - **The ROM** is found exactly like the standalone finds it; with none, the plugin's window says
   what it needs and lets you pick the file (remembered in the same settings file).
-- **Each instance has its own G1.** A new one starts from a *copy* of the standalone's flash, so
-  your banks are already there; from then on its patches and synth settings live in the DAW
-  project, never in the standalone's files. What is saved is only what differs from the factory
-  flash — the OS, which is the ROM's, never goes into your project.
+- **One memory, as on a synth.** The banks are shared by the standalone and every instance
+  (`flash.bin` for the G1, `flash-micro.bin` for the Micro): what one stores, from an editor, the
+  panel or the Presets page, is there for a new instance, a reopened project and the standalone.
+  Several instances can store at once; one that started before another stored puts its patch in
+  without overwriting the other's. A project keeps what each slot holds, the knobs and the synth
+  settings, so it sounds as it was saved even after the banks changed. Each instance still runs
+  its own G1.
 - **The 18 knobs are parameters** the DAW can automate. Each one is named after what it moves in
   the current patch (`Knob 3: OscA Freq coars`) and shows the value the OS gives it; turning one
   on the panel moves the parameter too.

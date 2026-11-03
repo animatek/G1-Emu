@@ -1,53 +1,58 @@
-# G1-Emu v0.1.0-alpha.28
+# G1-Emu v0.1.0-alpha.29
 
-**Picking a ROM now restarts G1-Emu with it**, **the Micro no longer makes a harsh sound on outputs 3/4**, and a
-note on where a **MIDI keyboard** goes in the Windows standalone.
+**A stability release.** No new instruments, but the things that broke in daily use: patches that
+were not stored, projects that did not come back as they were saved, and the Micro switching inside
+one plugin. Please use it with **Animatek NME 0.26** or later.
 
-**A new ROM takes effect at once.** G1-Emu read its ROM once, at start, so choosing another one in
-**Settings > ROM > Choose...** only wrote it down and the G1 went on with the old one until you closed
-G1-Emu and opened it again. Now Choose... asks **Restart with this ROM**; accept and the G1 switches off
-and on with the new ROM, your banks untouched. Cancel keeps the choice for the next start, as before. If
-the file does not serve, it keeps the ROM in use and says so in the log. It is what you want when you try
-a ROM you built yourself (the **MOD** badge of a modified one shows as soon as it restarts).
+**One memory, as on a synth.** The banks are now shared by the standalone and every plugin instance
+(`flash.bin` for the G1, `flash-micro.bin` for the Micro). A patch you store, from the editor, the
+panel or the Presets page, is there in a new instance, a reopened project and the standalone. Before,
+each instance started from a copy and kept its banks inside the DAW project, so a patch stored in a
+plugin was gone once you loaded the plugin again. Several instances can store at once: one that
+started before another stored puts its patch in without overwriting the other's. A project keeps what
+each slot holds, the knobs and the synth settings, so it still sounds as it was saved.
 
-**The Micro's box and its OS.** Pick the Micro's OS in **Settings > Micro OS > Choose...**; if you pick it in the ROM
-box by mistake, G1-Emu now offers **Use it as the Micro OS** instead of only saying it is not a ROM. A Micro OS
-whose modules were changed shows a **MOD** badge on the box.
+**Storing works, and the project knows.** Storing a patch changes nothing the DAW can see, so the
+project was not marked as changed and a reopened project had lost the stored patch. G1-Emu now tells
+the DAW. A store or a bank list asked for while the plugin was reading a slot could also get lost, so
+the editor waited seconds or said nothing was stored: fixed.
 
-**The Micro's outputs 3/4 are silent** (#83). The Micro has one stereo output, but its OS also puts a tone
-on two more slots when a patch's Output module is set to **3/4** (36 dB louder than outputs 1/2, and a
-copy of the right channel on output 4). In the plugin's Out 3/4 bus that was a harsh, louder sound. The
-Micro model now sends nothing to outputs 3/4, in the standalone and in the plugin: the sound stays on 1/2
-whatever the Output module says. The Regular and the Expanded are unchanged.
+**G1-Emu Micro is a plugin of its own.** The Micro Modular is no longer a model inside G1-Emu: put
+**G1-Emu Micro** on the track. Switching between the rack and the Micro inside one plugin lost the
+editor's connection and, back on the rack, could hang with the load at 100 %. G1-Emu is a Regular or
+an Expanded (that switch stays). A project saved with G1-Emu set to the Micro does not open in
+G1-Emu: load G1-Emu Micro there again.
 
-**A MIDI keyboard in the Windows standalone** (#84). Nothing was wrong, but nothing said where it goes: on
-Windows the standalone cannot create a MIDI port, so pick your keyboard in **Settings > MIDI in** and
-restart G1-Emu. `WINDOWS.md` has the steps now, and the README points to them.
+**The Micro comes back as you left it.** Reopening a project now brings back the patch in the Micro's
+slot (its OS takes patches only a moment after it starts, and the plugin sent it too early) and its
+four knobs. Its display shows `--` after that, as for any patch sent from an editor.
 
-**Inside:** the DSP core moves to the commit the builds here were already on. Three fixes come with it: the
-HDI08 takes its pending host flags in one exchange (a flag stored between the load and the reset was lost,
-which the G1's reload handshake could hit), the JIT's serial status poll fast-forward covers the
-two-instruction form, and a JIT block at the last address of an untouched region no longer writes into a
-shared page.
+**Store slot... on the Presets page** stores what the active slot holds at a bank and position, with
+no editor. The Micro has no Store button, as the real one; this is how you store on it. The Micro has
+one bank of 99 places, and only bank 1 is offered.
 
-Your ROM, banks, settings and projects are not affected.
+**Two plugins in one project** (G1-Emu and G1-Emu Micro) no longer take the same number, which gave
+two PC Ports the same name.
+
+Your ROM, banks and settings are kept. The first time, every instance and the standalone read the
+banks from the standalone's `flash.bin`.
 
 ## Please test
 
-- **The Micro on outputs 3/4** (#83): a patch with its Output module on 3/4 should sound as on 1/2, with
-  nothing on the Out 3/4 bus.
-- **Choose a ROM and restart** in Settings, standalone and plugin: does it come back with the new one?
-- **A keyboard on Windows** (#84): Settings > MIDI in, then play. Does the `MIDI in` counter count?
+- **Store, then reopen:** store a patch from NME or the Presets page, save the project, close it,
+  open it again. Is it in the bank? Does each slot sound as before?
+- **Two instances storing:** two G1-Emu on two tracks, store a patch in each, then load a third
+  one: are both patches in its banks?
+- **G1-Emu Micro:** reopen a project; does slot A play what it played, with the knobs where they were?
 
-If something breaks up or stays silent, attach the log (`%APPDATA%\Animatek\G1-Emu\g1-emu.log` on
-Windows, `~/.local/share/Animatek/G1-Emu/g1-emu.log` on Linux and macOS), with your CPU and DAW.
+If something breaks up, stays silent or is not stored, attach the log (`%APPDATA%\Animatek\G1-Emu\g1-emu.log`
+on Windows, `~/.local/share/Animatek/G1-Emu/g1-emu.log` on Linux and macOS), with your CPU and DAW.
 
 ## Known
 
-- **Micro and the editor:** Animatek NME 0.25 knows the Micro's one slot and three knobs; the Slot-select
-  dialog still shows four buttons and the bank list nine: use slot A and bank 1.
+- In CLAP, when the last instance in a project closes, new instances have no PC Port of their own
+  (a JUCE limit); NME still finds them through the direct link. VST3 is not affected.
+- The Micro's display shows `--` after a project reopens, though the right patch plays.
 - Notes sent over the PC Port (an editor's keyboard) do not follow the pitch on the Micro: play from
   the MIDI port or the DAW.
 - On a computer that cannot run the Expanded in real time it breaks up: use the Regular there.
-- On Windows the plugin has no PC Port of its own (it uses the direct link); the standalone still
-  needs loopMIDI for the editor when the direct link is not used.

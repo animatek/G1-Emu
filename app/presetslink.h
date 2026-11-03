@@ -44,6 +44,9 @@ namespace g1app
 		// _position. _abort ends a transfer cut short, so the OS does not stay waiting for the rest.
 		// What came of it, and whether it is still going: uploadStatus().
 		void upload(int _slot, std::vector<std::vector<uint8_t>> _frames, std::vector<uint8_t> _abort, int _bank, int _position);
+		// What the slot holds now, stored at _bank/_position (`41 0B`), as the panel's Store does: for the
+		// Micro, which has no Store on its panel, and the plugin with no editor. Its outcome is uploadStatus().
+		void storeSlot(int _slot, int _bank, int _position);
 		struct UploadStatus { bool busy = false, ok = false; std::string message; uint64_t serial = 0; };
 		UploadStatus uploadStatus() const;
 		// A patch going in packet by packet: anything else sent to the PC Port meanwhile makes the OS

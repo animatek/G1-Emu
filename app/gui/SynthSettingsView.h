@@ -210,7 +210,8 @@ namespace g1gui
 		{
 		public:
 			explicit StoreCard(PresetsView& _owner);
-			void open(const juce::String& _name, int _bank);
+			// _slotOnly: Store slot's question, what the active slot holds stored there (no Load only).
+			void open(const juce::String& _name, int _bank, bool _slotOnly = false);
 			void refresh();					// the positions' names, once the bank is read
 			void paint(juce::Graphics& _g) override;
 			void resized() override;
@@ -223,6 +224,7 @@ namespace g1gui
 			juce::ComboBox m_bank, m_position;
 			juce::TextButton m_store{"Store"}, m_loadOnly{"Load only"}, m_cancel{"Cancel"};
 			bool m_known = false;
+			bool m_slotOnly = false;
 		};
 
 		void timerCallback() override;
@@ -243,6 +245,7 @@ namespace g1gui
 		juce::Viewport m_viewport;
 		List m_list{*this};
 		juce::TextButton m_loadPch{"Load .pch..."};
+		juce::TextButton m_storeSlot{"Store slot..."};
 		juce::TextButton m_close{"Close"};
 		std::unique_ptr<juce::FileChooser> m_chooser;
 		PchUpload m_pending;			// the patch Load .pch read, until it is sent or dropped

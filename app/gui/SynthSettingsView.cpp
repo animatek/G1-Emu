@@ -696,6 +696,16 @@ namespace g1gui
 		m_loadPch.setColour(juce::TextButton::textColourOffId, g_boxText);
 		m_loadPch.onClick = [this] { choosePch(); };
 		addAndMakeVisible(m_loadPch);
+		// What the slot holds now, stored in a bank: the panel's Store, which the Micro has not.
+		m_storeSlot.setTooltip("Store what the active slot holds now at a bank position");
+		m_storeSlot.setColour(juce::TextButton::buttonColourId, g_heading);
+		m_storeSlot.setColour(juce::TextButton::textColourOffId, g_boxText);
+		m_storeSlot.onClick = [this]
+		{
+			const int slot = m_activeSlot ? m_activeSlot() : 0;
+			m_card.open("slot " + juce::String::charToString(static_cast<juce::juce_wchar>('A' + slot)), m_bank.getSelectedId() - 1, true);
+		};
+		addAndMakeVisible(m_storeSlot);
 		styleCloseButton(m_close, [this] { close(); });
 		addAndMakeVisible(m_close);
 		addChildComponent(m_card);
@@ -878,7 +888,7 @@ namespace g1gui
 
 		_g.setColour(g_label);
 		_g.setFont(juce::FontOptions(g_textSize));
-		_g.drawText(footer(), c.getX() + g_margin, c.getY() + footerY() + 4, m_loadPch.getX() - 8 - g_margin, c.getHeight() - footerY() - 8,
+		_g.drawText(footer(), c.getX() + g_margin, c.getY() + footerY() + 4, m_storeSlot.getX() - 8 - g_margin, c.getHeight() - footerY() - 8,
 			juce::Justification::centredLeft, true);
 	}
 
@@ -896,6 +906,7 @@ namespace g1gui
 		m_viewport.setBounds(c.getX() + g_margin - 6, c.getY() + g_listTop, c.getWidth() - 2 * g_margin + 12, footerY() - g_listTop - 6);
 		m_close.setBounds(c.getRight() - g_margin - g_closeW, c.getY() + footerY() + 8, g_closeW, g_rowH + 6);
 		m_loadPch.setBounds(m_close.getX() - 8 - 84, c.getY() + footerY() + 8, 84, g_rowH + 6);
+		m_storeSlot.setBounds(m_loadPch.getX() - 8 - 84, c.getY() + footerY() + 8, 84, g_rowH + 6);
 		m_card.setBounds(m_viewport.getBounds().reduced(60, 18));
 		showBank();
 	}
@@ -950,7 +961,10 @@ namespace g1gui
 		m_store.onClick = [this]
 		{
 			setVisible(false);
-			m_owner.send(m_bank.getSelectedId() - 1, m_position.getSelectedId() - 1);
+			if(m_slotOnly)
+				m_owner.m_link.storeSlot(m_owner.m_activeSlot ? m_owner.m_activeSlot() : 0, m_bank.getSelectedId() - 1, m_position.getSelectedId() - 1);
+			else
+				m_owner.send(m_bank.getSelectedId() - 1, m_position.getSelectedId() - 1);
 		};
 		m_loadOnly.onClick = [this]
 		{
@@ -960,14 +974,22 @@ namespace g1gui
 		m_cancel.onClick = [this]
 		{
 			setVisible(false);
-			m_owner.m_pending = {};
+			if(!m_slotOnly)
+				m_owner.m_pending = {};
 		};
 	}
 
-	void PresetsView::StoreCard::open(const juce::String& _name, const int _bank)
+	void PresetsView::StoreCard::open(const juce::String& _name, const int _bank, const bool _slotOnly)
 	{
 		m_name = _name;
-		m_bank.setSelectedId(_bank + 1, juce::dontSendNotification);
+		m_slotOnly = _slotOnly;
+		m_loadOnly.setVisible(!_slotOnly);
+		// The banks the synth has, as the page lists them: the Micro has bank 1 only.
+		const int banks = std::max(1, m_owner.m_bank.getNumItems());
+		m_bank.clear(juce::dontSendNotification);
+		for(int b = 0; b < banks; ++b)
+			m_bank.addItem("Bank " + juce::String(b + 1), b + 1);
+		m_bank.setSelectedId(std::clamp(_bank, 0, banks - 1) + 1, juce::dontSendNotification);
 		m_known = false;
 		fillPositions(true);
 		setVisible(true);
@@ -1026,7 +1048,7 @@ namespace g1gui
 		_g.drawRoundedRectangle(r, 8.0f, 2.0f);
 		_g.setColour(g_boxText);
 		_g.setFont(juce::FontOptions(g_textSize + 2.0f, juce::Font::bold));
-		_g.drawText("Load \"" + m_name + "\"", getLocalBounds().removeFromTop(30).reduced(12, 0), juce::Justification::centredLeft, true);
+		_g.drawText(m_slotOnly ? "Store " + m_name : "Load \"" + m_name + "\"", getLocalBounds().removeFromTop(30).reduced(12, 0), juce::Justification::centredLeft, true);
 	}
 
 	void PresetsView::StoreCard::resized()

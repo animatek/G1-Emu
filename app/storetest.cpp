@@ -14,6 +14,7 @@
 #include "engine.h"
 #include "hostconfig.h"
 #include "osimage.h"
+#include "presetslink.h"
 #include "romfinder.h"
 #include "slotkeeper.h"
 
@@ -182,6 +183,32 @@ int main()
 		static_cast<unsigned long long>(answerMs), static_cast<unsigned long long>(flashMs), flashDiff(before, mc.getFlash().data()));
 	check(flashMs != 0, "the store reaches the flash");
 	check(bankHasIt(first), "bank " + std::to_string(g_bank + 1) + " has SimpleOSC after the store");
+
+	// The Presets page's Store slot (PresetsLink::storeSlot): what slot A holds, stored at position 2,
+	// with no upload, as the Micro needs with no Store on its panel.
+	{
+		g1app::PresetsLink link;
+		const auto flashBefore = mc.getFlash().data();
+		link.storeSlot(0, g_bank, 1);
+		std::vector<uint8_t> rx, toEditor, toG1;
+		for(int t = 0; t < 5000 && (t < 10 || link.uploadStatus().busy); ++t)
+		{
+			toG1.clear();
+			link.tick(mc.ucCycles() / g_ms, toG1);
+			if(!toG1.empty())
+				mc.getPcPort().receive(toG1);
+			rx.clear();
+			const auto end = mc.ucCycles() + g_ms;
+			while(mc.ucCycles() < end)
+				mc.exec();
+			mc.getPcPort().takeTx(rx);
+			toEditor.clear();
+			link.g1Sent(rx, mc.ucCycles() / g_ms, toEditor);
+		}
+		const auto status = link.uploadStatus();
+		std::printf("     Store slot: \"%s\", %zu flash bytes changed\n", status.message.c_str(), flashDiff(flashBefore, mc.getFlash().data()));
+		check(status.ok && flashDiff(flashBefore, mc.getFlash().data()) > 0, "Store slot stores slot A at position 2");
+	}
 
 	// What a project saves, into a new G1, as a reopened project does.
 	const auto state = first.userState();

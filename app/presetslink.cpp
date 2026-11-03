@@ -193,6 +193,22 @@ namespace g1app
 		++m_revision;
 	}
 
+	void PresetsLink::storeSlot(const int _slot, const int _bank, const int _position)
+	{
+		if(_slot < 0 || _slot > 3 || _bank < 0 || _bank >= Banks || _position < 0 || _position >= Positions)
+			return;
+		std::lock_guard<std::mutex> lock(m_mutex);
+		Upload u;			// an upload of nothing: only the Store at its end
+		u.slot = _slot;
+		u.bank = _bank;
+		u.position = _position;
+		m_uploads.push_back(std::move(u));
+		m_uploadStatus.busy = true;
+		m_uploadStatus.message = "Storing slot " + std::string(1, static_cast<char>('A' + _slot)) + "...";
+		++m_uploadStatus.serial;
+		++m_revision;
+	}
+
 	PresetsLink::UploadStatus PresetsLink::uploadStatus() const
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -475,9 +491,11 @@ namespace g1app
 				m_deadline = _nowMs + PacketMs;
 				return;
 			}
-			// All in: the editor is told of the new patch in the slot, as after a load (takeReply).
+			// All in: the editor is told of the new patch in the slot, as after a load (takeReply). Not
+			// for a store of what the slot already had (storeSlot): no new patch there.
 			const auto slot = static_cast<uint8_t>(m_upload.slot);
-			m_toEditor = frame(CcInfo, slot, {0x01, InfoNewPatchInSlot, slot, m_uploadPid});
+			if(!m_upload.frames.empty())
+				m_toEditor = frame(CcInfo, slot, {0x01, InfoNewPatchInSlot, slot, m_uploadPid});
 			if(m_upload.bank >= 0)
 			{
 				request(frame(CcPatch, static_cast<uint8_t>(m_upload.slot), {0x41, 0x0b, static_cast<uint8_t>(m_upload.slot),
@@ -555,6 +573,14 @@ namespace g1app
 			m_upload = std::move(m_uploads.front());
 			m_uploads.erase(m_uploads.begin());
 			m_frame = 0;
+			// Nothing to send first (storeSlot): straight to the Store.
+			if(m_upload.frames.empty())
+			{
+				request(frame(CcPatch, static_cast<uint8_t>(m_upload.slot), {0x41, 0x0b, static_cast<uint8_t>(m_upload.slot),
+					static_cast<uint8_t>(m_upload.bank), static_cast<uint8_t>(m_upload.position)}), State::Storing, _nowMs, _toG1);
+				m_deadline = _nowMs + PacketMs;
+				return;
+			}
 			request(m_upload.frames[0], State::Uploading, _nowMs, _toG1);
 			m_deadline = _nowMs + PacketMs;
 			return;
