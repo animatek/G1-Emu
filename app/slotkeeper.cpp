@@ -16,6 +16,8 @@ namespace g1app
 		constexpr uint64_t ReplyMs = 1500;			// a GetPatch section, the RequestPatch ACK
 		constexpr uint64_t UploadAckMs = 4000;		// a packet that makes the OS reload the DSPs is slow
 		constexpr uint64_t FilterTailMs = 300;		// late replies to an abandoned request
+		constexpr uint64_t RetryPauseMs = 1000;		// before a slot's upload goes again
+		constexpr int UploadTries = 3;
 
 		constexpr uint8_t CcIAm = 0x00, CcParameter = 0x13, CcInfo = 0x14, CcAck = 0x16, CcPatch = 0x17;
 		constexpr uint8_t InfoNewPatchInSlot = 0x38;
@@ -127,9 +129,12 @@ namespace g1app
 			if(!trace())
 				return;
 			std::fprintf(stderr, "[keeper %6llu ms] %s", static_cast<unsigned long long>(_nowMs), _dir);
-			for(size_t i = 0; i < _m.size() && i < 24; ++i)
+			// G1_KEEPER_TRACE=full: whole messages.
+			static const bool full = std::string(std::getenv("G1_KEEPER_TRACE")) == "full";
+			const size_t shown = full ? _m.size() : 24;
+			for(size_t i = 0; i < _m.size() && i < shown; ++i)
 				std::fprintf(stderr, " %02x", _m[i]);
-			std::fprintf(stderr, _m.size() > 24 ? " ...\n" : "\n");
+			std::fprintf(stderr, _m.size() > shown ? " ...\n" : "\n");
 		}
 
 		bool isClavia(const std::vector<uint8_t>& _m) { return _m.size() >= 6 && _m[1] == 0x33; }
@@ -174,10 +179,18 @@ namespace g1app
 		// As NME's UploadPacketizer: the sections back to back, cut into packets of 32 bytes; each
 		// packet says how many sections end in it. cc $1C, +1 on the first, +2 on the last.
 		constexpr size_t PacketBytes = 32;
+		constexpr uint8_t HeaderSection = 0x21;	// type and 80 bits (patch.pdl2's Header)
+		constexpr size_t HeaderBytes = 11;
 		struct Packet { std::vector<uint8_t> data; uint8_t ended = 0; };
 		std::vector<Packet> packets(1);
-		for(const auto& s : _sections)
+		for(const auto& section : _sections)
 		{
+			auto s = section;
+			// The header's last 3 bits (patch.pdl2's unknown4) go as an editor sends them, 0. A Micro
+			// reads them back as 2 and refuses its own header with them in an upload: the first packet
+			// was never answered and a project's slot came back empty (2026-11-03). A rack reads 0.
+			if(s.size() == HeaderBytes && s[0] == HeaderSection)
+				s.back() &= 0xf8;
 			for(const auto b : s)
 			{
 				if(packets.back().data.size() == PacketBytes)
@@ -307,6 +320,23 @@ namespace g1app
 		m_section.clear();
 	}
 
+	std::vector<SharedBanks::Store> SlotKeeper::takeStores()
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		std::vector<SharedBanks::Store> out;
+		for(const auto& s : m_stores)
+		{
+			SharedBanks::Store store;
+			store.bank = s.bank;
+			store.position = s.position;
+			if(s.slot < m_slots.size())
+				store.sections = m_slots[s.slot].sections;
+			out.push_back(std::move(store));
+		}
+		m_stores.clear();
+		return out;
+	}
+
 	void SlotKeeper::editorSent(const std::vector<uint8_t>& _bytes, const uint64_t _nowMs)
 	{
 		m_editorRx.insert(m_editorRx.end(), _bytes.begin(), _bytes.end());
@@ -337,6 +367,11 @@ namespace g1app
 			m_editorUploading = cc >= 0x1c && cc <= 0x1f && !(cc & 2);
 			bool changes = cc == CcParameter || (cc >= 0x1c && cc <= 0x1f);
 			uint8_t slot = slotOf(_m);
+			if(uint8_t storeSlot, bank, position; SharedBanks::parseStore(_m, storeSlot, bank, position))
+			{
+				std::lock_guard<std::mutex> lock(m_mutex);
+				m_stores.push_back({storeSlot, bank, position});
+			}
 			if(cc == CcPatch)
 			{
 				if(_m[4] == 0x41)	// PatchManagerCommand: only LoadPatch (bank to slot) changes a slot
@@ -381,7 +416,12 @@ namespace g1app
 				const auto slot = slotOf(_m);
 				// What the keeper's own requests bring: ACKs, patch packets and the IAm answer.
 				// The IAm answer only while the keeper greets: the editor greets too, and must hear back.
-				if(filtering && ((cc == CcAck && slot == m_slot) || (cc >= 0x1c && cc <= 0x1f && slot == m_slot)))
+				// Only the ACKs the keeper's requests get ($36 to RequestPatch, $7F to an upload packet):
+				// an answer to the editor on the same slot (a patch list, $13, or a Store's) is the
+				// editor's, even when it asked while the keeper was reading (stream of 2026-11-02: a synth
+				// refresh took seconds, and a Store looked lost).
+				const bool keeperAck = cc == CcAck && slot == m_slot && _m.size() > 5 && (_m[5] == 0x36 || _m[5] == 0x7f);
+				if(filtering && (keeperAck || (cc >= 0x1c && cc <= 0x1f && slot == m_slot)))
 					hide = true;
 				if(cc == CcIAm && m_state == State::Greeting)
 					hide = true;
@@ -421,6 +461,16 @@ namespace g1app
 		{
 		case State::Greeting:
 			if(cc == CcIAm && _m.size() > 4 && _m[4] == 0x01)
+			{
+				// Answering IAm is not yet taking a patch: a Micro answers RequestPatch only ~2.5 s later,
+				// and a restore sent before that was never taken, nor any after it (2026-11-03). So the
+				// keeper asks for slot A until the OS answers, and only then uploads. A rack answers at once.
+				m_state = State::Ready;
+				m_deadline = 0;
+			}
+			break;
+		case State::Ready:
+			if(cc == CcAck && slot == 0 && _m.size() > 5 && _m[5] == 0x36)
 			{
 				m_state = State::Idle;
 				m_filterUntil = _nowMs + FilterTailMs;
@@ -475,7 +525,11 @@ namespace g1app
 			sections.clear();
 		std::lock_guard<std::mutex> lock(m_mutex);
 		if(ok)
+		{
+			if(m_slots[m_slot].sections != sections)
+				m_revision.fetch_add(1, std::memory_order_relaxed);
 			m_slots[m_slot].sections = std::move(sections);
+		}
 		else
 			m_dirty[m_slot] = true;
 		m_replies.clear();
@@ -496,6 +550,14 @@ namespace g1app
 			{
 				send({0xf0, 0x33, 0x00, 0x06, 0x00, 0x03, 0x03, 0xf7}, _nowMs, _toG1);	// IAm, as an editor
 				m_state = State::Greeting;
+				m_deadline = _nowMs + ReplyMs;
+			}
+			break;
+
+		case State::Ready:
+			if((m_deadline == 0 || _nowMs >= m_deadline) && !m_editorUploading)
+			{
+				send(frame(CcPatch, 0, {0x41, 0x35}), _nowMs, _toG1);	// RequestPatch for slot A
 				m_deadline = _nowMs + ReplyMs;
 			}
 			break;
@@ -523,6 +585,7 @@ namespace g1app
 					{
 						m_uploadPending[s] = !m_slots[s].empty();
 						m_dirty[s] = m_slots[s].empty();	// nothing saved for it: learn what it has
+						m_uploadTries[s] = 0;
 					}
 				}
 			}
@@ -567,6 +630,8 @@ namespace g1app
 			{
 				// No patch to give: an empty slot (or one the OS will not talk about).
 				std::lock_guard<std::mutex> lock(m_mutex);
+				if(!m_slots[m_slot].sections.empty())
+					m_revision.fetch_add(1, std::memory_order_relaxed);
 				m_slots[m_slot].sections.clear();
 				m_state = State::Idle;
 				m_filterUntil = _nowMs + FilterTailMs;
@@ -607,12 +672,23 @@ namespace g1app
 			}
 			else if(_nowMs >= m_deadline)
 			{
-				// The OS did not take it: learn what the slot has instead.
 				m_upload.clear();
 				std::lock_guard<std::mutex> lock(m_mutex);
-				m_dirty[m_slot] = true;
 				m_state = State::Idle;
-				m_filterUntil = _nowMs + FilterTailMs;
+				// The OS did not take it. A Micro just booted leaves the first packet of a restore
+				// unanswered, then answers the next message with error 6 and takes uploads again
+				// (2026-11-03): after a pause the whole slot goes again, a few times. Then the keeper
+				// learns what the slot has instead.
+				if(++m_uploadTries[m_slot] < UploadTries)
+				{
+					m_uploadPending[m_slot] = true;
+					m_filterUntil = _nowMs + RetryPauseMs;
+				}
+				else
+				{
+					m_dirty[m_slot] = true;
+					m_filterUntil = _nowMs + FilterTailMs;
+				}
 			}
 			break;
 		}

@@ -244,8 +244,9 @@ namespace g1app
 		m_engine = std::make_unique<Engine>(m_rom, os, dsps);
 		_log += std::string("model: ") + HostOptions::modelName(m_engine->mc().dspCount()) + " (" + std::to_string(m_engine->mc().dspCount()) + " DSPs)\n";
 
-		std::vector<uint8_t> flash;
-		if(loadFile(m_flashPath, flash) && m_engine->loadFlash(flash))
+		// The memory every G1 shares (sharedbanks.h): the plugins read it and store into it too.
+		m_shared.setPath(m_flashPath);
+		if(m_shared.loadInto(*m_engine))
 			_log += "flash loaded from " + m_flashPath + "\n";
 		else
 			_log += std::string("new flash with ") + (m_engine->customOs() ? "the OS image" : "the factory OS") + " (will be saved in " + m_flashPath + ")\n";
@@ -548,18 +549,25 @@ namespace g1app
 		std::fprintf(stderr, "Micro update mode: an OS of %zu bytes was stored; kept as %s and set as the Micro OS in the settings\n", os.size(), path.c_str());
 	}
 
+	// Into the shared memory (sharedbanks.h). Behind (a plugin stored into it since this G1 read it):
+	// this G1's banks are not written over it, they are set aside beside it, and the log says so.
 	void EmuHost::saveFlash()
 	{
 		if(!m_engine)
 			return;
-		std::filesystem::create_directories(std::filesystem::path(m_flashPath).parent_path());
-		const auto tmp = m_flashPath + ".tmp";
+		const auto& d = m_engine->mc().getFlash().data();
+		std::string note;
+		const auto result = m_shared.sync(d, true, note);
+		if(result == SharedBanks::Sync::Behind)
 		{
-			std::ofstream f(tmp, std::ios::binary);
-			const auto& d = m_engine->mc().getFlash().data();
+			const auto stamp = std::to_string(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+			const auto aside = (std::filesystem::path(m_flashPath).parent_path() / ("flash-not-shared-" + stamp + ".bin")).string();
+			std::ofstream f(aside, std::ios::binary);
 			f.write(reinterpret_cast<const char*>(d.data()), static_cast<std::streamsize>(d.size()));
+			logEvent("shared memory: changed by a plugin since this G1 started; its own banks were not written over it, kept as " + aside);
 		}
-		std::filesystem::rename(tmp, m_flashPath);
+		else if(result == SharedBanks::Sync::Failed)
+			logEvent("shared memory: " + note);
 	}
 
 	void EmuHost::finishWav()

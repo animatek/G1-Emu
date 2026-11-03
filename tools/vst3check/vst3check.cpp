@@ -268,27 +268,62 @@ namespace
 	{
 		int failed = 0;
 
-		// A process of its own, so this first instance's PC Port is the first name.
+		// A process of its own, so this first instance is the first on the direct link. The editor
+		// talks over the direct link, as Animatek NME does: the plugin's virtual MIDI port is made by
+		// the JUCE this process shares with it, and JUCE does not list its own client's ports
+		// (2026-11-03: "NOT THERE" though the port was open).
 		Voice f;
 		f.plugin = load(formats, path);
-		const juce::String port = "G1-Emu PC Port";
-		Editor sender;
-		const bool open = port.isNotEmpty() && sender.open(port);
-		std::printf("issue #25: editor on \"%s\": %s\n", port.toRawUTF8(), open ? "open" : "NOT THERE");
+		juce::StreamingSocket link;
+		const bool open = link.connect("127.0.0.1", 47310, 2000);
+		std::printf("issue #25: editor on the direct link: %s\n", open ? "open" : "NOT THERE");
+		std::vector<uint8_t> rx;
+		bool greeted = false;
+		int acks = 0;
+		const auto receive = [&]
+		{
+			uint8_t buf[512];
+			while(open && link.waitUntilReady(true, 0) == 1)
+			{
+				const int n = link.read(buf, sizeof(buf), false);
+				if(n <= 0)
+					break;
+				rx.insert(rx.end(), buf, buf + n);
+			}
+			if(!greeted)
+				if(const auto nl = std::find(rx.begin(), rx.end(), '\n'); nl != rx.end())
+				{
+					greeted = true;
+					rx.erase(rx.begin(), nl + 1);
+				}
+			if(!greeted)
+				return;
+			// An upload packet's ACK (cc $16, $36 or $7F).
+			for(size_t i = 0; i + 5 < rx.size(); ++i)
+				if(rx[i] == 0xf0 && rx[i + 1] == 0x33 && (rx[i + 2] >> 2) == 0x16 && (rx[i + 5] == 0x36 || rx[i + 5] == 0x7f))
+					++acks;
+			rx.clear();
+		};
 		const auto upload = simpleOscUpload();
 		// From 6 s, after the G1 has booted and the plugin has read its slots: each packet as soon
 		// as the last one's ACK is back, as NME sends them. The render is offline, so each block
-		// waits a moment for the MIDI to travel.
+		// waits a moment for the bytes to travel.
 		size_t sent = 0;
 		const auto peaksF = drone(*f.plugin, 11.0, [&](const int _pos)
 		{
-			if(!open || _pos < static_cast<int>(6.0 * g_rate) || sent == upload.size() || sender.acks() < static_cast<int>(sent))
+			receive();
+			if(!open || _pos < static_cast<int>(6.0 * g_rate) || sent == upload.size() || acks < static_cast<int>(sent))
 				return;
-			sender.send(port, upload[sent++]);
-			for(int i = 0; i < 50 && sender.acks() < static_cast<int>(sent); ++i)
+			link.write(upload[sent].data(), static_cast<int>(upload[sent].size()));
+			++sent;
+			for(int i = 0; i < 50 && acks < static_cast<int>(sent); ++i)
+			{
 				juce::Thread::sleep(2);
+				receive();
+			}
 		});
-		std::printf("issue #25: %zu of %zu packets sent, %d ACKs\n", sent, upload.size(), sender.acks());
+		std::printf("issue #25: %zu of %zu packets sent, %d ACKs\n", sent, upload.size(), acks);
+		link.close();
 		juce::MemoryBlock project;
 		f.plugin->getStateInformation(project);
 		f.plugin.reset();
@@ -959,6 +994,52 @@ namespace
 	}
 }
 
+namespace
+{
+	// --micro-knobs: G1-Emu Micro's knobs (volume, edit knobs 1-3) go with the project. Its OS reads
+	// them through the QSPI, which the project once did not keep: they came back at their defaults
+	// each time (2026-11-03). A state with them set is opened in a new instance, which plays a while
+	// and is saved again: the same values must be in it.
+	int checkMicroKnobs(juce::AudioPluginFormatManager& _formats, const juce::String& _path)
+	{
+		Voice a;
+		a.plugin = load(_formats, _path);
+		if(!a.plugin)
+			return 1;
+		drone(*a.plugin, 3.0);
+		juce::MemoryBlock state;
+		a.plugin->getStateInformation(state);
+		a.plugin.reset();
+		auto xml = pluginXml(state);
+		if(!xml)
+		{
+			std::printf("micro knobs: no plugin state\n");
+			return 1;
+		}
+		const juce::String before = xml->getStringAttribute("qspi", "(none)");
+		const juce::String wanted = "17 33 51 99 0 0 0 0 0 0 0 0 0 0 0 0";
+		xml->setAttribute("qspi", wanted);
+		const auto changed = withPluginXml(state, *xml);
+		Voice b;
+		b.plugin = load(_formats, _path);
+		b.plugin->setStateInformation(changed.getData(), static_cast<int>(changed.getSize()));
+		drone(*b.plugin, 4.0);
+		juce::MemoryBlock again;
+		b.plugin->getStateInformation(again);
+		const auto back = pluginXml(again);
+		const juce::String got = back ? back->getStringAttribute("qspi", "(none)") : "(no state)";
+		std::printf("micro knobs: saved by a new instance \"%s\"; set to \"%s\", saved again \"%s\"\n",
+			before.toRawUTF8(), wanted.toRawUTF8(), got.toRawUTF8());
+		if(got != wanted)
+		{
+			std::printf("FAIL: the Micro's knobs do not come back with the project\n");
+			return 1;
+		}
+		return 0;
+	}
+
+}
+
 int main(int _argc, char** _argv)
 {
 	if(_argc < 2)
@@ -1006,6 +1087,12 @@ int main(int _argc, char** _argv)
 	if(_argc > 3 && juce::String(_argv[2]) == "--fx")
 	{
 		failed = checkFx(formats, path, juce::File(juce::String(_argv[3])));
+		std::printf("%s\n", failed ? "FAILED" : "all good");
+		return failed;
+	}
+	if(_argc > 2 && juce::String(_argv[2]) == "--micro-knobs")
+	{
+		failed = checkMicroKnobs(formats, path);
 		std::printf("%s\n", failed ? "FAILED" : "all good");
 		return failed;
 	}

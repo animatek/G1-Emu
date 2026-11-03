@@ -18,6 +18,8 @@
 
 #include <array>
 #include <algorithm>
+#include "sharedbanks.h"
+
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -55,6 +57,12 @@ namespace g1app
 		// G1 once it has booted (empty slots are left alone) and then keeps them as known.
 		Slots slots() const;
 		void restore(const Slots& _slots);
+		// Goes up each time what the keeper holds for a slot changes: the plugin tells its host the
+		// project changed, so a DAW asks to save it.
+		uint32_t revision() const { return m_revision.load(std::memory_order_relaxed); }
+		// The Stores an editor sent since the last call, each with what the keeper has for its slot:
+		// what a G1 behind the shared memory stores into it again (SharedBanks::replay).
+		std::vector<SharedBanks::Store> takeStores();
 		// _slot may have changed in a way the OS tells no one (the System menu's patch settings):
 		// read it again once the PC Port is quiet.
 		void reread(size_t _slot);
@@ -85,7 +93,8 @@ namespace g1app
 		static std::vector<std::vector<uint8_t>> uploadMessages(const std::vector<std::vector<uint8_t>>& _sections, uint8_t _slot);
 
 	private:
-		enum class State { Boot, Greeting, Idle, Requesting, Fetching, Uploading };
+		// Ready: the OS answered IAm; waiting for it to answer a RequestPatch too, before any upload.
+		enum class State { Boot, Greeting, Ready, Idle, Requesting, Fetching, Uploading };
 
 		void send(std::vector<uint8_t> _msg, uint64_t _nowMs, std::vector<uint8_t>& _toG1);
 		void handle(const std::vector<uint8_t>& _msg, uint64_t _nowMs);
@@ -101,6 +110,10 @@ namespace g1app
 		std::atomic<size_t> m_slotCount{SlotCount};
 		bool m_editorWaits = false;	// the editor spoke to an idle keeper: replies are its own
 		std::atomic<State> m_state{State::Boot};
+		std::atomic<uint32_t> m_revision{0};
+		struct StoreSent { uint8_t slot, bank, position; };
+		std::vector<StoreSent> m_stores;	// m_mutex
+		std::array<int, SlotCount> m_uploadTries{};	// a restore's tries per slot
 		std::array<bool, SlotCount> m_uploadPending{};	// restored slots not yet sent to the G1
 		uint64_t m_lastActivity = 0;	// the editor's last message, or the G1's last change report
 		bool m_editorUploading = false;	// an upload from the editor has begun and not ended

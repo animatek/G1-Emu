@@ -17,6 +17,8 @@ far is in `NOTES.md`.
 - `g1gui` shows the panel: display, 18 knobs and master volume, the 18 buttons, the dial and the
   LEDs. Every button is identified and the dial works (it turns values on the G1's own screens).
 
+**From 2026-11-03 the next release is a stability release: [`docs/stability.md`](docs/stability.md).** No new features until its gate passes.
+
 **The short list, in order, with the detail of each: [`docs/next-steps.md`](docs/next-steps.md).**
 
 **From 2026-09-30 the open work is tracked as GitHub issues**, so nothing lives only in

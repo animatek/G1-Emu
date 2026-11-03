@@ -487,6 +487,106 @@ int main()
 	check(g1app::SlotKeeper::unpack(g1app::SlotKeeper::pack(got), back) && back == got, "pack/unpack keep the slots");
 	check(!g1app::SlotKeeper::unpack({1, 2, 3}, back), "unpack refuses what is not its format");
 
+	// 7. The editor asks for a bank's patch list (PatchHandling GetPatchList, answered with an ACK
+	//     on slot A) just as the keeper starts reading slot A after an upload: the answer is the
+	//     editor's, and must reach it at once (stream of 2026-11-02: a synth refresh took seconds,
+	//     a Store was lost).
+	{
+		auto& mc = engine.mc();
+		std::vector<uint8_t> fromG1, toEditor, toG1;
+		std::vector<uint8_t> raw;	// what the G1 itself sent, before the keeper
+		auto step = [&](std::vector<uint8_t>& _seen)
+		{
+			const auto end = mc.ucCycles() + g_ms;
+			while(mc.ucCycles() < end)
+				mc.exec();
+			fromG1.clear();
+			mc.getPcPort().takeTx(fromG1);
+			raw.insert(raw.end(), fromG1.begin(), fromG1.end());
+			toEditor.clear();
+			second.g1Sent(fromG1, bench.nowMs(), toEditor);
+			_seen.insert(_seen.end(), toEditor.begin(), toEditor.end());
+			toG1.clear();
+			second.tick(bench.nowMs(), toG1);
+			if(!toG1.empty())
+				mc.getPcPort().receive(toG1);
+			return !toG1.empty();
+		};
+		auto acksIn = [](const std::vector<uint8_t>& _b)
+		{
+			int n = 0;
+			for(size_t k = 0; k + 5 < _b.size(); ++k)
+				n += _b[k] == 0xf0 && _b[k + 1] == 0x33 && (_b[k + 2] >> 2) == 0x16;
+			return n;
+		};
+		// GetPatchList for bank 1, position 0: F0 33 5C 06 41 14 00 00 sum F7.
+		std::vector<uint8_t> list = {0xf0, 0x33, 0x5c, 0x06, 0x41, 0x14, 0x00, 0x00};
+		uint32_t sum = 0;
+		for(const auto b : list)
+			sum += b;
+		list.push_back(static_cast<uint8_t>(sum & 0x7f));
+		list.push_back(0xf7);
+
+		// First with the keeper settled: the request itself is answered.
+		{
+			std::vector<uint8_t> seen;
+			const auto asked = bench.nowMs();
+			mc.getPcPort().receive(list);
+			second.editorSent(list, asked);
+			uint64_t at = 0;
+			for(uint64_t t = 0; t < 3000 && !at; ++t)
+			{
+				step(seen);
+				if(acksIn(seen) > 0)
+					at = bench.nowMs();
+			}
+			std::printf("     patch list asked with the keeper idle: %s\n", at ? ("answered after " + std::to_string(at - asked) + " ms").c_str() : "no answer in 3 s");
+			check(at != 0, "the patch list request is answered with the keeper idle");
+			bench.runUntilSettled(10000);
+		}
+
+		// The editor's upload into slot A, packet by packet on each ACK.
+		const auto packets = g1app::SlotKeeper::uploadMessages(g_simpleOsc, 0);
+		std::vector<uint8_t> seen;
+		size_t sent = 0;
+		for(uint64_t t = 0; t < 10000 && sent < packets.size(); ++t)
+		{
+			const int before = acksIn(seen);
+			if(t == 0 || acksIn(seen) > static_cast<int>(sent) - 1)
+			{
+				mc.getPcPort().receive(packets[sent]);
+				second.editorSent(packets[sent], bench.nowMs());
+				++sent;
+			}
+			step(seen);
+			(void)before;
+		}
+		// Wait for the keeper to start reading slot A.
+		seen.clear();
+		bool keeperAsked = false;
+		for(uint64_t t = 0; t < 5000 && !keeperAsked; ++t)
+			keeperAsked = step(seen);
+		check(keeperAsked, "after the editor's upload into slot A the keeper starts reading it");
+		// That very moment the editor asks for the list.
+		const auto asked = bench.nowMs();
+		mc.getPcPort().receive(list);
+		second.editorSent(list, asked);
+		seen.clear();
+		raw.clear();
+		uint64_t answeredAt = 0;
+		for(uint64_t t = 0; t < 3000 && !answeredAt; ++t)
+		{
+			step(seen);
+			if(acksIn(seen) > 0)
+				answeredAt = bench.nowMs();
+		}
+		std::printf("     patch list asked while the keeper reads slot A: %s\n",
+			answeredAt ? ("answered to the editor after " + std::to_string(answeredAt - asked) + " ms").c_str() : "NO answer reached the editor in 3 s");
+		std::printf("     the G1 sent %d ACKs meanwhile, the editor got %d\n", acksIn(raw), acksIn(seen));
+		check(answeredAt && answeredAt - asked < 500, "the editor's patch list request is answered to the editor while the keeper reads slot A");
+		bench.runUntilSettled(10000);
+	}
+
 	std::printf("%s\n", failures ? "FAILED" : "passed");
 	return failures ? 1 : 0;
 }

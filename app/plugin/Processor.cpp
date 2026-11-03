@@ -1,4 +1,5 @@
 #include "Processor.h"
+#include "filelock.h"
 
 #include "Editor.h"
 
@@ -18,14 +19,38 @@ namespace g1plugin
 {
 	namespace
 	{
+		// G1-Emu Micro is always a Micro; G1-Emu (and G1-Emu FX) a Regular or an Expanded, never a Micro.
+		constexpr bool g_microPlugin = G1_PLUGIN_MICRO != 0;
+		Processor::Model allowed(const Processor::Model _m)
+		{
+			if(g_microPlugin)
+				return Processor::Model::Micro;
+			return _m == Processor::Model::Micro ? Processor::Model::Regular : _m;
+		}
 		Processor::Model modelOf(const g1app::HostOptions& _o)
 		{
 			const auto dsps = _o.dspCount();	// the settings, or G1_MODEL, which wins
-			return dsps == g1::g_microDsps ? Processor::Model::Micro : dsps > g1::g_regularDsps ? Processor::Model::Expanded : Processor::Model::Regular;
+			return allowed(dsps == g1::g_microDsps ? Processor::Model::Micro : dsps > g1::g_regularDsps ? Processor::Model::Expanded : Processor::Model::Regular);
 		}
 		Processor::Model modelFromString(const juce::String& _s)
 		{
 			return _s == "micro" ? Processor::Model::Micro : _s == "expanded" ? Processor::Model::Expanded : Processor::Model::Regular;
+		}
+		// The Micro's knobs (volume and edit knobs 1-3) are read by its OS through the QSPI, not the
+		// rack's ADC, so the project keeps them apart: one value per QSPI queue entry (2026-11-03: they
+		// came back at their defaults each time a project opened).
+		juce::String qspiToString(const g1::Microcontroller& _mc)
+		{
+			juce::StringArray v;
+			for(uint8_t e = 0; e < 16; ++e)
+				v.add(juce::String(_mc.qspiAdc(e)));
+			return v.joinIntoString(" ");
+		}
+		void qspiFromString(g1::Microcontroller& _mc, const juce::String& _s)
+		{
+			const auto v = juce::StringArray::fromTokens(_s, " ", {});
+			for(int e = 0; e < v.size() && e < 16; ++e)
+				_mc.setQspiAdc(static_cast<uint8_t>(e), static_cast<uint8_t>(juce::jlimit(0, 255, v[e].getIntValue())));
 		}
 		const char* modelToString(const Processor::Model _m)
 		{
@@ -84,7 +109,7 @@ namespace g1plugin
 			return _n == 1 ? std::string("G1-Emu") : "G1-Emu " + std::to_string(_n);
 		}
 
-		int takeInstanceNumber(std::unique_ptr<juce::InterProcessLock>& _hold)
+		int takeInstanceNumber(std::unique_ptr<g1app::FileLock>& _hold)
 		{
 			std::set<juce::String> taken;
 			for(const auto& d : juce::MidiInput::getAvailableDevices())
@@ -96,8 +121,12 @@ namespace g1plugin
 			{
 				if(g_instances.count(n) || taken.count(juce::String(pcPortClient(n) + " PC Port")))
 					continue;
-				auto hold = std::make_unique<juce::InterProcessLock>("G1-Emu PC Port " + juce::String(n));
-				if(!hold->enter(0))
+				// A file lock and not juce::InterProcessLock: G1-Emu and G1-Emu Micro are two libraries in
+				// one host process, each with its own g_instances, and JUCE's fcntl lock does not keep one
+				// process from taking a number twice (two "G1-Emu 2 PC Port", 2026-11-03).
+				const auto lockPath = std::filesystem::path(g1app::defaultFlashPath()).parent_path() / "locks" / ("pcport-" + std::to_string(n) + ".lock");
+				auto hold = std::make_unique<g1app::FileLock>(lockPath.string(), false);
+				if(!hold->locked())
 					continue;
 				_hold = std::move(hold);
 				g_instances.insert(n);
@@ -258,8 +287,10 @@ namespace g1plugin
 		o.extrasOpen = m_extrasOpen;
 		o.knobDisplays = m_knobDisplays;
 		o.knobFollowsPatch = m_knobFollowsPatch;
-		o.expanded = m_model == Model::Expanded;
-		o.micro = m_model == Model::Micro;
+		// The model in the settings is the standalone's too. G1-Emu Micro leaves it alone, and G1-Emu
+		// does not take the standalone off the Micro: it only says Regular or Expanded for a rack.
+		if(!g_microPlugin && !o.micro)
+			o.expanded = m_model == Model::Expanded;
 		o.randomExclude = m_randomExclude;
 		o.save(g1app::defaultSettingsPath());
 
@@ -281,6 +312,13 @@ namespace g1plugin
 			(e.index == VolumeIndex ? static_cast<juce::RangedAudioParameter&>(*m_volumeParam)
 				: static_cast<juce::RangedAudioParameter&>(*m_knobParams[e.index])).endChangeGesture();
 		g1app::logEvent("plugin end: instance " + std::to_string(m_instance));
+		{
+			std::lock_guard<std::mutex> lock(m_lifecycle);
+			// What was stored in the last moments goes into the shared memory before the G1 goes.
+			if(m_engine && m_flashPending)
+				startSync(true);
+		}
+		joinSync();
 		{
 			std::lock_guard<std::mutex> lock(m_lifecycle);
 			m_runner.reset();
@@ -353,8 +391,12 @@ namespace g1plugin
 		std::vector<uint8_t> rom;
 		if(search.found() && g1app::inspectRom(search.path, rom).ok())
 		{
+			// The rack's OS (`os =`): with the settings on the Micro, loadOs would hand the Micro's,
+			// and a rack booted on it never starts (the load stuck at 100 %, 2026-11-03). The Micro's
+			// own is read in createEngine.
 			std::string osNote;
-			m_os = options.loadOs(osNote);
+			options.micro = false;
+			m_os = options.dspCount() == g1::g_microDsps ? std::vector<uint8_t>() : options.loadOs(osNote);
 			m_rom = std::move(rom);
 			m_romPath = search.path;
 			m_romProblem.clear();
@@ -403,14 +445,20 @@ namespace g1plugin
 	void Processor::createEngine(const juce::MemoryBlock* _state)
 	{
 		m_runner.reset();
+		// What the old G1 stored last goes into the shared memory, and that finishes before the new
+		// one reads it.
+		if(m_engine && m_flashPending)
+			startSync(true);
+		joinSync();
 		m_engine.reset();
 		m_keeper.reset();
+		m_flashPending = false;
 		if(m_rom.empty())
 			return;
 		// The model is the project's: one saved before there was a choice ran on a Regular.
 		if(_state)
 			if(const auto xml = getXmlFromBinary(_state->getData(), static_cast<int>(_state->getSize())); xml && xml->hasTagName(g_stateTag))
-				m_model = modelFromString(xml->getStringAttribute("model"));
+				m_model = allowed(modelFromString(xml->getStringAttribute("model")));
 		// The Micro runs its own OS (not the rack's `os =`) on one DSP; without it, this instance is a
 		// Regular one and says so (microNote), as the standalone does.
 		auto os = m_os;
@@ -438,6 +486,9 @@ namespace g1plugin
 		// costs about half the CPU with the default patch) and failed with real patches: ButohDrone and
 		// ArpeggiRama need more than one core serially, and a second instance alone dropped out
 		// (Bitwig, 2026-10-26). G1_THREADS=0 still runs one serially, to try it.
+		m_engineOs = os;
+		m_engineDsps = dsps;
+		m_shared.setPath(g1app::SharedBanks::pathFor(dsps));
 		auto engine = std::make_unique<g1app::Engine>(m_rom, os, dsps, true);
 		g1app::logEvent("engine: model " + std::string(modelToString(m_model)) + ", " + std::to_string(dsps) + " DSPs"
 			+ (m_microFallback ? ", NO Micro OS, running as a Regular: " : m_model == Model::Micro ? ", " : "")
@@ -468,6 +519,8 @@ namespace g1plugin
 			startFromStandalone(*engine);
 		}
 		m_engine = std::move(engine);
+		m_engineCreatedAt = juce::Time::getMillisecondCounter();
+		m_flashWritesSeen = m_engine->mc().getFlash().programmedBytes() + m_engine->mc().getFlash().erasedSectors();
 		m_engineFresh = true;
 		++m_generation;
 		knobsFromEngine();
@@ -493,19 +546,17 @@ namespace g1plugin
 		m_knobGeneration = m_generation.load();
 	}
 
-	// A new instance's banks: a copy of the standalone's flash, or the factory's.
+	// The banks: the memory every G1 shares (the standalone's flash.bin, or the Micro's flash-micro.bin),
+	// or the factory's when there is none yet; the first store then makes it.
 	void Processor::startFromStandalone(g1app::Engine& _engine)
 	{
-		// The Micro has its own flash, apart from the rack's.
-		auto flashPath = std::filesystem::path(g1app::defaultFlashPath());
-		if(_engine.mc().dspCount() == g1::g_microDsps)
-			flashPath = flashPath.parent_path() / "flash-micro.bin";
-		const juce::File flash(flashPath.string());
-		juce::MemoryBlock data;
-		if(flash.existsAsFile() && flash.loadFileAsData(data) && _engine.loadFlash(toBytes(data)))
-			m_origin = "a copy of the standalone's flash (" + flash.getFullPathName().toStdString() + ")";
+		if(m_shared.loadInto(_engine))
+			m_origin = "the shared memory (" + m_shared.path() + ")";
 		else
-			m_origin = "the factory flash: no patches yet";
+		{
+			m_origin = "the factory flash: no shared memory yet (" + m_shared.path() + ")";
+			m_flashPending = true;	// it makes it
+		}
 	}
 
 	int Processor::startRunner()
@@ -779,7 +830,7 @@ namespace g1plugin
 		m_knobDisplays = _xml.getBoolAttribute("knobDisplays", m_knobDisplays);
 		m_panelScale = static_cast<float>(_xml.getDoubleAttribute("panelScale", m_panelScale));
 		m_knobFollowsPatch = _xml.getBoolAttribute("knobFollowsPatch", m_knobFollowsPatch);
-		m_model = modelFromString(_xml.getStringAttribute("model"));
+		m_model = allowed(modelFromString(_xml.getStringAttribute("model")));
 		// A project from before this parameter existed has no attribute: the fixed 36 dB it ran
 		// with, not the new default, so its mix does not jump 12 dB.
 		m_gainParam->setValueNotifyingHost(m_gainParam->convertTo0to1(
@@ -799,6 +850,8 @@ namespace g1plugin
 			knobs.add(juce::String(KnobParameter::toAdc(p->get())));
 		xml.setAttribute("knobs", knobs.joinIntoString(" "));
 		xml.setAttribute("volume", VolumeParameter::toAdc(m_volumeParam->get()));
+		if(m_engine && m_engine->mc().dspCount() == g1::g_microDsps)
+			xml.setAttribute("qspi", qspiToString(m_engine->mc()));
 		juce::MemoryBlock out;
 		copyXmlToBinary(xml, out);
 		return out;
@@ -808,6 +861,7 @@ namespace g1plugin
 	{
 		knobsFromHost();	// what the host turned while no audio ran (CLAP's flush) goes in too
 		std::vector<uint8_t> flash, knobs(256);
+		juce::String qspi;
 		{
 			std::unique_lock<std::mutex> engineLock;
 			if(m_runner)
@@ -815,8 +869,12 @@ namespace g1plugin
 			flash = m_engine->userState();
 			for(size_t i = 0; i < knobs.size(); ++i)
 				knobs[i] = m_engine->mc().adc(static_cast<uint8_t>(i));
+			if(m_engine->mc().dspCount() == g1::g_microDsps)
+				qspi = qspiToString(m_engine->mc());
 		}
 		auto xml = stateXml();
+		if(qspi.isNotEmpty())
+			xml.setAttribute("qspi", qspi);
 		xml.createNewChildElement("Flash")->addTextElement(packBytes(flash));
 		xml.createNewChildElement("Knobs")->addTextElement(packBytes(knobs));
 		// What each slot holds, which the flash does not (issue #25): as the keeper last read it.
@@ -861,10 +919,18 @@ namespace g1plugin
 				_engine.mc().setAdc(g1::KnobMap::KnobAdc[static_cast<size_t>(k)], static_cast<uint8_t>(juce::jlimit(0, 255, knobs[k].getIntValue())));
 			if(xml->hasAttribute("volume"))
 				_engine.mc().setAdc(g1::g_adcVolume, static_cast<uint8_t>(juce::jlimit(0, 255, xml->getIntAttribute("volume"))));
+			if(xml->hasAttribute("qspi"))
+				qspiFromString(_engine.mc(), xml->getStringAttribute("qspi"));
 			return true;
 		}
+		// One memory, as on a synth (Javier, 2026-11-03): the banks are the shared memory's, the project
+		// brings back what its slots held (below). Its own copy of the banks is used only while there
+		// is no shared memory yet, and then makes it.
 		bool otherOs = false;
-		if( !unpackBytes(flashXml->getAllSubText(), flash) || !_engine.setUserState(flash, error, &otherOs))
+		const bool shared = m_shared.loadInto(_engine);
+		if(shared)
+			m_origin = "the shared memory (" + m_shared.path() + "); the project's slots, knobs and settings";
+		else if( !unpackBytes(flashXml->getAllSubText(), flash) || !_engine.setUserState(flash, error, &otherOs))
 		{
 			// Kept as it came, and handed back as it came: saving the project again must not
 			// replace the user's banks with an empty G1 just because this ROM is not that one.
@@ -872,10 +938,14 @@ namespace g1plugin
 			m_origin = "the factory flash: the project's G1 state was not used (" + error + "); it is kept in the project untouched";
 			return false;
 		}
+		else
+			m_flashPending = true;	// the project's banks make the shared memory
 		std::vector<uint8_t> knobs;
 		if(const auto* knobsXml = xml->getChildByName("Knobs"); knobsXml && unpackBytes(knobsXml->getAllSubText(), knobs))
 			for(size_t i = 0; i < knobs.size() && i < 256; ++i)
 				_engine.mc().setAdc(static_cast<uint8_t>(i), knobs[i]);
+		if(xml->hasAttribute("qspi"))
+			qspiFromString(_engine.mc(), xml->getStringAttribute("qspi"));
 		// The slots go back once the G1 is up (after the Program Changes, which they override).
 		// A project saved before the keeper existed has none: the keeper reads what there is.
 		std::vector<uint8_t> slotBytes;
@@ -896,8 +966,59 @@ namespace g1plugin
 			m_holdAll = true;
 			m_restoreStart = juce::Time::getMillisecondCounter();
 		}
-		m_origin = otherOs ? "this project, saved with another OS: its banks and settings, with the OS in use" : "this project";
+		if(!shared)
+			m_origin = otherOs ? "this project, saved with another OS: its banks and settings, with the OS in use" : "this project";
 		return true;
+	}
+
+	// The flash as it is now goes into the shared memory, on a thread (a replay boots a G1 of its own,
+	// seconds of CPU). Behind (another G1 wrote since this one read it): its own banks are not written
+	// over the others', and the Stores its editor sent are stored again into the memory instead.
+	void Processor::startSync(const bool _wait)
+	{
+		joinSync();
+		std::vector<uint8_t> flash;
+		{
+			std::unique_lock<std::mutex> engineLock;
+			if(m_runner)
+				engineLock = m_runner->lockEngine();
+			flash = m_engine->mc().getFlash().data();
+		}
+		auto stores = m_keeper ? m_keeper->takeStores() : std::vector<g1app::SharedBanks::Store>();
+		m_flashPending = false;
+		m_syncBusy = true;
+		const auto instance = m_instance;
+		auto job = [this, flash = std::move(flash), stores = std::move(stores), rom = m_rom, os = m_engineOs, dsps = m_engineDsps, instance]
+		{
+			std::string note;
+			auto result = m_shared.sync(flash, false, note);
+			if(result == g1app::SharedBanks::Sync::Written)
+				g1app::logEvent("shared memory: written by instance " + std::to_string(instance) + " (" + m_shared.path() + ")");
+			else if(result == g1app::SharedBanks::Sync::Behind)
+			{
+				if(stores.empty())
+					g1app::logEvent("shared memory: instance " + std::to_string(instance) + " changed its banks after another G1 wrote the memory, "
+						"with no Store from an editor to put in again (a panel store, a bank sent, a delete): not written. Load the plugin again to see the shared banks.");
+				else
+				{
+					m_shared.replay(rom, os, dsps, stores, note);
+					g1app::logEvent("shared memory: instance " + std::to_string(instance) + " was behind another G1; " + note);
+				}
+			}
+			else if(result == g1app::SharedBanks::Sync::Failed)
+				g1app::logEvent("shared memory: " + note);
+			m_syncBusy = false;
+		};
+		if(_wait)
+			job();
+		else
+			m_syncThread = std::thread(std::move(job));
+	}
+
+	void Processor::joinSync()
+	{
+		if(m_syncThread.joinable())
+			m_syncThread.join();
 	}
 
 	void Processor::getStateInformation(juce::MemoryBlock& _dest)
@@ -945,37 +1066,14 @@ namespace g1plugin
 		return true;
 	}
 
+	// Regular and Expanded share the rack's flash, so a change keeps the state. The Micro is another
+	// plugin (G1-Emu Micro): nothing switches into or out of it.
 	void Processor::setModel(const Model _m)
 	{
-		const auto was = m_model;
-		if(was == _m)
+		const auto next = allowed(_m);
+		if(next == m_model)
 			return;
-		// The Micro's flash is not a rack's: its banks and system data are another layout, and a rack
-		// that started on them hung at boot, display blank and the DSPs never loaded (Javier, 2026-10-29;
-		// the standalone had the same fault, fixed in d879fcd). So between the Micro and a rack the new G1
-		// is not built from the old one's state: it starts as a new instance does, from the standalone's
-		// flash of its own model, or from the state it had here before, parked when it was left. A
-		// Regular and an Expanded share the rack's flash, and keep the state as before.
-		if((was == Model::Micro) != (_m == Model::Micro))
-		{
-			if(m_engine && !m_unstarted)
-				m_parked[was] = snapshotState();
-			else
-				m_parked.erase(was);
-			m_model = _m;
-			savePreferences();
-			juce::MemoryBlock next;
-			if(const auto it = m_parked.find(_m); it != m_parked.end())
-			{
-				next = std::move(it->second);
-				m_parked.erase(it);
-			}
-			else
-				next = settingsOnlyState();	// the model attribute is the new one
-			setStateInformation(next.getData(), static_cast<int>(next.getSize()));
-			return;
-		}
-		m_model = _m;
+		m_model = next;
 		savePreferences();
 		restart();	// the state now says the new model, and the new G1 is built from it
 	}
@@ -990,6 +1088,19 @@ namespace g1plugin
 	void Processor::setStateInformation(const void* _data, const int _size)
 	{
 		juce::MemoryBlock state(_data, static_cast<size_t>(std::max(_size, 0)));
+		// A project saved by a G1-Emu set to the Micro (before the Micro was a plugin of its own), or the
+		// other way round: its flash is the other model's, and a rack started on a Micro's flash hangs at
+		// boot. Not loaded; this instance stays as it is.
+		if(const auto xml = getXmlFromBinary(state.getData(), static_cast<int>(state.getSize())); xml && xml->hasTagName(g_stateTag))
+		{
+			const auto saved = modelFromString(xml->getStringAttribute("model"));
+			if((saved == Model::Micro) != g_microPlugin)
+			{
+				g1app::logEvent(std::string("state not loaded: it is a ") + (saved == Model::Micro ? "Micro's, and this is G1-Emu" : "rack's, and this is G1-Emu Micro")
+					+ ", instance " + std::to_string(m_instance));
+				return;
+			}
+		}
 		{
 			std::lock_guard<std::mutex> lock(m_pendingMutex);
 			m_pending = std::move(state);
@@ -1074,7 +1185,7 @@ namespace g1plugin
 	// names follow what the knobs are assigned to.
 	void Processor::timerCallback()
 	{
-		bool renamed = false;
+		bool renamed = false, changed = false;
 		std::vector<std::pair<size_t, float>> edits;
 		std::vector<std::pair<size_t, int>> octaveEdits;
 		{
@@ -1105,8 +1216,34 @@ namespace g1plugin
 						m_keeper->reread(mc.read8(g1::KnobMap::ActiveSlot + map.osShift()) & 3);
 					m_systemMenu = systemMenu;
 				}
+				// The banks (a Store from an editor or the panel, a bank sent) and the slots (what the
+				// keeper read) live in the project's state, but no parameter moves with them, so the host
+				// would not know the project changed: Bitwig then kept the old state and a stored patch
+				// was gone when the project was opened again (Javier, 2026-11-03). Not in a new G1's first
+				// seconds (it formats its flash, the keeper reads the slots) nor while a project goes back in.
+				const auto writes = mc.getFlash().programmedBytes() + mc.getFlash().erasedSectors();
+				if(writes != m_flashWritesSeen)
+				{
+					m_flashWritesSeen = writes;
+					m_flashChangedAt = now;
+					m_flashPending = true;
+				}
+				// Into the shared memory once the OS has been quiet a moment (a Store writes in bursts).
+				if(m_flashPending && m_runner && !m_restoring && !m_syncBusy && now - m_flashChangedAt >= SyncQuietMs
+					&& now - m_engineCreatedAt >= QuietStartMs)
+					startSync(false);
+				const auto revision = m_keeper ? m_keeper->revision() : 0u;
+				if(writes != m_lastFlashWrites || revision != m_lastKeeperRevision)
+				{
+					m_lastFlashWrites = writes;
+					m_lastKeeperRevision = revision;
+					if(!m_restoring && now - m_engineCreatedAt >= QuietStartMs)
+						changed = true;
+				}
 			}
 		}
+		if(changed)
+			stateChanged();
 		// Outside the locks: the host may call back into the plugin from inside these calls (to
 		// learn the parameter, to keep an undo step, to ask for the new names).
 		tellHost(edits);

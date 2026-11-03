@@ -117,7 +117,17 @@ clap-juce-extensions; `clap-validator` passes it. The design is
   loads stored ones and the update loads only Shift+Store's. The panel's knob turns come back as
   part of the slots (the keeper also hears the OS's Info message for a knob), and so do the System
   menu's patch settings (read again every 2 s while the System LED is lit). A state that cannot be applied is handed back
-  untouched. A new instance copies the standalone's `flash.bin` (read only).
+  untouched.
+- **One memory, as on a synth** (`app/sharedbanks.*`, 2026-11-03): the banks are the rack's `flash.bin`
+  or the Micro's `flash-micro.bin`, shared by the standalone and every instance. An instance starts
+  from it (a project brings back its slots, knobs and settings, not its own banks; those are used
+  only while there is no shared memory yet) and puts back what it stores 1.5 s after the flash was
+  last written, under a file lock. One that is behind (another G1 wrote since) writes nothing over
+  it: the Stores its editor sent are replayed into the file by a headless G1. The standalone sets
+  its banks aside when behind. `g1sharedbankstest` tests it; **`g1vst3check` writes into the real
+  memory**: run it with `HOME` set to a scratch directory.
+- **The Micro is its own plugin**, G1-Emu Micro (`G1_PLUGIN_MICRO=1`): G1-Emu is a Regular or an
+  Expanded, never a Micro, and a project's state of the other kind is not loaded.
 - **Slots** (`app/slotkeeper.*`): the flash does not hold a slot's patch (sent by an editor,
   loaded from the panel or a Program Change, edited since), so the `SlotKeeper` asks the OS for
   it over the PC Port like an editor (RequestPatch, 13 GetPatch) once a slot may have changed

@@ -141,11 +141,12 @@ namespace g1plugin
 			const auto file = _c.getResult();
 			if(file == juce::File())
 				return;
-			// A Micro's OS picked where the ROM goes: offer to use it as the Micro's OS, which is what was meant
+			// A Micro's OS picked where the ROM goes, in G1-Emu Micro: offer to use it as the Micro's OS,
+			// which is what was meant. In G1-Emu the ROM box says what the file is (useRom).
 			g1app::OsImage os;
 			std::string why;
 			std::vector<uint8_t> romBytes;
-			if(!g1app::inspectRom(file.getFullPathName().toStdString(), romBytes).ok() && g1app::readOsFile(file.getFullPathName().toStdString(), os, why)
+			if(G1_PLUGIN_MICRO && !g1app::inspectRom(file.getFullPathName().toStdString(), romBytes).ok() && g1app::readOsFile(file.getFullPathName().toStdString(), os, why)
 				&& (!os.fromUpdater || os.isMicro()))
 			{
 				juce::AlertWindow::showAsync(juce::MessageBoxOptions().withIconType(juce::MessageBoxIconType::QuestionIcon)
@@ -228,6 +229,7 @@ namespace g1plugin
 				: m_gainAttachment(_gain, m_gain)
 			{
 				// The Micro's own OS, when this is a Micro: shared with the standalone's Settings > Micro OS.
+				// Only G1-Emu Micro has it: G1-Emu is never a Micro.
 				label(m_microLabel, "Micro OS");
 				m_microPath.setText(_microOsPath.isEmpty() ? "none (looked for in the ROM folder)" : juce::File(_microOsPath).getFileName(), juce::dontSendNotification);
 				m_microPath.setTooltip(_microOsPath);
@@ -239,6 +241,9 @@ namespace g1plugin
 				m_microChoose.setTooltip("Clavia's Micro Modular OS updater, or an OS image (G1-Mods' builder gives one): a Micro restarts with it");
 				m_microChoose.onClick = std::move(_chooseMicroOs);
 				addAndMakeVisible(m_microChoose);
+				m_microLabel.setVisible(Micro);
+				m_microPath.setVisible(Micro);
+				m_microChoose.setVisible(Micro);
 				// The ROM: the same file the standalone reads (settings.conf), so picking another here restarts this
 				// G1 with it and is what the standalone starts with next time. The plugin had no way to change it.
 				label(m_romLabel, "ROM");
@@ -253,19 +258,29 @@ namespace g1plugin
 				m_romChoose.onClick = std::move(_chooseRom);
 				addAndMakeVisible(m_romChoose);
 
-				// Regular, Expanded (8 DSPs, about twice the voices) or Micro Modular (one DSP, its own
-				// OS): a new G1, so the change restarts it, keeping the project's patches as a restart does.
+				// Regular or Expanded (8 DSPs, about twice the voices): a new G1, so the change restarts it,
+				// keeping the project's patches as a restart does. G1-Emu Micro has one model, shown fixed.
 				label(m_modelLabel, "Model");
-				m_model.addItem("Regular  (4 DSPs)", 1);
-				m_model.addItem("Expanded  (8 DSPs, twice the voices)", 2);
-				m_model.addItem("Micro Modular  (1 DSP, its own OS)", 3);
-				m_model.setSelectedId(_model == Processor::Model::Micro ? 3 : _model == Processor::Model::Expanded ? 2 : 1, juce::dontSendNotification);
-				m_model.setTooltip("The G1 with or without the expansion board, or the Micro Modular (one DSP, light on the CPU; "
-					"needs Clavia's Micro OS updater in the ROM folder). Changing it restarts the G1; "
-					"the project's patches and settings stay, what is in the slots and not stored is kept with the project");
+				if(Micro)
+				{
+					m_model.addItem("Micro Modular  (1 DSP, its own OS)", 3);
+					m_model.setSelectedId(3, juce::dontSendNotification);
+					m_model.setEnabled(false);
+					m_model.setTooltip("G1-Emu Micro is always a Micro Modular; for a G1 rack, load G1-Emu");
+				}
+				else
+				{
+					m_model.addItem("Regular  (4 DSPs)", 1);
+					m_model.addItem("Expanded  (8 DSPs, twice the voices)", 2);
+					m_model.setSelectedId(_model == Processor::Model::Expanded ? 2 : 1, juce::dontSendNotification);
+					m_model.setTooltip("The G1 with or without the expansion board. Changing it restarts the G1; "
+						"the project's patches and settings stay, what is in the slots and not stored is kept with the project. "
+						"For the Micro Modular, load G1-Emu Micro");
+				}
 				m_model.onChange = [this, set = std::move(_setModel)]
 				{
-					set(m_model.getSelectedId() == 3 ? Processor::Model::Micro : m_model.getSelectedId() == 2 ? Processor::Model::Expanded : Processor::Model::Regular);
+					if(!Micro)
+						set(m_model.getSelectedId() == 2 ? Processor::Model::Expanded : Processor::Model::Regular);
 				};
 				addAndMakeVisible(m_model);
 
@@ -304,7 +319,7 @@ namespace g1plugin
 			{
 				m_modelLabel.setBounds(0, 0, 130, GainRowH);
 				m_model.setBounds(136, 0, 320, GainRowH);
-				constexpr int romY = GainRowH + 8, microY = romY + GainRowH + 8, gainY = microY + GainRowH + 8, textY = gainY + GainRowH + 6;
+				constexpr int romY = GainRowH + 8, microY = romY + GainRowH + 8, gainY = (Micro ? microY : romY) + GainRowH + 8, textY = gainY + GainRowH + 6;
 				m_romLabel.setBounds(0, romY, 130, GainRowH);
 				m_romChoose.setBounds(getWidth() - 100, romY, 100, GainRowH);
 				m_romPath.setBounds(136, romY, getWidth() - 136 - 100 - 8, GainRowH);
@@ -324,6 +339,7 @@ namespace g1plugin
 				_l.setJustificationType(juce::Justification::centredRight);
 			}
 			static constexpr int Width = 760, Height = 412, GainRowH = 24;
+			static constexpr bool Micro = G1_PLUGIN_MICRO != 0;
 			juce::Label m_modelLabel, m_gainLabel, m_romLabel, m_romPath, m_microLabel, m_microPath;
 			juce::TextButton m_romChoose, m_microChoose;
 			juce::ComboBox m_model;

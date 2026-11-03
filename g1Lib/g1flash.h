@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <atomic>
 #include <vector>
 
 namespace g1
@@ -22,8 +23,9 @@ namespace g1
 		Flash() : m_data(Size, 0xff) {}
 
 		std::vector<uint8_t>& data() { return m_data; }
-		uint32_t programmedBytes() const { return m_programmed; }
-		uint32_t erasedSectors() const { return m_erased; }
+		// Read from other threads too (the plugin tells its host the banks changed): atomic, relaxed.
+		uint32_t programmedBytes() const { return m_programmed.load(std::memory_order_relaxed); }
+		uint32_t erasedSectors() const { return m_erased.load(std::memory_order_relaxed); }
 
 		uint8_t read(const uint32_t _offset) const
 		{
@@ -47,7 +49,7 @@ namespace g1
 			if(m_state == State::Program)
 			{
 				m_data[_offset & (Size - 1)] &= _val;	// flash can only clear bits
-				++m_programmed;
+				m_programmed.fetch_add(1, std::memory_order_relaxed);
 				m_state = State::Idle;
 				return;
 			}
@@ -86,13 +88,13 @@ namespace g1
 				if(_val == 0x10 && cmdAddr == 0x555)	// chip erase
 				{
 					std::fill(m_data.begin(), m_data.end(), 0xff);
-					m_erased += Size / SectorSize;
+					m_erased.fetch_add(Size / SectorSize, std::memory_order_relaxed);
 				}
 				else if(_val == 0x30)					// sector erase
 				{
 					const auto base = (_offset & (Size - 1)) & ~(SectorSize - 1);
 					std::fill_n(m_data.begin() + base, SectorSize, 0xff);
-					++m_erased;
+					m_erased.fetch_add(1, std::memory_order_relaxed);
 				}
 				break;
 			case State::Program:
@@ -106,7 +108,7 @@ namespace g1
 		std::vector<uint8_t> m_data;
 		State m_state = State::Idle;
 		bool m_autoselect = false;
-		uint32_t m_programmed = 0;
-		uint32_t m_erased = 0;
+		std::atomic<uint32_t> m_programmed{0};
+		std::atomic<uint32_t> m_erased{0};
 	};
 }

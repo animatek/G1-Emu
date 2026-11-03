@@ -20,7 +20,7 @@ message(STATUS "g1Host: ${G1_BACKEND} audio and MIDI backend")
 # No devices and no threads of its own: the plugin builds on it without the backends below.
 add_library(g1Core STATIC engine.cpp engine.h hostconfig.cpp hostconfig.h hostlog.cpp hostlog.h diaglog.cpp diaglog.h romfinder.cpp romfinder.h
 	slotkeeper.cpp slotkeeper.h synthsettings.cpp synthsettings.h presetslink.cpp presetslink.h audiobridge.h directlink.cpp directlink.h
-	midirouting.cpp midirouting.h osimage.cpp osimage.h microupdate.cpp microupdate.h)
+	midirouting.cpp midirouting.h osimage.cpp osimage.h microupdate.cpp microupdate.h sharedbanks.cpp sharedbanks.h)
 target_include_directories(g1Core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # So a clone works with no setup: the repo's own Roms/ is one of the folders searched.
 target_compile_definitions(g1Core PRIVATE G1_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -72,6 +72,22 @@ add_executable(g1uploadgaptest uploadgaptest.cpp)
 target_link_libraries(g1uploadgaptest PRIVATE g1Core)
 add_test(NAME g1uploadgaptest COMMAND g1uploadgaptest)
 set_tests_properties(g1uploadgaptest PROPERTIES TIMEOUT 600 LABELS g1 SKIP_RETURN_CODE 77)
+
+# A patch stored into a bank survives the plugin's state (2026-11-03).
+add_executable(g1storetest storetest.cpp)
+target_link_libraries(g1storetest PRIVATE g1Core)
+add_test(NAME g1storetest COMMAND g1storetest)
+add_test(NAME g1storetest-micro COMMAND g1storetest)
+set_tests_properties(g1storetest-micro PROPERTIES ENVIRONMENT G1_MODEL=micro)
+set_tests_properties(g1storetest g1storetest-micro PROPERTIES TIMEOUT 300 LABELS g1 SKIP_RETURN_CODE 77)
+
+# The shared memory: two G1s storing into it, one after the other and one behind (2026-11-03).
+add_executable(g1sharedbankstest sharedbankstest.cpp)
+target_link_libraries(g1sharedbankstest PRIVATE g1Core)
+add_test(NAME g1sharedbankstest COMMAND g1sharedbankstest)
+add_test(NAME g1sharedbankstest-micro COMMAND g1sharedbankstest)
+set_tests_properties(g1sharedbankstest-micro PROPERTIES ENVIRONMENT G1_MODEL=micro)
+set_tests_properties(g1sharedbankstest g1sharedbankstest-micro PROPERTIES TIMEOUT 600 LABELS g1 SKIP_RETURN_CODE 77)
 
 # A kept flash comes back without being formatted again (the OS's marks survive loadFlash).
 add_executable(g1flashkeeptest flashkeeptest.cpp)

@@ -261,7 +261,10 @@ namespace g1app
 				m_editorHeld.clear();
 			}
 			speak(m_keeper, m_settings, m_presets);
-			if(!(m_keeper && m_keeper->editorUploading(nowMs())))
+			// Nor while the keeper itself uploads a slot (a project going back in): the settings link's
+			// read between two packets made the OS drop it with error 6 and the slot came back empty. On
+			// the Micro, whose first packet is answered later, every time (Javier, 2026-11-03).
+			if(!(m_keeper && (m_keeper->editorUploading(nowMs()) || m_keeper->uploading())))
 			{
 				speak(m_settings, m_keeper, m_presets);
 				speak(m_presets, m_keeper, m_settings);

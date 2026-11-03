@@ -20,6 +20,8 @@
 #include "hostclock.h"
 #include "hostgestures.h"
 #include "runner.h"
+#include "sharedbanks.h"
+#include "filelock.h"
 #include "jucemidi.h"
 #include "g1Lib/g1knobs.h"
 
@@ -33,6 +35,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 
 namespace g1plugin
@@ -259,7 +262,7 @@ namespace g1plugin
 		void startFromStandalone(g1app::Engine& _engine);
 
 		// The PC Port's virtual MIDI port. Declared before the engine and the runner so it goes after them.
-		std::unique_ptr<juce::InterProcessLock> m_instanceLock;	// holds m_instance's number for every process
+		std::unique_ptr<g1app::FileLock> m_instanceLock;	// holds m_instance's number for every process
 		int m_instance = 0;						// 1 for the first live instance, 2 for the next...
 		std::unique_ptr<g1app::JuceMidi> m_pcPort;
 		int m_pcIndex = -1;
@@ -274,8 +277,6 @@ namespace g1plugin
 
 		std::vector<uint8_t> m_rom;
 		std::string m_romPath, m_romProblem;
-		// A model change between the Micro and a rack leaves the old G1 here, whole, for when it comes back
-		std::map<Model, juce::MemoryBlock> m_parked;
 
 		std::mutex m_lifecycle;					// m_engine and m_runner are swapped under it
 		std::unique_ptr<g1app::Engine> m_engine;
@@ -319,6 +320,18 @@ namespace g1plugin
 		std::vector<uint8_t> m_os;				// HostOptions::os, if set: the OS to run instead of the ROM's
 		std::atomic<int> m_generation{0};
 		std::string m_origin;					// where this instance's flash came from
+		// The memory every G1 shares (SharedBanks): this instance starts from it and puts back what
+		// it stores, a moment after the flash was last written, on a thread of its own.
+		g1app::SharedBanks m_shared;			// used by m_syncThread while it runs
+		std::thread m_syncThread;
+		std::atomic<bool> m_syncBusy{false};
+		bool m_flashPending = false;			// written since the last sync
+		uint32_t m_flashWritesSeen = 0, m_flashChangedAt = 0;
+		std::vector<uint8_t> m_engineOs;		// what the engine was built with, for a replay
+		uint32_t m_engineDsps = 0;
+		static constexpr uint32_t SyncQuietMs = 1500;
+		void startSync(bool _wait);				// m_lifecycle held
+		void joinSync();
 
 		// A state the host gave before there was an engine (or with no ROM at all): it is what
 		// gets used, and what gets handed back, so a project opened without the ROM loses nothing.
@@ -347,7 +360,11 @@ namespace g1plugin
 		// would come up with empty slots: these are sent again as soon as it starts. -1: none.
 		struct Program { std::atomic<int> bankMsb{-1}, bankLsb{-1}, program{-1}; };
 		std::array<Program, 16> m_programs;
-		bool m_unstarted = false;				// a new instance's G1 that has not run yet (settingsOnlyState)
+		bool m_unstarted = false;
+		// What the host was last told about: flash writes and the keeper's revision (timerCallback).
+		uint32_t m_lastFlashWrites = 0, m_lastKeeperRevision = 0;
+		uint32_t m_engineCreatedAt = 0;
+		static constexpr uint32_t QuietStartMs = 10000;				// a new instance's G1 that has not run yet (settingsOnlyState)
 		bool m_engineFresh = false;				// created and not started yet: replay the programs
 		std::atomic<int> m_hostProgram{-1};		// set by the host's program parameter, sent by processBlock
 		// The host's transport as MIDI clock for the G1 (issue #20); audio thread only.

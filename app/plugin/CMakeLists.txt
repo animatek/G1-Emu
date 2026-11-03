@@ -5,7 +5,12 @@
 # G1 as an effect (G1-Emu FX), whose audio input is on from the start so a host lets it sit on an
 # audio track and feeds the G1's two inputs (issue #76). An instrument's input is off until the
 # host turns it on, and most hosts never offer it.
-function(g1_add_plugin _target _name _code _fx)
+#
+# And a third time as g1pluginmicro, the Micro Modular (G1-Emu Micro): one DSP and its own OS, its
+# model fixed at build time. A G1-Emu is a Regular or an Expanded and never a Micro: switching
+# between a rack and the Micro inside one instance broke the editor's connection and hung the rack
+# on the Micro's OS (Javier, 2026-11-03), and the two share neither flash nor patches anyway.
+function(g1_add_plugin _target _name _code _fx _micro)
 	# AU too on macOS (asked for in #7): an instrument (aumu), and G1-Emu FX as a music effect (aumf),
 	# the AU type for an effect that takes MIDI.
 	set(formats VST3)
@@ -24,6 +29,9 @@ function(g1_add_plugin _target _name _code _fx)
 		set(categories Instrument Synth)
 		set(clapId "net.animatek.g1-emu")
 		set(clapFeatures instrument synthesizer)
+	endif()
+	if(_micro)
+		set(clapId "net.animatek.g1-emu-micro")
 	endif()
 
 	juce_add_plugin(${_target}
@@ -47,6 +55,7 @@ function(g1_add_plugin _target _name _code _fx)
 	target_compile_definitions(${_target} PUBLIC
 		G1_BUILD_VERSION="${g1_build_version}"
 		G1_PLUGIN_FX=$<BOOL:${_fx}>
+		G1_PLUGIN_MICRO=$<BOOL:${_micro}>
 		JUCE_WEB_BROWSER=0
 		JUCE_USE_CURL=0
 		JUCE_VST3_CAN_REPLACE_VST2=0
@@ -66,8 +75,9 @@ function(g1_add_plugin _target _name _code _fx)
 	endif()
 endfunction()
 
-g1_add_plugin(g1plugin "G1-Emu" G1Em OFF)
-g1_add_plugin(g1pluginfx "G1-Emu FX" G1Fx ON)
+g1_add_plugin(g1plugin "G1-Emu" G1Em OFF OFF)
+g1_add_plugin(g1pluginfx "G1-Emu FX" G1Fx ON OFF)
+g1_add_plugin(g1pluginmicro "G1-Emu Micro" G1Mi OFF ON)
 
 # Knobs turned on the panel, told to the host as gestures (issue #42): no ROM, no DAW.
 add_executable(g1hostgesturestest hostgesturestest.cpp hostgestures.h)

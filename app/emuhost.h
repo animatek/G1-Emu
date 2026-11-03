@@ -19,6 +19,7 @@
 #include "microupdate.h"
 #include "midirouting.h"
 #include "presetslink.h"
+#include "sharedbanks.h"
 #include "synthsettings.h"
 
 #include <atomic>
@@ -146,6 +147,7 @@ namespace g1app
 		std::vector<uint8_t> m_rom;		// kept for a restart
 		Options m_options;
 		std::string m_flashPath;
+		SharedBanks m_shared;		// the memory every G1 shares, at m_flashPath
 		bool m_flashChosen = false;	// given on the command line: kept whatever the model
 		void chooseFlashPath();
 		// G1_UPDATE=1: the G1 starts in its boot ROM's update mode (the OS length in the flash
