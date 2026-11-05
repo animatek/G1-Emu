@@ -1,51 +1,37 @@
-# G1-Emu v0.1.0-alpha.29
+# G1-Emu v0.1.0-alpha.30
 
-**A stability release.** No new instruments, but the things that broke in daily use: patches that
-were not stored, projects that did not come back as they were saved, and the Micro switching inside
-one plugin. Please use it with **Animatek NME 0.26** or later.
+**Fixes for the plugin in DAWs.** Dropouts in Nuendo and Cubase, and patches the synth rejected at
+random while uploading. Please use it with **Animatek NME 0.26** or later.
 
-**One memory, as on a synth.** The banks are now shared by the standalone and every plugin instance
-(`flash.bin` for the G1, `flash-micro.bin` for the Micro). A patch you store, from the editor, the
-panel or the Presets page, is there in a new instance, a reopened project and the standalone. Before,
-each instance started from a copy and kept its banks inside the DAW project, so a patch stored in a
-plugin was gone once you loaded the plugin again. Several instances can store at once: one that
-started before another stored puts its patch in without overwriting the other's. A project keeps what
-each slot holds, the knobs and the synth settings, so it still sounds as it was saved.
+**No more dropouts in Nuendo and Cubase (#86).** Their ASIO-Guard, like REAPER's anticipative
+processing, runs a plugin ahead of real time: it rests, then asks for several blocks back to back.
+G1-Emu only ran a few milliseconds ahead, so from the second block of each burst the sound was not
+ready yet and came out as silence, however idle the CPU was: dropouts at 20-35 % load, never in the
+standalone. Now a block asked for early waits for the emulator instead. Timing and latency do not
+change, and with an ordinary sound card nothing waits. The log says when the host processes ahead of
+real time.
 
-**Storing works, and the project knows.** Storing a patch changes nothing the DAW can see, so the
-project was not marked as changed and a reopened project had lost the stored patch. G1-Emu now tells
-the DAW. A store or a bank list asked for while the plugin was reading a slot could also get lost, so
-the editor waited seconds or said nothing was stored: fixed.
+**Uploads are no longer rejected at random (#81).** A MIDI driver hands a long SysEx over in pieces,
+and the plugin's own background requests (reading the slots and the synth settings to keep them with
+the project) could land between two pieces of the editor's message: the synth then answered
+"Unfinished bubble error" (code 6) or "Error in synth" (code 3). They now wait until the editor's
+message is whole, in the plugin and in the standalone.
 
-**G1-Emu Micro is a plugin of its own.** The Micro Modular is no longer a model inside G1-Emu: put
-**G1-Emu Micro** on the track. Switching between the rack and the Micro inside one plugin lost the
-editor's connection and, back on the rack, could hang with the load at 100 %. G1-Emu is a Regular or
-an Expanded (that switch stays). A project saved with G1-Emu set to the Micro does not open in
-G1-Emu: load G1-Emu Micro there again.
+**Smaller things.** The status bar's "CPU n cores" now works on Windows and macOS (it read 0). The
+emulator is a little lighter at rest, with the same output to the bit.
 
-**The Micro comes back as you left it.** Reopening a project now brings back the patch in the Micro's
-slot (its OS takes patches only a moment after it starts, and the plugin sent it too early) and its
-four knobs. Its display shows `--` after that, as for any patch sent from an editor.
-
-**Store slot... on the Presets page** stores what the active slot holds at a bank and position, with
-no editor. The Micro has no Store button, as the real one; this is how you store on it. The Micro has
-one bank of 99 places, and only bank 1 is offered.
-
-**Two plugins in one project** (G1-Emu and G1-Emu Micro) no longer take the same number, which gave
-two PC Ports the same name.
-
-Your ROM, banks and settings are kept. The first time, every instance and the standalone read the
-banks from the standalone's `flash.bin`.
+Your ROM, banks and settings are kept.
 
 ## Please test
 
-- **Store, then reopen:** store a patch from NME or the Presets page, save the project, close it,
-  open it again. Is it in the bank? Does each slot sound as before?
-- **Two instances storing:** two G1-Emu on two tracks, store a patch in each, then load a third
-  one: are both patches in its banks?
-- **G1-Emu Micro:** reopen a project; does slot A play what it played, with the knobs where they were?
+- **Nuendo / Cubase with ASIO-Guard on:** play a project for a few minutes. Any dropouts? The log's
+  `dropout` lines now also say how many blocks waited.
+- **Sending patches from NME:** send several patches in a row, to the plugin and the standalone. Is
+  any rejected?
+- **G1-Emu FX (#85):** an audio track through AudioIn while you add modules to the patch. Does it
+  keep working? We could not reproduce the error on Windows.
 
-If something breaks up, stays silent or is not stored, attach the log (`%APPDATA%\Animatek\G1-Emu\g1-emu.log`
+If something breaks up, stays silent or is rejected, attach the log (`%APPDATA%\Animatek\G1-Emu\g1-emu.log`
 on Windows, `~/.local/share/Animatek/G1-Emu/g1-emu.log` on Linux and macOS), with your CPU and DAW.
 
 ## Known

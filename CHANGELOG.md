@@ -5,6 +5,10 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-11-05
+
+- [Release] Claude: **v0.1.0-alpha.30** (Javier). Release notes (`docs/release-notes.md`): the ASIO-Guard dropouts (#86), the uploads rejected while the plugin's links spoke (#81), "CPU n cores" off Linux, the lighter idle loop; Please test asks for #85 on a Mac. Checked: CI on 3516567 before tagging; this commit is checked by the tag's run.
+
 ## 2026-11-04
 
 - [App] Claude: **an upload is no longer broken by the plugin's own requests landing inside it** (#81: "upload rejected by synth (code 6: Unfinished bubble)", at random, with any patch). The editor's bytes go to the PC Port as they come, and a MIDI driver hands a long SysEx over in pieces; the slot keeper and the settings and presets links judged the editor quiet by its last *whole* message, so the first piece of a new upload's packet could be in the G1 when one of them sent a request, right into the middle of the editor's message, and the OS rejected the upload. They now wait while the editor's bytes stop inside a SysEx (`pcsysex::SysexTracker`, an F0 with no F7 yet), in the plugin's runner and in the standalone. `g1vst3check plugin --split-upload dir` (new) uploads a patch twelve times over the direct link with its first packet in two halves 200 ms apart, in real time with the message loop running (the plugin asks for the synth settings every 2 s from a timer): the installed alpha.29-based plugin had 2 of 12 rejected in each of three runs, the fixed one 0 of 12 in each; REAPER with `tools/reaper/upload.py --split` gave 2-3 of 12 (200 ms) and 8 of 8 (1 s) on the old plugin, and the fixed standalone 0 of 12 and 0 of 8. The G1 tests pass. Not yet seen on a Mac, where #81 was reported.
