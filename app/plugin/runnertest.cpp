@@ -1,6 +1,6 @@
 // g1runnertest: the plugin's Runner without a DAW.
 //
-//   g1runnertest [--realtime] [--seconds N] [--program N]
+//   g1runnertest [--realtime] [--burst K] [--seconds N] [--program N]
 //
 // G1_MODEL=expanded runs it on an Expanded (8 DSPs): the outputs then come from DSP 7.
 //
@@ -13,6 +13,10 @@
 //      identical, bit for bit.
 //   3. with --realtime: blocks of 256 frames paced by the wall clock, as an audio callback would
 //      be called, counting dropouts.
+//   4. with --burst K: blocks of 512 called as a prefetch thread calls them (ASIO-Guard in Cubase
+//      and Nuendo, REAPER's anticipative FX, #86): it keeps up to K + 1 blocks ready before they
+//      play, so it rests and then calls K blocks back to back. Counts the dropouts, the blocks that
+//      waited for the worker, and the blocks that were not ready when they were due to play.
 //
 // Exit code 77 (skipped) without a ROM, 1 if the renders differ or a dropout hides sound (one
 // while the G1 is silent, as it is while it loads a patch, hides nothing and is only reported).
@@ -87,10 +91,13 @@ namespace
 		double cores = 0;			// CPU time over wall time, the whole process
 		std::string display;		// the G1's display at the end
 		std::vector<double> xrunAt;	// when the dropouts were, in seconds
+		uint64_t waits = 0;			// blocks that waited for the worker (--burst)
+		uint64_t late = 0;			// blocks not ready when due to play (--burst)
 	};
 
-	// _blockSize 0: random sizes. _realtime: paced by the wall clock.
-	Render render(const Setup& _s, const double _seconds, const size_t _blockSize, const bool _realtime)
+	// _blockSize 0: random sizes. _realtime: paced by the wall clock; with _burst, by a prefetch
+	// thread that rests and then calls _burst blocks back to back.
+	Render render(const Setup& _s, const double _seconds, const size_t _blockSize, const bool _realtime, const size_t _burst = 0)
 	{
 		auto engine = makeEngine(_s);
 		g1app::Runner runner(*engine, g_rate, g_maxBlock, 36.0f);
@@ -107,6 +114,10 @@ namespace
 		const auto start = std::chrono::steady_clock::now();
 		const auto cpuStart = processCpuSeconds();
 		auto deadline = start;
+		const auto blockTime = std::chrono::nanoseconds(static_cast<int64_t>(1e9 * static_cast<double>(_blockSize) / g_rate));
+		const auto guard = blockTime * static_cast<int64_t>(_burst + 1);	// how far ahead the prefetch thread keeps
+		const auto playStart = start + guard;
+		auto playAt = [&](const size_t _pos) { return playStart + std::chrono::nanoseconds(static_cast<int64_t>(1e9 * static_cast<double>(_pos) / g_rate)); };
 		while(pos < total)
 		{
 			size_t n = _blockSize;
@@ -132,7 +143,20 @@ namespace
 			float* outs[4];
 			for(size_t c = 0; c < 4; ++c)
 				outs[c] = r.out[c].data() + pos;
-			if(_realtime)
+			if(_realtime && _burst)
+			{
+				// Ready more than the guard ahead: rest until only two blocks are left, then go.
+				if(playAt(pos) - std::chrono::steady_clock::now() > guard)
+				{
+					const auto wake = playAt(pos) - 2 * blockTime;
+					const auto left = std::chrono::duration_cast<std::chrono::microseconds>(wake - std::chrono::steady_clock::now());
+					if(left.count() > 600)
+						g1::preciseSleep(left - std::chrono::microseconds(500));
+					while(std::chrono::steady_clock::now() < wake)
+						std::this_thread::yield();
+				}
+			}
+			else if(_realtime)
 			{
 				deadline += std::chrono::nanoseconds(static_cast<int64_t>(1e9 * static_cast<double>(n) / g_rate));
 				// As a sound card would call it: on time. sleep_until on Windows wakes up to 15.6 ms late,
@@ -144,6 +168,8 @@ namespace
 					std::this_thread::yield();
 			}
 			runner.process(outs, 4, nullptr, 0, n, !_realtime);
+			if(_realtime && _burst && std::chrono::steady_clock::now() > playAt(pos))
+				++r.late;
 			if(_realtime)
 			{
 				const auto x = runner.stats().xruns;
@@ -162,6 +188,7 @@ namespace
 		const auto s = runner.stats();
 		r.xruns = s.xruns;
 		r.load = s.load;
+		r.waits = runner.waits();
 		return r;
 	}
 
@@ -185,11 +212,14 @@ namespace
 int main(int _argc, char** _argv)
 {
 	bool realtime = false;
+	size_t burst = 0;
 	double seconds = 8.0;
 	for(int i = 1; i < _argc; ++i)
 	{
 		if(!std::strcmp(_argv[i], "--realtime"))
 			realtime = true;
+		else if(!std::strcmp(_argv[i], "--burst") && i + 1 < _argc)
+			burst = static_cast<size_t>(std::max(1, std::atoi(_argv[++i])));
 		else if(!std::strcmp(_argv[i], "--program") && i + 1 < _argc)
 			g_program = std::atoi(_argv[++i]);
 		else if(!std::strcmp(_argv[i], "--seconds") && i + 1 < _argc)
@@ -256,8 +286,8 @@ int main(int _argc, char** _argv)
 	if(realtime)
 	{
 		const auto c = render(setup, seconds, 256, true);
-		std::printf("real time, blocks of 256:  %llu dropouts, worker load %.0f%%, %.2f cores, after the note %.1f dBFS\n",
-			static_cast<unsigned long long>(c.xruns), c.load, c.cores, dbfs(c.out[0], noteOn, c.out[0].size()));
+		std::printf("real time, blocks of 256:  %llu dropouts, %llu blocks waited, worker load %.0f%%, %.2f cores, after the note %.1f dBFS\n",
+			static_cast<unsigned long long>(c.xruns), static_cast<unsigned long long>(c.waits), c.load, c.cores, dbfs(c.out[0], noteOn, c.out[0].size()));
 		std::printf("  peak per half second (dBFS):");
 		for(size_t w = 0; w + 24000 <= c.out[0].size(); w += 24000)
 			std::printf(" %.0f", dbfs(c.out[0], w, w + 24000));
@@ -281,6 +311,22 @@ int main(int _argc, char** _argv)
 		if(!c.xrunAt.empty())
 			std::printf("  dropouts from %.2f s to %.2f s, %zu of them over sound\n", c.xrunAt.front(), c.xrunAt.back(), audible);
 		if(audible)
+			failed = 1;
+	}
+	if(burst)
+	{
+		const auto c = render(setup, seconds, 512, true, burst);
+		size_t audible = 0;
+		for(const auto t : c.xrunAt)
+		{
+			const auto at = static_cast<size_t>(t * g_rate);
+			if(dbfs(a.out[0], at, at + 512) > -120.0 || dbfs(a.out[1], at, at + 512) > -120.0)
+				++audible;
+		}
+		std::printf("prefetch, %zu blocks of 512 at a time: %llu dropouts (%zu over sound), %llu blocks waited, %llu late, worker load %.0f%%, after the note %.1f dBFS\n",
+			burst, static_cast<unsigned long long>(c.xruns), audible, static_cast<unsigned long long>(c.waits),
+			static_cast<unsigned long long>(c.late), c.load, dbfs(c.out[0], noteOn, c.out[0].size()));
+		if(audible || c.late)
 			failed = 1;
 	}
 	return failed;

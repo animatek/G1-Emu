@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <thread>
 
 namespace g1app
 {
@@ -31,6 +32,9 @@ namespace g1app
 				marginMs = std::max(0.0, std::atof(v));
 			return std::max<size_t>(_maxBlock, 32) + static_cast<size_t>(std::lround(_rate * marginMs / 1000.0));
 		}
+
+		// G1_PLUGIN_WAIT=0: a block called ahead of real time never waits for the worker (#86, to compare).
+		const bool g_waitWhenEarly = [] { const char* v = std::getenv("G1_PLUGIN_WAIT"); return !(v && *v == '0'); }();
 	}
 
 	Runner::Runner(Engine& _engine, const double _rate, const size_t _maxBlock, const float _gainDb,
@@ -67,6 +71,14 @@ namespace g1app
 	{
 		m_quit = true;
 		m_thread.join();
+		// The totals, whatever the dropout lines above caught (they come only every 100).
+		{
+			std::lock_guard<std::mutex> statsLock(m_statsMutex);
+			char buf[160];
+			std::snprintf(buf, sizeof(buf), "runner end: %.0f s, %llu dropouts, %llu blocks waited for the emulator",
+				m_stats.seconds, static_cast<unsigned long long>(m_xruns.load()), static_cast<unsigned long long>(m_waits.load()));
+			g1app::logEvent(buf);
+		}
 		// The DSPs may still be finishing their last catch-up, which ends in these callbacks.
 		auto& mc = m_engine.mc();
 		mc.syncDsps();
@@ -102,6 +114,30 @@ namespace g1app
 			// what is queued, not with what is owed.
 			m_debt = 0;
 		}
+
+		// How far ahead of its own pace the host is calling (#86). A sound card's callback comes one
+		// block after the last, give or take its jitter; a prefetch thread (ASIO-Guard in Cubase and
+		// Nuendo, REAPER's anticipative FX) calls several back to back and then rests. Each call that
+		// comes before the last block's length has passed adds the difference; each late one takes it
+		// back. Then a block called early has that long before it plays, and when the worker is short
+		// (it is only allowed `ahead` past what was taken, and a burst takes several blocks at once)
+		// the block can wait for it instead of going out as silence. A sound card's callback never
+		// builds this up (one late call, then one on time, gives back what it took), and 1 ms per
+		// second is given up so a drift between the clocks cannot build it up either.
+		const auto callStart = std::chrono::steady_clock::now();
+		if(!_offline && m_lastCall != std::chrono::steady_clock::time_point{})
+		{
+			const double interval = std::chrono::duration<double>(callStart - m_lastCall).count();
+			m_early = std::max(0.0, m_early + m_lastBlockSeconds - interval * 1.001);
+		}
+		m_lastCall = callStart;
+		m_lastBlockSeconds = static_cast<double>(_frames) / m_rate;
+		// What the block may spend waiting: what the host is early by, less a quarter of the block and
+		// 1 ms for the rest of the host's work on it. Nothing at a sound card's pace.
+		const double waitBudget = m_early - 0.25 * m_lastBlockSeconds - 0.001;
+		const auto waitUntil = callStart + std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(std::max(0.0, waitBudget)));
+		bool waited = false;
+
 		size_t done = 0;
 		while(done < _frames)
 		{
@@ -117,6 +153,13 @@ namespace g1app
 				const auto giveUp = std::chrono::steady_clock::now() + std::chrono::seconds(10);
 				while(m_bridge.queued() < m_debt + n && std::chrono::steady_clock::now() < giveUp)
 					g1::preciseSleep(std::chrono::microseconds(50));
+			}
+			else if(waitBudget > 0 && g_waitWhenEarly && m_primed && m_bridge.queued() < m_debt + n)
+			{
+				// Early: the time is there, the frames will be (the worker runs as soon as consumed moves).
+				while(m_bridge.queued() < m_debt + n && std::chrono::steady_clock::now() < waitUntil)
+					std::this_thread::yield();
+				waited = true;
 			}
 
 			// A debt the worker cannot pay is given up: the G1 slower than real time (an Expanded on a
@@ -150,6 +193,8 @@ namespace g1app
 		for(size_t c = AudioBridge::Outs; c < _numOuts; ++c)
 			if(_outs[c])
 				std::fill(_outs[c], _outs[c] + _frames, 0.0f);
+		if(waited)
+			m_waits.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	void Runner::run()
@@ -252,6 +297,7 @@ namespace g1app
 			if(!m_editorHeld.empty() && !(m_keeper && m_keeper->uploading()))
 			{
 				mc.getPcPort().receive(m_editorHeld);
+				m_editorSysex.feed(m_editorHeld);
 				if(m_keeper)
 					m_keeper->editorSent(m_editorHeld, nowMs());
 				if(m_settings)
@@ -260,11 +306,13 @@ namespace g1app
 					m_presets->editorSent(m_editorHeld, nowMs());
 				m_editorHeld.clear();
 			}
-			speak(m_keeper, m_settings, m_presets);
+			// Nobody else talks while the editor's last message is only half in (a MIDI driver's pieces, #81).
+			if(!m_editorSysex.inside)
+				speak(m_keeper, m_settings, m_presets);
 			// Nor while the keeper itself uploads a slot (a project going back in): the settings link's
 			// read between two packets made the OS drop it with error 6 and the slot came back empty. On
 			// the Micro, whose first packet is answered later, every time (Javier, 2026-11-03).
-			if(!(m_keeper && (m_keeper->editorUploading(nowMs()) || m_keeper->uploading())))
+			if(!m_editorSysex.inside && !(m_keeper && (m_keeper->editorUploading(nowMs()) || m_keeper->uploading())))
 			{
 				speak(m_settings, m_keeper, m_presets);
 				speak(m_presets, m_keeper, m_settings);
@@ -376,7 +424,14 @@ namespace g1app
 				{
 					m_loggedXruns = xruns;
 					g1app::logEvent("dropout: " + std::to_string(xruns) + " total, load "
-						+ std::to_string(static_cast<int>(m_stats.load)) + "%");
+						+ std::to_string(static_cast<int>(m_stats.load)) + "%, "
+						+ std::to_string(m_waits.load(std::memory_order_relaxed)) + " blocks waited");
+				}
+				// Once: the host calls ahead of real time (#86), which says which host and which way.
+				if(!m_loggedWaits && m_waits.load(std::memory_order_relaxed) > 0)
+				{
+					m_loggedWaits = true;
+					g1app::logEvent("the host processes ahead of real time (ASIO-Guard, anticipative FX): blocks wait for the emulator instead of dropping out");
 				}
 			}
 		}

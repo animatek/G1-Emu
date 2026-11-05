@@ -2,7 +2,12 @@
 
 #include "dsp56kBase/threadtools.h"
 
+#include <cstdint>
 #include <thread>
+
+#ifndef _WIN32
+#include <sys/resource.h>
+#endif
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -66,5 +71,21 @@ namespace g1
 		SetThreadInformation(GetCurrentThread(), ThreadPowerThrottling, &state, sizeof(state));
 #endif
 		dsp56k::ThreadTools::setCurrentThreadPriority(dsp56k::ThreadPriority::Highest);	// false where not allowed: it stays as it was
+	}
+
+	double processCpuSeconds()
+	{
+#ifdef _WIN32
+		FILETIME created, exited, kernel, user;
+		if(!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user))
+			return 0;
+		const auto seconds = [](const FILETIME& _t) { return static_cast<double>((static_cast<uint64_t>(_t.dwHighDateTime) << 32) | _t.dwLowDateTime) * 1e-7; };
+		return seconds(kernel) + seconds(user);
+#else
+		rusage u{};
+		if(getrusage(RUSAGE_SELF, &u))
+			return 0;
+		return static_cast<double>(u.ru_utime.tv_sec + u.ru_stime.tv_sec) + static_cast<double>(u.ru_utime.tv_usec + u.ru_stime.tv_usec) * 1e-6;
+#endif
 	}
 }

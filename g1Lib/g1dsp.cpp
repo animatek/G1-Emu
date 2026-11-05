@@ -386,6 +386,12 @@ namespace g1
 		else
 		{
 			const uint64_t dIns = ins - m_idle.instructions, dCyc = cyc - m_idle.cycles;
+			// Called again where the last skip landed, nothing run since (runUntil's checks come round
+			// first): the iteration learned still holds. Run one so the peripheral that stopped the skip
+			// gets its turn, and the next call can skip again at once instead of learning it over two
+			// more iterations (a skip stops at every ESSI tick, 96 cycles, eight iterations at most).
+			if(!dIns && !dCyc && m_idle.stable)
+				return false;
 			if(m_idle.stable && dIns == m_idle.dInstructions && dCyc == m_idle.dCycles && dIns && dCyc && idleLoopInPlace())
 			{
 				uint64_t k = (_target - cyc) / dCyc;

@@ -5,7 +5,7 @@
 // A worker thread keeps the emulator exactly `latency()` frames ahead of what the host has taken,
 // and stops there. The audio callback only takes finished frames out of a lock-free ring: it never
 // runs the emulator, never locks and never waits (except when rendering offline, where waiting is
-// the point). The latency is reported to the host, which delays everything else to match.
+// the point, and when the host calls ahead of real time and there is time to wait, #86). The latency is reported to the host, which delays everything else to match.
 //
 // Because the emulator never gets further ahead than that, a MIDI event at offset o of the block
 // that starts at host frame C can be given to the G1 at exactly frame C + latency + o of its
@@ -23,12 +23,14 @@
 #include "miditransport.h"
 #include "midirouting.h"
 #include "midioutparser.h"
+#include "pcsysex.h"
 #include "presetslink.h"
 #include "slotkeeper.h"
 #include "synthsettings.h"
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -80,6 +82,8 @@ namespace g1app
 		~Runner();	// stops the worker and detaches from the engine; the engine keeps its state
 
 		size_t latency() const { return m_latency; }
+		// Blocks that found the worker short and waited for it, the host being ahead of real time (#86).
+		uint64_t waits() const { return m_waits.load(std::memory_order_relaxed); }
 		// The last MIDI controller from the host, for the panel's MIDI Learn (MidiRouting). Any thread.
 		bool lastController(int& _channel, int& _cc, uint32_t& _serial) const { return m_midiRouting.lastController(_channel, _cc, _serial); }
 		// MIDI CC Mode on Selected Slots: a controller on a selected slot's channel goes to every selected
@@ -152,9 +156,16 @@ namespace g1app
 		std::atomic<bool> m_octaveShift{false};			// Octave Shift On (setOctaveShift)
 		std::vector<uint8_t> m_routed;
 		std::vector<uint8_t> m_editorHeld;	// worker thread: the editor's bytes, held while the keeper uploads a slot
+		pcsysex::SysexTracker m_editorSysex;			// worker thread: the editor's bytes in the G1 stop inside a SysEx (#81)
 
 		std::atomic<uint64_t> m_consumed{0};	// frames the host has taken (audio thread writes)
 		uint64_t m_debt = 0;					// frames owed: put out as silence, not yet arrived
+		// A host that processes ahead of real time (ASIO-Guard in Cubase and Nuendo, REAPER's anticipative
+		// FX: a prefetch thread calls several blocks back to back, #86). Audio thread only.
+		std::chrono::steady_clock::time_point m_lastCall{};
+		double m_lastBlockSeconds = 0;
+		double m_early = 0;						// seconds the host is ahead of its own pace (process())
+		std::atomic<uint64_t> m_waits{0};		// blocks that waited for the worker instead of dropping out
 		bool m_primed = false;					// the first frames have gone out
 		std::atomic<uint64_t> m_forgiven{0};	// debt given up by the audio thread, for the worker's skew
 		std::atomic<const std::atomic<bool>*> m_restoreFlag{nullptr};
@@ -169,5 +180,6 @@ namespace g1app
 		HostStats m_stats;
 		std::atomic<uint64_t> m_midiIn{0}, m_midiOut{0}, m_pcIn{0}, m_pcOut{0}, m_xruns{0}, m_dropped{0};
 		uint64_t m_loggedXruns = 0;				// worker thread only: dropouts already written to the log
+		bool m_loggedWaits = false;				// worker thread only: the first wait written to the log
 	};
 }

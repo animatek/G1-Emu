@@ -179,6 +179,17 @@ addressed before multi-instance use.
    VST3 the host hands over the MIDI and no virtual port is needed anywhere.
 6. **Performance:** real-time with ~45% headroom on a Ryzen 7 5700X. If more is needed: skip the
    idle loop of DSPs with no voices, drop the TX side of the links (read from memory already), PGO.
+   Measured on 2026-11-04 (Windows, i7 hybrid): at rest the load (~26 %) is DSP 0's emulation, which
+   the CPU thread waits for at ~81,000 syncs a second; the four DSP threads spin for as long. The idle
+   loop is skipped already (`skipIdle`), but a skip stops at every ESSI tick, 96 cycles, eight
+   iterations: a DSP with nothing to do still takes ~0.19 s per emulated second. **Next step: coarser
+   ESSI ticks.** Tried on DSPs 1-3 (one tick per sample, 864 cycles, divider 0, rx never served): their
+   time halved (0.98 → 0.46 s per 5 s), but the load did not move, DSP 0 being the one waited for; DSP 0
+   could tick every 432 cycles, exactly its codec's word, which the 4/5-tick `codecTick` only
+   approximates. It changes the emulation's timing: PolyGateTest's voice on DSP 1 came out one sample
+   out of phase (same pitch and level), even with the change made on a tick that served both
+   transmitters. Worth doing only with the whole patch battery (`tools/bench/golden.sh`, the library is
+   on the Linux machine) and a listen.
 
 ## Ideas for later
 

@@ -84,6 +84,27 @@ namespace g1app::pcsysex
 		_buf.erase(_buf.begin(), _buf.begin() + static_cast<long>(pos));
 	}
 
+	// Whether a byte stream has stopped inside a SysEx: an F0 with no F7 yet (issue #81). The editor's
+	// bytes go to the PC Port as they come, and a MIDI driver hands a long SysEx over in pieces, so the
+	// first piece of an upload's packet can be in the G1 while the rest is on its way. Whoever else talks
+	// to the PC Port (the slot keeper, the settings and presets links) must wait for the rest: a request
+	// in the middle of the editor's message breaks it, and the OS rejects the upload (code 3 or 6). Any
+	// status byte but a real-time one ends a SysEx, as MIDI has it.
+	struct SysexTracker
+	{
+		bool inside = false;
+		void feed(const std::vector<uint8_t>& _bytes)
+		{
+			for(const auto b : _bytes)
+			{
+				if(b == 0xf0)
+					inside = true;
+				else if(b >= 0x80 && b < 0xf8)
+					inside = false;
+			}
+		}
+	};
+
 	inline bool isClavia(const std::vector<uint8_t>& _m) { return _m.size() >= 6 && _m[1] == 0x33; }
 	inline uint8_t ccOf(const std::vector<uint8_t>& _m) { return static_cast<uint8_t>(_m[2] >> 2); }
 	inline uint8_t slotOf(const std::vector<uint8_t>& _m) { return static_cast<uint8_t>(_m[2] & 3); }

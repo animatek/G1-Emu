@@ -1113,7 +1113,16 @@ int main(int argc, char** argv)
 							defaults.push_back(p.defaultValue);
 				}
 				const NewModuleMessageProto msg(pid, aa.type, 1, aa.index, aa.x, aa.y, name, defaults);
-				mc.getPcPort().receive(msg.toSysEx(0));
+				const auto sysex = msg.toSysEx(0);
+				// --dump-packets: the message too, as add-NN.syx, for g1vst3check --fx to drop the same
+				// modules into a plugin over the direct link (#85)
+				if(!dumpDir.empty())
+				{
+					char file[32];
+					std::snprintf(file, sizeof(file), "add-%02zu.syx", ev.i);
+					std::ofstream(dumpDir + "/" + file, std::ios::binary).write(reinterpret_cast<const char*>(sysex.data()), static_cast<std::streamsize>(sysex.size()));
+				}
+				mc.getPcPort().receive(sysex);
 				std::printf("added module %d (type %d, %zu parameters) at %.2f s\n", aa.index, aa.type, defaults.size(), aa.at);
 			}
 			else

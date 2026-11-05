@@ -1,6 +1,6 @@
 // g1vst3check: loads the built G1-Emu.vst3 through JUCE's VST3 host, as a DAW would, and plays it.
 //
-//   g1vst3check path/to/G1-Emu.vst3 [--slots | --settings | --window | --buffer-change | --clock packets-dir]
+//   g1vst3check path/to/G1-Emu.vst3 [--slots | --settings | --window | --buffer-change | --clock packets-dir | --split-upload packets-dir]
 //   g1vst3check "path/to/G1-Emu FX.vst3" --fx packets-dir
 //
 // Two instances at once in one process, each with its own Program Change and a note, rendered
@@ -44,6 +44,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -59,6 +60,30 @@ namespace
 		int program = -1;
 		float peakBefore = 0, peakAfter = 0;
 	};
+
+	// The direct link's ports already taken before this process loads its plugin: a standalone G1-Emu
+	// or a DAW's instance listens on the first ones, and the check talked to that one (a standalone got
+	// the check's patches in its slot A, 2026-11-04). The instance loaded here takes the first free one.
+	std::set<int> linkPortsTaken()
+	{
+		std::set<int> taken;
+		for(int port = 47310; port < 47318; ++port)
+		{
+			juce::StreamingSocket s;
+			if(s.connect("127.0.0.1", port, 200))
+				taken.insert(port);
+		}
+		return taken;
+	}
+
+	// Connects to the direct link of the instance loaded since linkPortsTaken() said _taken.
+	bool connectToNewLink(juce::StreamingSocket& _link, const std::set<int>& _taken)
+	{
+		for(int port = 47310; port < 47318; ++port)
+			if(!_taken.count(port) && _link.connect("127.0.0.1", port, 2000))
+				return true;
+		return false;
+	}
 
 	std::unique_ptr<juce::AudioPluginInstance> load(juce::AudioPluginFormatManager& _formats, const juce::String& _path)
 	{
@@ -273,9 +298,10 @@ namespace
 		// the JUCE this process shares with it, and JUCE does not list its own client's ports
 		// (2026-11-03: "NOT THERE" though the port was open).
 		Voice f;
+		const auto taken = linkPortsTaken();
 		f.plugin = load(formats, path);
 		juce::StreamingSocket link;
-		const bool open = link.connect("127.0.0.1", 47310, 2000);
+		const bool open = connectToNewLink(link, taken);
 		std::printf("issue #25: editor on the direct link: %s\n", open ? "open" : "NOT THERE");
 		std::vector<uint8_t> rx;
 		bool greeted = false;
@@ -346,6 +372,10 @@ namespace
 	// see an effect whose input is on as it comes; AudioInTest.pch goes to slot A over the direct
 	// link at 6 s, a sine plays into the input from 9 to 12 s and stops, and outputs 1/2 must carry it
 	// then and fall silent after.
+	// With add-NN.syx files in dir too (g1patchtest --dump-packets with --add-module-at, issue #85),
+	// the sine plays from 8 s to the end and from 10 s one module is dropped into the patch every
+	// 0.6 s over the same link, as an editor sends them, while the plugin's own links talk on the PC
+	// Port too: the sine must still come through, every second, to the end.
 	int checkFx(juce::AudioPluginFormatManager& _formats, const juce::String& _path, const juce::File& _packets)
 	{
 		int failed = 0;
@@ -356,7 +386,16 @@ namespace
 			f.loadFileAsData(data);
 			upload.emplace_back(static_cast<const uint8_t*>(data.getData()), static_cast<const uint8_t*>(data.getData()) + data.getSize());
 		}
+		std::vector<std::vector<uint8_t>> adds;
+		for(const auto& f : _packets.findChildFiles(juce::File::findFiles, false, "add-*.syx"))
+		{
+			juce::MemoryBlock data;
+			f.loadFileAsData(data);
+			adds.emplace_back(static_cast<const uint8_t*>(data.getData()), static_cast<const uint8_t*>(data.getData()) + data.getSize());
+		}
+		const bool editing = !adds.empty();
 		Voice v;
+		const auto taken = linkPortsTaken();
 		v.plugin = load(_formats, _path);
 		if(!v.plugin)
 			return 1;
@@ -372,7 +411,7 @@ namespace
 		// The first instance listens on the direct link's first port and greets with a line.
 		juce::StreamingSocket link;
 		std::string greeting;
-		const bool open = !upload.empty() && link.connect("127.0.0.1", 47310, 2000);
+		const bool open = !upload.empty() && connectToNewLink(link, taken);
 		std::vector<uint8_t> rx;
 		int acks = 0;
 		const auto receive = [&]
@@ -401,9 +440,10 @@ namespace
 
 		p.setNonRealtime(true);
 		p.prepareToPlay(g_rate, g_block);
-		const int total = static_cast<int>(14.0 * g_rate);
-		float during = 0, after = 0;
-		size_t sent = 0;
+		const int total = static_cast<int>((editing ? 10.0 + 0.6 * static_cast<double>(adds.size()) + 4.0 : 14.0) * g_rate);
+		float during = 0, after = 0, last = 0;
+		size_t sent = 0, added = 0;
+		std::vector<float> perSecond(static_cast<size_t>(total / g_rate) + 1, 0.0f);
 		for(int pos = 0; pos < total; pos += g_block)
 		{
 			receive();
@@ -422,9 +462,16 @@ namespace
 			for(int i = 0; i < g_block; ++i)
 			{
 				const double t = (pos + i) / g_rate;
-				const auto x = t >= 9.0 && t < 12.0 ? static_cast<float>(0.25 * std::sin(2.0 * juce::MathConstants<double>::pi * 440.0 * t)) : 0.0f;
+				const bool on = editing ? t >= 8.0 : (t >= 9.0 && t < 12.0);
+				const auto x = on ? static_cast<float>(0.25 * std::sin(2.0 * juce::MathConstants<double>::pi * 440.0 * t)) : 0.0f;
 				for(int c = 0; c < p.getTotalNumInputChannels(); ++c)
 					buffer.setSample(c, i, x);
+			}
+			// The editor's modules, one every 0.6 s from 10 s, once the patch is in.
+			if(editing && open && sent == upload.size() && added < adds.size() && pos >= static_cast<int>((10.0 + 0.6 * static_cast<double>(added)) * g_rate))
+			{
+				link.write(adds[added].data(), static_cast<int>(adds[added].size()));
+				++added;
 			}
 			juce::MidiBuffer midi;
 			p.processBlock(buffer, midi);
@@ -432,15 +479,37 @@ namespace
 			float peak = 0;
 			for(int c = 0; c < 2; ++c)
 				peak = std::max(peak, buffer.getMagnitude(c, 0, g_block));
-			if(t >= 10.0 && t < 12.0)
+			perSecond[static_cast<size_t>(t)] = std::max(perSecond[static_cast<size_t>(t)], peak);
+			if(t >= 10.0 && t < (editing ? 10.0 + 0.6 * static_cast<double>(adds.size()) : 12.0))
 				during = std::max(during, peak);
-			else if(t >= 13.0)
+			else if(editing && t >= total / g_rate - 2.0)
+				last = std::max(last, peak);
+			else if(!editing && t >= 13.0)
 				after = std::max(after, peak);
 		}
 		p.releaseResources();
 		std::printf("issue #76: direct link %s (\"%s\")\n", open ? "open" : "NOT THERE", greeting.c_str());
 		std::printf("issue #76: %zu of %zu packets sent, %d ACKs; outputs 1/2 with the sine in %.1f dB, after it %.1f dB\n",
 			sent, upload.size(), acks, db(during), db(after));
+		if(editing)
+		{
+			// From 9 s, when the sine is through, every second must carry it.
+			size_t quiet = 0;
+			std::printf("issue #85: %zu of %zu modules added; peak per second", added, adds.size());
+			for(size_t i = 0; i < perSecond.size(); ++i)
+			{
+				std::printf(" %.0f", db(perSecond[i]));
+				if(i >= 9 && i + 1 < perSecond.size() && perSecond[i] < 1e-3f)
+					++quiet;
+			}
+			std::printf("\nissue #85: while adding %.1f dB, the last 2 s %.1f dB\n", db(during), db(last));
+			if(!open || sent != upload.size() || added != adds.size() || quiet || during < 1e-3f || last < during * 0.5f)
+			{
+				std::printf("FAIL: the input stopped coming through while modules were added\n");
+				failed = 1;
+			}
+			return failed;
+		}
 		if(!open || sent != upload.size() || during < 1e-3f || after > during * 0.01f)
 		{
 			std::printf("FAIL: the input does not reach the G1 through AudioIn\n");
@@ -1040,6 +1109,128 @@ namespace
 
 }
 
+namespace
+{
+	// Issue #81 (--split-upload dir), in a process of its own: a patch (packet-NN.syx in dir) goes to
+	// slot A over the direct link twelve times, 1.5 s apart, with its first packet in two halves
+	// 200 ms apart, as a MIDI driver hands a long SysEx over in pieces. Meanwhile the plugin's own
+	// links want the PC Port (the slot keeper reads slot A a second after each upload, the settings
+	// link every 2 s): none may talk between the halves. A request there broke the editor's message
+	// and the OS rejected the upload (sc $7E, "Unfinished bubble" or "Error in synth").
+	int checkSplitUpload(juce::AudioPluginFormatManager& _formats, const juce::String& _path, const juce::File& _packets)
+	{
+		std::vector<std::vector<uint8_t>> upload;
+		for(const auto& f : _packets.findChildFiles(juce::File::findFiles, false, "packet-*.syx"))
+		{
+			juce::MemoryBlock data;
+			f.loadFileAsData(data);
+			upload.emplace_back(static_cast<const uint8_t*>(data.getData()), static_cast<const uint8_t*>(data.getData()) + data.getSize());
+		}
+		if(upload.empty())
+		{
+			std::printf("issue #81: no packet-NN.syx in %s\n", _packets.getFullPathName().toRawUTF8());
+			return 1;
+		}
+		Voice v;
+		const auto taken = linkPortsTaken();
+		v.plugin = load(_formats, _path);
+		if(!v.plugin)
+			return 1;
+		auto& p = *v.plugin;
+		juce::StreamingSocket link;
+		const bool open = connectToNewLink(link, taken);
+		std::vector<uint8_t> rx;
+		bool greeted = false;
+		const auto receive = [&]
+		{
+			uint8_t buf[512];
+			while(open && link.waitUntilReady(true, 0) == 1)
+			{
+				const int n = link.read(buf, sizeof(buf), false);
+				if(n <= 0)
+					break;
+				rx.insert(rx.end(), buf, buf + n);
+			}
+			if(!greeted)
+				if(const auto nl = std::find(rx.begin(), rx.end(), '\n'); nl != rx.end())
+				{
+					rx.erase(rx.begin(), nl + 1);
+					greeted = true;
+				}
+		};
+		const auto count = [&](const bool _errors)
+		{
+			int n = 0;
+			for(size_t i = 0; i + 6 < rx.size(); ++i)
+				if(rx[i] == 0xf0 && rx[i + 1] == 0x33)
+				{
+					if(_errors && rx[i + 5] == 0x7e)
+						++n;
+					else if(!_errors && (rx[i + 2] >> 2) == 0x16 && (rx[i + 5] == 0x36 || rx[i + 5] == 0x7f))
+						++n;
+				}
+			return n;
+		};
+		// In real time, block by block on the wall clock as a sound card calls, with the message loop
+		// running in between: the plugin asks for the synth settings every 2 s from a timer.
+		p.setNonRealtime(false);
+		p.prepareToPlay(g_rate, g_block);
+		auto next = std::chrono::steady_clock::now();
+		const auto render = [&](const double _seconds, const std::function<bool()>& _until = {})
+		{
+			for(int b = 0; b < static_cast<int>(_seconds * g_rate / g_block); ++b)
+			{
+				receive();
+				if(_until && _until())
+					return;
+				// Meanwhile the message loop runs: the plugin's timers ask its links for things, as in a DAW.
+				next += std::chrono::microseconds(static_cast<int64_t>(1e6 * g_block / g_rate));
+				const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(next - std::chrono::steady_clock::now()).count();
+				if(left > 0)
+					juce::MessageManager::getInstance()->runDispatchLoopUntil(static_cast<int>(left));
+				juce::AudioBuffer<float> buffer(std::max(p.getTotalNumInputChannels(), p.getTotalNumOutputChannels()), g_block);
+				buffer.clear();
+				juce::MidiBuffer midi;
+				p.processBlock(buffer, midi);
+			}
+		};
+		render(6.0);	// the G1 boots
+		int rejected = 0, accepted = 0;
+		std::string results;
+		for(int u = 0; u < 12 && open; ++u)
+		{
+			rx.clear();
+			bool failed = false;
+			for(size_t k = 0; k < upload.size() && !failed; ++k)
+			{
+				const auto& packet = upload[k];
+				if(k == 0)
+				{
+					const int half = static_cast<int>(packet.size() / 2);
+					link.write(packet.data(), half);
+					juce::Thread::sleep(5);
+					render(0.2);
+					link.write(packet.data() + half, static_cast<int>(packet.size()) - half);
+				}
+				else
+					link.write(packet.data(), static_cast<int>(packet.size()));
+				juce::Thread::sleep(5);
+				render(3.0, [&] { return count(false) > static_cast<int>(k) || count(true) > 0; });
+				failed = count(true) > 0;
+			}
+			render(0.3);
+			failed |= count(true) > 0;
+			results += failed ? " R" : " ok";
+			(failed ? rejected : accepted)++;
+			render(1.5);
+		}
+		p.releaseResources();
+		std::printf("issue #81: direct link %s; 12 uploads with the first packet split:%s\n", open ? "open" : "NOT THERE", results.c_str());
+		std::printf("issue #81: %d accepted, %d rejected by the synth\n", accepted, rejected);
+		return !open || rejected ? 1 : 0;
+	}
+}
+
 int main(int _argc, char** _argv)
 {
 	if(_argc < 2)
@@ -1081,6 +1272,12 @@ int main(int _argc, char** _argv)
 	if(_argc > 3 && juce::String(_argv[2]) == "--clock")
 	{
 		failed = checkClock(formats, path, juce::File(juce::String(_argv[3])));
+		std::printf("%s\n", failed ? "FAILED" : "all good");
+		return failed;
+	}
+	if(_argc > 3 && juce::String(_argv[2]) == "--split-upload")
+	{
+		failed = checkSplitUpload(formats, path, juce::File(juce::String(_argv[3])));
 		std::printf("%s\n", failed ? "FAILED" : "all good");
 		return failed;
 	}

@@ -20,4 +20,8 @@ namespace g1
 	// macOS, time-critical on Windows. At the normal priority a DAW's other plugins and threads took
 	// the emulation's turn and it dropped out with the load well below 100 % (Bitwig, 2026-10-18).
 	void keepThreadAtFullSpeed();
+
+	// CPU seconds (user + system) the whole process has used: all its threads. The status figure
+	// "CPU n cores" is this over the wall time; it read 0 off Linux, which had the only version.
+	double processCpuSeconds();
 }

@@ -26,6 +26,10 @@ target_sources(g1patchtest PRIVATE
 	${NME_DIR}/source/protocol/NewModuleMessage.cpp
 	${NME_DIR}/source/protocol/ParameterEncoder.cpp
 	${NME_DIR}/source/protocol/SysExMessage.cpp)
+# NmMessages.cpp calls OsUpdate since NME 0.26 (the OS update's greeting); older trees have neither.
+if(EXISTS "${NME_DIR}/source/midi/OsUpdate.cpp")
+	target_sources(g1patchtest PRIVATE ${NME_DIR}/source/midi/OsUpdate.cpp)
+endif()
 target_include_directories(g1patchtest PRIVATE ${NME_DIR}/source)
 target_compile_definitions(g1patchtest PRIVATE
 	NME_DATA_DIR="${NME_DIR}/data"

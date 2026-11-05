@@ -8,6 +8,7 @@
 #include "g1Lib/g1thread.h"
 
 #include "miditransport.h"
+#include "pcsysex.h"
 
 #ifdef G1_BACKEND_JUCE
 #include "juceaudio.h"
@@ -29,9 +30,6 @@ namespace g1app { class JackAudio {}; }
 #include <filesystem>
 #include <iterator>
 #include <sstream>
-#ifdef __linux__
-#include <unistd.h>
-#endif
 
 namespace g1app
 {
@@ -44,30 +42,6 @@ namespace g1app
 				return false;
 			_data.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
 			return true;
-		}
-
-		// CPU seconds (user + system) of the whole process. Only Linux has /proc; elsewhere the
-		// load figure in the status line is simply not shown.
-		double processCpuSeconds()
-		{
-#ifndef __linux__
-			return 0;
-#else
-			std::ifstream f("/proc/self/stat");
-			std::string s((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-			const auto close = s.rfind(')');
-			if(close == std::string::npos)
-				return 0;
-			std::istringstream in(s.substr(close + 2));
-			std::string field;
-			unsigned long long utime = 0, stime = 0;
-			for(int i = 3; i <= 15 && in >> field; ++i)
-			{
-				if(i == 14) utime = std::stoull(field);
-				if(i == 15) stime = std::stoull(field);
-			}
-			return static_cast<double>(utime + stime) / static_cast<double>(sysconf(_SC_CLK_TCK));
-#endif
 		}
 
 		// Subtracted so no DC reaches the sound card (see Engine::OutputDc).
@@ -597,7 +571,7 @@ namespace g1app
 		auto lastRawMidi = start;
 		uint64_t lastStatsCycles = 0;
 		double busy = 0;		// seconds the thread has worked since the last statistics
-		double lastCpu = processCpuSeconds();
+		double lastCpu = g1::processCpuSeconds();
 		uint32_t savedProgrammed = mc.getFlash().programmedBytes();
 		uint32_t savedErased = mc.getFlash().erasedSectors();
 
@@ -633,6 +607,8 @@ namespace g1app
 		// keeps real time from there. Nothing can be heard before. G1_FAST_BOOT=0 boots in real time.
 		const bool fastBoot = [] { const char* v = std::getenv("G1_FAST_BOOT"); return !(v && *v == '0'); }();
 		bool osUp = false;
+		// The editor's bytes stop inside a SysEx: the links wait for the rest (#81, pcsysex::SysexTracker).
+		pcsysex::SysexTracker editorSysex;
 
 		while(!m_quit)
 		{
@@ -650,6 +626,7 @@ namespace g1app
 					m_microUpdate->feed(incoming[m_pcPort], microReply);
 				else
 					mc.getPcPort().receive(incoming[m_pcPort]);
+				editorSysex.feed(incoming[m_pcPort]);
 				m_synthSettings.editorSent(incoming[m_pcPort], mc.ucCycles() / msCycles);
 				m_presets.editorSent(incoming[m_pcPort], mc.ucCycles() / msCycles);
 				incoming[m_pcPort].clear();
@@ -665,6 +642,7 @@ namespace g1app
 					m_microUpdate->feed(linkIn, microReply);
 				else
 					mc.getPcPort().receive(linkIn);
+				editorSysex.feed(linkIn);
 				m_synthSettings.editorSent(linkIn, mc.ucCycles() / msCycles);
 				m_presets.editorSent(linkIn, mc.ucCycles() / msCycles);
 			}
@@ -726,7 +704,7 @@ namespace g1app
 			m_presets.g1Sent(out, nowMs, toEditor);
 			out.swap(toEditor);
 			// Their own requests, each taken by the other for an editor's, so they never talk at once.
-			if(!m_updateMode)	// Clavia's updater has the PC Port to itself
+			if(!m_updateMode && !editorSysex.inside)	// Clavia's updater has the PC Port to itself
 			{
 				toG1.clear();
 				m_synthSettings.tick(nowMs, toG1);
@@ -791,7 +769,7 @@ namespace g1app
 			{
 				const double wall = std::chrono::duration<double>(t1 - lastStats).count();
 				const double emu = static_cast<double>(mc.ucCycles() - lastStatsCycles) / g1::g_ucClock;
-				const double cpu = processCpuSeconds();
+				const double cpu = g1::processCpuSeconds();
 				std::lock_guard lock(m_statsMutex);
 				m_stats.seconds = elapsed;
 				m_stats.speed = 100.0 * emu / wall;

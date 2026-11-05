@@ -104,7 +104,11 @@ clap-juce-extensions; `clap-validator` passes it. The design is
   the G1 at the same emulated frame whatever the host's block sizes. `g1runnertest` checks that
   as bit-identical output between blocks of 256 and random blocks. The audio callback never runs
   the emulator nor locks; offline it waits for the worker. Underruns are paid back by dropping
-  the late frames, so timing stays locked.
+  the late frames, so timing stays locked. **A host that processes ahead of real time** (ASIO-Guard
+  in Cubase/Nuendo, REAPER's anticipative FX: bursts of blocks on a prefetch thread, #86) gets the
+  one exception: a block called early, by the runner's own measure of the host's pace, waits for the
+  worker for at most what it is early by (`G1_PLUGIN_WAIT=0` turns it off; `g1runnertest --burst K`
+  simulates it). At a sound card's pace it never waits.
 - **State:** `Engine::userState()` (runs of bytes differing from the factory flash, with a hash of
   the factory flash, which only names the OS: a state saved under another OS still loads its banks
   and settings, with the OS in use, #25), gzip + base64 in XML, plus the 256 ADC values, the
@@ -206,6 +210,7 @@ the four outputs and the links between DSPs; it also has probes for the panel (s
 | `tools/patchtest/` | `g1patchtest`: the test bench. |
 | `tools/battery/` | `battery.py`: one patch per module type, played and measured (`docs/module-battery.md`). |
 | `tools/vst3check/` | `g1vst3check`: loads the built `.vst3` through JUCE's VST3 host, two instances at once, and checks sound, state, editor, that each PC Port answers NME's greeting on its own port, the knobs as parameters and the host's program.; `--fx dir` checks G1-Emu FX's input through AudioIn. |
+| `tools/reaper/` | `bench.ps1`: the installed VST3 in REAPER on Windows, end to end (a patch uploaded over the direct link, played, the project reopened and played again), with APPDATA in a work directory so the real memory is never touched. |
 | `tools/dspdis.cpp` | DSP56300 disassembler (hex words on stdin). |
 | `tools/jitdiff.cpp` | Runs DSP instructions on the JIT and on the interpreter (or as one block against one per block) from random states and prints what differs. |
 
