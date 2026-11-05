@@ -13,6 +13,7 @@
 #include "MicroPanel.h"
 
 #include "Settings.h"
+#include "KeyboardInput.h"
 
 #include "romfinder.h"
 
@@ -311,6 +312,7 @@ namespace g1gui
 		{
 			m_snapshots.reset();
 			m_window.reset();
+			KeyboardInput::get().close();	// before the G1 it plays into goes
 			m_host.stop();	// saves the flash
 		}
 
@@ -332,6 +334,9 @@ namespace g1gui
 			}
 			std::printf("%s", log.c_str());
 			std::fflush(stdout);	// the window has no console reading it as it goes
+			// The keyboard chosen in Settings (#84); one not connected now is only kept as the choice.
+			if(!m_host.options().keyboard.empty() && !KeyboardInput::get().open(m_host, m_host.options().keyboard))
+				g1app::logEvent("keyboard: " + m_host.options().keyboard + ": " + KeyboardInput::get().problem());
 			m_window = std::make_unique<MainWindow>(m_host);
 			if(const char* dir = std::getenv("G1_SNAPSHOTS"))
 			{

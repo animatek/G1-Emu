@@ -877,6 +877,67 @@ namespace
 		return 0;
 	}
 
+	// Issue #88 (--gain): a new instance starts at the last output level set in any instance, not at
+	// 48 dB every time; a project's own level still wins, and is not taken for one the user set.
+	// Run it with HOME (APPDATA) on a scratch directory: it writes plugin.conf.
+	int checkGain(juce::AudioPluginFormatManager& _formats, const juce::String& _path)
+	{
+		const auto settle = [] { juce::MessageManager::getInstance()->runDispatchLoopUntil(1500); };
+		Voice a;
+		a.plugin = load(_formats, _path);
+		if(!a.plugin)
+			return 1;
+		const int gain = parameterIndex(*a.plugin, "Output Gain");
+		if(gain < 0)
+		{
+			std::printf("FAIL: no Output Gain parameter\n");
+			return 1;
+		}
+		const auto db = [gain](Voice& _v) { return juce::roundToInt(_v.plugin->getParameters()[gain]->getValue() * 60.0f); };
+		settle();
+		std::printf("issue #88: the first instance starts at %d dB\n", db(a));
+		a.plugin->getParameters()[gain]->setValueNotifyingHost(42.0f / 60.0f);
+		settle();
+		juce::MemoryBlock project;
+		a.plugin->getStateInformation(project);
+		a.plugin.reset();
+
+		Voice b;
+		b.plugin = load(_formats, _path);
+		settle();
+		const int second = db(b);
+		std::printf("issue #88: set to 42 dB there, a new instance starts at %d dB\n", second);
+		b.plugin.reset();
+
+		auto xml = pluginXml(project);
+		if(!xml)
+		{
+			std::printf("FAIL: no state in the project\n");
+			return 1;
+		}
+		xml->setAttribute("gainDb", 30.0);
+		const auto edited = withPluginXml(project, *xml);
+		Voice c;
+		c.plugin = load(_formats, _path);
+		c.plugin->setStateInformation(edited.getData(), static_cast<int>(edited.getSize()));
+		settle();
+		const int opened = db(c);
+		std::printf("issue #88: a project saved at 30 dB opens at %d dB\n", opened);
+		c.plugin.reset();
+
+		Voice d;
+		d.plugin = load(_formats, _path);
+		settle();
+		const int after = db(d);
+		std::printf("issue #88: and a new instance after it still starts at %d dB\n", after);
+		if(second != 42 || opened != 30 || after != 42)
+		{
+			std::printf("FAIL: expected 42, 30 and 42\n");
+			return 1;
+		}
+		return 0;
+	}
+
 	// Issue #66 (--buffer-change), in a process of its own, as it hangs when it fails: Cubase and
 	// Nuendo answer a latency change at once, in the same call stack, by deactivating and
 	// reactivating the plugin. A new buffer size changes the latency inside prepareToPlay, so
@@ -1290,6 +1351,12 @@ int main(int _argc, char** _argv)
 	if(_argc > 2 && juce::String(_argv[2]) == "--micro-knobs")
 	{
 		failed = checkMicroKnobs(formats, path);
+		std::printf("%s\n", failed ? "FAILED" : "all good");
+		return failed;
+	}
+	if(_argc > 2 && juce::String(_argv[2]) == "--gain")
+	{
+		failed = checkGain(formats, path);
 		std::printf("%s\n", failed ? "FAILED" : "all good");
 		return failed;
 	}

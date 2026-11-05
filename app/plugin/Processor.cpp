@@ -249,6 +249,37 @@ namespace g1plugin
 		{
 			return (std::filesystem::path(g1app::defaultSettingsPath()).parent_path() / "plugin.conf").string();
 		}
+
+		// plugin.conf as it is on disk now: every instance writes it, so each one writes back what
+		// the others left beside its own value. A missing key leaves its argument alone.
+		void readPluginConf(float& _panelScale, float& _gainDb)
+		{
+			std::ifstream f(preferencesPath());
+			std::string line;
+			while(std::getline(f, line))
+			{
+				const auto eq = line.find('=');
+				if(eq == std::string::npos || line[0] == '#')
+					continue;
+				const auto key = juce::String(line.substr(0, eq)).trim();
+				const auto value = juce::String(line.substr(eq + 1)).trim();
+				if(key == "panelScale")
+					_panelScale = juce::jlimit(g1gui::PanelView::MinScale, g1gui::PanelView::MaxScale, value.getFloatValue());
+				else if(key == "gainDb")
+					_gainDb = juce::jlimit(0.0f, 60.0f, value.getFloatValue());
+			}
+		}
+
+		void writePluginConf(const float _panelScale, const float _gainDb)
+		{
+			std::error_code ec;
+			std::filesystem::create_directories(std::filesystem::path(preferencesPath()).parent_path(), ec);
+			std::ofstream f(preferencesPath(), std::ios::trunc);
+			f << "# G1-Emu plugin: what a new instance starts with (the rest is in settings.conf).\n"
+			  << "# panelScale: the window's size, as the last editor was left. gainDb: the last output level set.\n"
+			  << "panelScale = " << _panelScale << "\n"
+			  << "gainDb = " << _gainDb << "\n";
+		}
 	}
 
 	// What the last editor was left like: a new instance starts there, and a project's state, when
@@ -265,18 +296,12 @@ namespace g1plugin
 		m_model = modelOf(o);
 		m_randomExclude = o.randomExclude;
 
-		std::ifstream f(preferencesPath());
-		std::string line;
-		while(std::getline(f, line))
-		{
-			const auto eq = line.find('=');
-			if(eq == std::string::npos || line[0] == '#')
-				continue;
-			const auto key = juce::String(line.substr(0, eq)).trim();
-			const auto value = juce::String(line.substr(eq + 1)).trim();
-			if(key == "panelScale")
-				m_panelScale = juce::jlimit(g1gui::PanelView::MinScale, g1gui::PanelView::MaxScale, value.getFloatValue());
-		}
+		// The output level too (#88): a new instance starts at the last one set in any instance, not at
+		// 48 dB every time. A project's own level still wins (readPreferences).
+		float gain = GainParameter::DefaultDb;
+		readPluginConf(m_panelScale, gain);
+		m_gainParam->setValueNotifyingHost(m_gainParam->convertTo0to1(gain));
+		m_seenGainDb = m_gainParam->get();
 	}
 
 	void Processor::savePreferences() const
@@ -294,11 +319,18 @@ namespace g1plugin
 		o.randomExclude = m_randomExclude;
 		o.save(g1app::defaultSettingsPath());
 
-		std::error_code ec;
-		std::filesystem::create_directories(std::filesystem::path(preferencesPath()).parent_path(), ec);
-		std::ofstream f(preferencesPath(), std::ios::trunc);
-		f << "# G1-Emu plugin: the size a new instance's window starts at (the rest is in settings.conf).\n"
-		  << "panelScale = " << m_panelScale << "\n";
+		float scale = m_panelScale, gain = GainParameter::DefaultDb;
+		readPluginConf(scale, gain);	// the level as the others left it
+		writePluginConf(m_panelScale, gain);
+	}
+
+	// The output level as the last one set, for the next new instance (#88). Only the size another
+	// instance left is kept from the file: this one's is written when its editor closes.
+	void Processor::savePreferredGain(const float _gainDb) const
+	{
+		float scale = m_panelScale, gain = _gainDb;
+		readPluginConf(scale, gain);
+		writePluginConf(scale, _gainDb);
 	}
 
 	Processor::~Processor()
@@ -835,6 +867,7 @@ namespace g1plugin
 		// with, not the new default, so its mix does not jump 12 dB.
 		m_gainParam->setValueNotifyingHost(m_gainParam->convertTo0to1(
 			static_cast<float>(_xml.getDoubleAttribute("gainDb", GainParameter::LegacyDb))));
+		m_seenGainDb = m_gainParam->get();	// a project's level is not one the user just set (#88)
 		m_selectedControllers = _xml.getBoolAttribute("midiCcSelectedSlots", false);	// the project's alone
 		m_octaveShift = _xml.getBoolAttribute("octaveShift", false);	// a project from before plays as a rack
 		if(_xml.hasAttribute("randomExclude"))
@@ -1244,6 +1277,22 @@ namespace g1plugin
 		}
 		if(changed)
 			stateChanged();
+		// The output level set from the Settings card or the host (#88): remembered once it has rested a
+		// moment, so a slider drag writes the file once and not twenty times a second.
+		{
+			const auto now = juce::Time::getMillisecondCounter();
+			if(const float gain = m_gainParam->get(); gain != m_seenGainDb)
+			{
+				m_seenGainDb = gain;
+				m_gainChangedAt = now;
+				m_gainPending = true;
+			}
+			if(m_gainPending && now - m_gainChangedAt >= GainRestMs)
+			{
+				m_gainPending = false;
+				savePreferredGain(m_seenGainDb);
+			}
+		}
 		// Outside the locks: the host may call back into the plugin from inside these calls (to
 		// learn the parameter, to keep an undo step, to ask for the new names).
 		tellHost(edits);

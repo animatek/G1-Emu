@@ -69,6 +69,11 @@ namespace g1app
 
 		// The output level, the only setting that can change while it plays.
 		void setGainDb(float _gainDb);
+		// Bytes for the G1's MIDI IN from outside the MIDI port, whole messages: the window's keyboard
+		// (gui/KeyboardInput.h, #84). Any thread; the G1's thread takes them after the port's.
+		void queueMidiIn(const uint8_t* _data, size_t _size);
+		// How the system's MIDI APIs name this G1's own ports, so a list of inputs can leave them out.
+		std::vector<std::string> ownMidiPortIds() const;
 		void stop();
 		bool running() const { return m_thread.joinable(); }
 
@@ -163,6 +168,8 @@ namespace g1app
 		std::mutex m_statsMutex;
 		Stats m_stats;
 		std::atomic<uint64_t> m_pcIn{0}, m_pcOut{0}, m_midiIn{0}, m_midiOut{0};
+		std::mutex m_queuedMidiMutex;
+		std::vector<uint8_t> m_queuedMidi;		// queueMidiIn's, for the MIDI IN
 		HealthProbe m_health;		// the emulator's thread, and DSP 3's for output()
 		std::vector<uint64_t> m_lastFrames = std::vector<uint64_t>(g1::g_maxDsps, 0);
 		double m_lastReportTime = 0;

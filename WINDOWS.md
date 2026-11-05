@@ -55,12 +55,15 @@ port for both directions can feed a program's own output back into its input.
 
 ### Playing it from a MIDI keyboard (the standalone)
 
-On Windows G1-Emu cannot create a MIDI port of its own, so **Automatic** leaves the performance MIDI
-unconnected. To play the standalone from a keyboard, open **Settings** and set **MIDI in** to your
-keyboard (the list has every MIDI input Windows sees), then close G1-Emu and open it again. Slot A
+Open **Settings** and pick your keyboard under **MIDI keyboard** (the list has every MIDI input
+Windows sees). It plays at once, with no restart, and G1-Emu opens it again on its next start. Slot A
 listens on MIDI channel 1 (B on 2, C on 3, D on 4), and the `MIDI in` counter in the status bar counts
-up while you play. Set **MIDI out** the same way if you want the G1's MIDI OUT to reach a device.
-Keep the **PC Port** boxes for the editor: the keyboard goes on **MIDI**, not on the PC Port.
+up while you play. A keyboard another program holds cannot be opened: Settings says so.
+
+The **MIDI in** and **MIDI out** boxes above it are the performance MIDI port itself (on Windows
+G1-Emu cannot create one, so **Automatic** leaves it unconnected): use them for a loopback driver's
+ports when a DAW or another program has to play G1-Emu or hear its MIDI OUT, and restart after a
+change. Keep the **PC Port** boxes for the editor.
 
 Settings and flash are stored in `%APPDATA%\Animatek\G1-Emu`. Removing the application folder does
 not remove them.

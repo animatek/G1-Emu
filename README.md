@@ -110,9 +110,10 @@ they do not come with it (see [the next section](#two-things-a-nord-modular-need
   panel, as on the hardware: they choose among the patches already stored in the banks.
 
 **5. Play it** from your DAW track or a MIDI keyboard. Slot A listens on MIDI channel 1 (B on 2,
-C on 3, D on 4) unless the synth settings say otherwise. In the **standalone on Windows**, pick the
-keyboard in **Settings > MIDI in** and restart G1-Emu ([`WINDOWS.md`](WINDOWS.md), "Playing it from a MIDI
-keyboard"); on Linux, connect it to G1-Emu's **MIDI** port.
+C on 3, D on 4) unless the synth settings say otherwise. In the **standalone**, pick the keyboard in
+**Settings > MIDI keyboard**, on every system: it plays at once and is opened again on the next start
+([`WINDOWS.md`](WINDOWS.md), "Playing it from a MIDI keyboard"). On Linux a keyboard can also be
+connected to G1-Emu's **MIDI** port from outside, as before.
 
 **6. Check that it works, with the two test patches.** If something does not sound, this is also
 the first thing to try, and what to tell us in an issue. Download them (they are not in the

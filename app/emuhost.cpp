@@ -438,6 +438,25 @@ namespace g1app
 	}
 
 	// The level can change while it plays: both backends read it from an atomic on their own thread.
+	void EmuHost::queueMidiIn(const uint8_t* _data, const size_t _size)
+	{
+		std::lock_guard<std::mutex> lock(m_queuedMidiMutex);
+		// A G1 that is not reading (stopped, restarting) does not get a pile of old notes later.
+		if(m_queuedMidi.size() < 4096)
+			m_queuedMidi.insert(m_queuedMidi.end(), _data, _data + _size);
+	}
+
+	std::vector<std::string> EmuHost::ownMidiPortIds() const
+	{
+		std::vector<std::string> ids;
+		if(m_midi)
+			for(const int port : {m_pcPort, m_midiPort})
+				if(port >= 0)
+					for(auto& id : m_midi->portIds(port))
+						ids.push_back(std::move(id));
+		return ids;
+	}
+
 	void EmuHost::setGainDb(const float _gainDb)
 	{
 		m_options.gainDb = _gainDb;
@@ -645,6 +664,15 @@ namespace g1app
 				editorSysex.feed(linkIn);
 				m_synthSettings.editorSent(linkIn, mc.ucCycles() / msCycles);
 				m_presets.editorSent(linkIn, mc.ucCycles() / msCycles);
+			}
+			{
+				// The window's keyboard (#84), after what the port brought: both come as whole messages.
+				std::lock_guard<std::mutex> lock(m_queuedMidiMutex);
+				if(!m_queuedMidi.empty())
+				{
+					incoming[m_midiPort].insert(incoming[m_midiPort].end(), m_queuedMidi.begin(), m_queuedMidi.end());
+					m_queuedMidi.clear();
+				}
 			}
 			if(!incoming[m_midiPort].empty())
 			{

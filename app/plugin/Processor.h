@@ -78,7 +78,8 @@ namespace g1plugin
 
 	// The output gain (issue #65): the standalone's "Output level" slider, missing from the plugin,
 	// which had no way at all to make up for a quiet patch beyond the host's own fader. A new
-	// instance starts at 48 dB (DefaultDb): +36 dB only undoes the OS's -36 dB cap on the master
+	// instance starts at the last level set in any instance (plugin.conf, #88), and the very first
+	// at 48 dB (DefaultDb): +36 dB only undoes the OS's -36 dB cap on the master
 	// volume, and most patches still came out too quiet next to other instruments. A project saved
 	// before this parameter existed ran at a fixed 36 dB and reads back 36 dB (readPreferences).
 	class GainParameter final : public juce::AudioParameterFloat
@@ -192,6 +193,7 @@ namespace g1plugin
 		float panelScale() const { return m_panelScale; }
 		void setPanelScale(float _scale) { if(std::abs(std::exchange(m_panelScale, _scale) - _scale) > 0.002f) stateChanged(); }
 		void savePreferences() const;
+		void savePreferredGain(float _gainDb) const;	// plugin.conf's gainDb: a new instance's output level (#88)
 		// Regular (4 DSPs), Expanded (8, the expansion board) or Micro Modular (1 DSP, its own OS): the
 		// project's, and a new instance takes the last one chosen. A change restarts the G1, which
 		// keeps what restart() keeps. On the message thread, and not from inside the panel, which the
@@ -229,6 +231,11 @@ namespace g1plugin
 		int m_lastVolumeAdc = -1, m_lastVolumeParam = -1;
 		GainParameter* m_gainParam = nullptr;
 		float m_lastGainDb = GainParameter::DefaultDb;		// audio thread only: the value last given to the runner
+		// Message thread: the level as last seen by the timer, and since when, to remember it (#88)
+		float m_seenGainDb = GainParameter::DefaultDb;
+		uint32_t m_gainChangedAt = 0;
+		bool m_gainPending = false;
+		static constexpr uint32_t GainRestMs = 500;
 		std::mutex m_knobMutex;
 		int m_knobGeneration = -1;
 		static constexpr size_t VolumeIndex = 18;		// after the knobs, in m_gestures and m_toHost

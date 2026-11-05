@@ -60,6 +60,9 @@ namespace g1app
 		// names. Ignored on the native (ALSA) backend, which always owns real sequencer ports.
 		std::string pcPortOutDevice, pcPortInDevice;	// PC Port: the editor's side
 		std::string midiOutDevice, midiInDevice;		// MIDI: the DAW/keyboard's side
+		// The window's MIDI keyboard (#84): a system MIDI input, by name, played into the MIDI IN
+		// beside the MIDI port, on every backend. Empty: none.
+		std::string keyboard;
 
 		// The names used in the settings file and in the panel.
 		static const char* const audioNames[3];	// "jack", "alsa", "no"

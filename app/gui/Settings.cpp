@@ -1,4 +1,5 @@
 #include "Settings.h"
+#include "KeyboardInput.h"
 #include "osimage.h"
 
 #include "Overlay.h"
@@ -54,8 +55,10 @@ namespace g1gui
 		// jucemidi.h) adds four device rows to the MIDI column, under a longer note.
 #if defined(_WIN32) && defined(G1_BACKEND_JUCE) && !defined(G1_WINDOWS_MIDI)
 		constexpr int g_midiInfoH = 92;
+		constexpr int g_keyboardY = g_headingH + g_midiInfoH + 6 + 4 * (g_rowH + g_gap) + 8;	// its heading, under the four device rows
 #else
 		constexpr int g_midiInfoH = 76;
+		constexpr int g_keyboardY = g_headingH + g_midiInfoH + 14;	// its heading, under the note or the raw MIDI card's two rows
 #endif
 	}
 
@@ -286,6 +289,15 @@ namespace g1gui
 #endif
 #endif
 
+		// The MIDI keyboard (#84): any MIDI input the system has, played into the G1's MIDI IN beside
+		// the MIDI port. Applies at once; the list is the system's as the card opens.
+		label(m_keyboardLabel, "Keyboard");
+		populateKeyboards();
+		m_keyboardBox.setTooltip("A MIDI keyboard played straight into the G1, beside the MIDI port: slot A listens on "
+			"channel 1, B on 2, C on 3, D on 4 (the synth's MIDI settings). The editor stays on the PC Port");
+		m_keyboardBox.onChange = [this] { chooseKeyboard(); };
+		addAndMakeVisible(m_keyboardBox);
+
 		// The notice used to stop every startup. It lives here now, readable at any time.
 		m_disclaimer.setToggleState(o.showDisclaimer, juce::dontSendNotification);
 		m_disclaimer.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
@@ -355,7 +367,7 @@ namespace g1gui
 			l->setJustificationType(juce::Justification::topLeft);
 			addAndMakeVisible(*l);
 		}
-		m_note.setText("The level applies now; the rest, on the next start.\n"
+		m_note.setText("The level and the keyboard apply now; the rest, on the next start.\n"
 			"Environment variables win over these settings.\n"
 			"Saved in " + juce::String(g1app::EmuHost::defaultSettingsPath()), juce::dontSendNotification);
 		m_note.setTooltip(g1app::EmuHost::defaultSettingsPath());
@@ -552,6 +564,45 @@ namespace g1gui
 		o.save(g1app::EmuHost::defaultSettingsPath());
 	}
 
+	// "None", then the system's MIDI inputs; the one chosen before stays selected, marked, when it is
+	// not connected now, so the choice is not lost while the keyboard is off.
+	void SettingsView::populateKeyboards()
+	{
+		const auto& chosen = m_host.options().keyboard;
+		auto& k = KeyboardInput::get();
+		m_keyboardBox.clear(juce::dontSendNotification);
+		m_keyboardBox.addItem("None", 1);
+		int id = 2, selected = 1;
+		for(const auto& d : KeyboardInput::devices(m_host))
+		{
+			m_keyboardBox.addItem(d, id);
+			if(d == chosen)
+				selected = id;
+			++id;
+		}
+		if(!chosen.empty() && selected == 1)
+		{
+			m_keyboardBox.addItem(chosen + "  (not connected)", id);
+			selected = id;
+		}
+		else if(!chosen.empty() && k.name() == chosen && !k.problem().empty())
+			m_keyboardBox.changeItemText(selected, chosen + "  (" + k.problem() + ")");
+		m_keyboardBox.setSelectedId(selected, juce::dontSendNotification);
+	}
+
+	void SettingsView::chooseKeyboard()
+	{
+		const auto name = m_keyboardBox.getSelectedId() <= 1 ? std::string()
+			: m_keyboardBox.getText().upToFirstOccurrenceOf("  (", false, false).toStdString();
+		m_host.options().keyboard = name;
+		apply();
+		if(!KeyboardInput::get().open(m_host, name))
+			juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "Keyboard",
+				juce::String(name) + ": " + KeyboardInput::get().problem() + ".\n\nIt is kept as the keyboard: G1-Emu opens it "
+				"on its next start, or pick it here again once it is free.");
+		populateKeyboards();
+	}
+
 	// What is actually in use right now, which is not always what the controls say: the driver
 	// may have refused to open, or the environment may have overridden the file.
 	void SettingsView::timerCallback()
@@ -582,6 +633,7 @@ namespace g1gui
 		_g.setColour(overlay::Rule);
 		_g.drawLine(0.0f, g_audioY - 8.0f, static_cast<float>(g_colW), g_audioY - 8.0f);
 		_g.drawLine(0.0f, static_cast<float>(g_belowY), static_cast<float>(g_width), static_cast<float>(g_belowY));
+		_g.drawLine(static_cast<float>(g_rightX), g_keyboardY - 8.0f, static_cast<float>(g_width), g_keyboardY - 8.0f);
 		_g.setColour(juce::Colours::white);
 		_g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
 		auto heading = [&](const char* _text, const int _x, const int _y) { _g.drawText(_text, _x, _y, g_colW, g_headingH - 2, juce::Justification::centredLeft); };
@@ -592,6 +644,7 @@ namespace g1gui
 #else
 		heading("Raw MIDI", g_rightX, 0);
 #endif
+		heading("MIDI keyboard", g_rightX, g_keyboardY);
 		heading("In use now", 0, g_belowY + 8);
 	}
 
@@ -633,6 +686,8 @@ namespace g1gui
 		row(m_midiOutLabel, m_midiOutDeviceBox, g_rightX, y);
 		row(m_midiInLabel, m_midiInDeviceBox, g_rightX, y);
 #endif
+		y = g_keyboardY + g_headingH;
+		row(m_keyboardLabel, m_keyboardBox, g_rightX, y);
 
 		m_running.setBounds(0, g_belowY + 8 + g_headingH, g_colW, 66);
 		m_note.setBounds(g_rightX, g_belowY + 8 + g_headingH, g_colW, 52);

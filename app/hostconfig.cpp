@@ -73,6 +73,7 @@ namespace g1app
 			else if(key == "pcPortInDevice")  pcPortInDevice = value;
 			else if(key == "midiOutDevice")   midiOutDevice = value;
 			else if(key == "midiInDevice")    midiInDevice = value;
+			else if(key == "keyboard")        keyboard = value;
 		}
 		return true;
 	}
@@ -187,7 +188,8 @@ namespace g1app
 		  << "pcPortOutDevice = " << o.pcPortOutDevice << "\n"
 		  << "pcPortInDevice = " << o.pcPortInDevice << "\n"
 		  << "midiOutDevice = " << o.midiOutDevice << "\n"
-		  << "midiInDevice = " << o.midiInDevice << "\n";
+		  << "midiInDevice = " << o.midiInDevice << "\n"
+		  << "keyboard = " << o.keyboard << "\n";
 		return f.good();
 	}
 }
