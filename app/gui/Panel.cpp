@@ -196,6 +196,18 @@ namespace g1gui
 		Sprite smallLcd{G1Skin::small_lcd_png, G1Skin::small_lcd_pngSize, 170, 57, 1};				// a knob's parameter display
 		Sprite smallLcdDark{G1Skin::small_lcd_dark_png, G1Skin::small_lcd_dark_pngSize, 170, 57, 1};	// the same, nothing assigned
 		Sprite octaveShift{G1Skin::octave_shift_png, G1Skin::octave_shift_pngSize, 235, 99, 1};		// OCT SHIFT and its keys' red strip, over the background
+		Sprite octaveShiftOff{greyedOut(juce::ImageCache::getFromMemory(G1Skin::octave_shift_png, G1Skin::octave_shift_pngSize)), 235, 99, 1};	// the same with Octave Shift Off
+
+	private:
+		// Grey rather than see-through: the red strip at half opacity read as a pink smear over
+		// the face, which looked broken (#92), not off.
+		static juce::Image greyedOut(const juce::Image& _src)
+		{
+			auto img = _src.createCopy();
+			img.desaturate();
+			img.multiplyAllAlphas(0.55f);
+			return img;
+		}
 	};
 
 	namespace
@@ -1626,9 +1638,7 @@ namespace g1gui
 		_g.fillAll(g_face);
 		const auto& s = *m_skin;
 		s.background.draw(_g, 0, {0.0f, 0.0f, static_cast<float>(Width), 1238.0f * SkinScale});
-		_g.setOpacity(m_octaveShown ? 1.0f : 0.5f);
-		s.octaveShift.draw(_g, 0, skf(g_octaveShiftX, g_octaveShiftY, 235, 99));
-		_g.setOpacity(1.0f);
+		(m_octaveShown ? s.octaveShift : s.octaveShiftOff).draw(_g, 0, skf(g_octaveShiftX, g_octaveShiftY, 235, 99));
 		s.dialShadow.draw(_g, 0, skf(g_dialX - 136.5f, g_dialY + 8.0f - 124.5f, 289, 289));
 		// Under each knob, the shadow's disk under the cap: only its soft edge shows, down and right.
 		const auto shadowAt = [&](const Centre _c) { s.knobShadow.draw(_g, 0, skf(_c.x - 33, _c.y - 33, 100, 101)); };
@@ -2673,8 +2683,10 @@ namespace g1gui
 		// The active slot's octave shift, as its LEDs show it: -2 to +2.
 		const int octave = g1app::MidiRouting::shift(m_mc, static_cast<size_t>(activeSlot()));
 		const auto octaveText = (octave > 0 ? "+" : "") + juce::String(octave);
-		setLcdTip(*m_octDown, "Oct Down\t" + octaveText);
-		setLcdTip(*m_octUp, "Oct Up\t" + octaveText);
+		// Off, the keys do nothing, as on a rack: the display says so, and where to turn it on (#92).
+		const bool octaveOn = m_host.octaveShift();
+		setLcdTip(*m_octDown, octaveOn ? "Oct Down\t" + octaveText : juce::String("Oct Shift Off\tRight-click"));
+		setLcdTip(*m_octUp, octaveOn ? "Oct Up\t" + octaveText : juce::String("Oct Shift Off\tRight-click"));
 		for(const auto& s : m_shiftNames)
 			setLcdTip(*s.button, s.name(shift));
 		// Where the G1 is, from its display. In Edit mode the end of the first line says which part

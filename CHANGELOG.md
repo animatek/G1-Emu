@@ -5,6 +5,10 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-11-12
+
+- [App] Claude: **OCT SHIFT greyed out for real when Octave Shift is Disabled** (#92, bacizone: "broken both in functionality and visually"). Disabled is the default since #77 (a rack ignores a patch's shift), and the keys doing nothing then is by design; but the label and the keys' red strip were drawn at half opacity, which read as a pink smear over the face. They are now a desaturated copy of the same sprite, and hovering a key with it Disabled shows "Oct Shift Off / Right-click" on the display, where the menu turns it on (also on the Synth Settings page). Checked: `g1gui` built and opened with a scratch `HOME`, the panel looked at in a screenshot (grey, no red).
+
 ## 2026-11-05
 
 - [Plugin] Claude: **a new instance starts at the last output level set, not at 48 dB every time** (#88, reported by Waltercalling in #86: matched to his Nord Racks he needs 42 dB, and lowered it on every instance he added). The level set from the Settings card or the host is written to `plugin.conf` (`gainDb`) once it has rested half a second, and a new instance starts there; the very first still starts at 48 dB. A project's own level still wins and is not taken for one the user set. Every instance reads `plugin.conf` again before writing it, so one closing its editor no longer writes an older level back. `g1vst3check plugin --gain` (new, with HOME on a scratch directory): the first instance at 48 dB; set to 42 there, a new one starts at 42; a project saved at 30 dB opens at 30; a new one after it still starts at 42. Passes.
