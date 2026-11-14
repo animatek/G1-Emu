@@ -5,6 +5,10 @@ its line here, in the same commit** (see `CLAUDE.md`). Each entry says who made 
 and how it was checked; the commit is the one that brings the entry (`git log -- CHANGELOG.md`).
 Older entries cite their commit by hand.
 
+## 2026-11-14
+
+- [Docs] Claude: **the README says the Micro Modular model needs the rack ROM too** (a Patreon member with only a Micro put the Micro OS updater in the ROM folder and stayed on the screen asking for the ROM: the README read as if the updater were enough). The "No ROMs" notice, the Micro paragraph and the G1-Emu Micro plugin line now say that the Micro's OS starts on the rack's boot ROM, that the updater holds only the OS, that a Micro's own ROM cannot be used, and that Settings' Micro OS is reached once G1-Emu has started with the rack ROM. Checked against `NOTES.md` ("Micro Modular in G1-Emu").
+
 ## 2026-11-12
 
 - [App] Claude: **OCT SHIFT greyed out for real when Octave Shift is Disabled** (#92, bacizone: "broken both in functionality and visually"). Disabled is the default since #77 (a rack ignores a patch's shift), and the keys doing nothing then is by design; but the label and the keys' red strip were drawn at half opacity, which read as a pink smear over the face. They are now a desaturated copy of the same sprite, and hovering a key with it Disabled shows "Oct Shift Off / Right-click" on the display, where the menu turns it on (also on the Synth Settings page). Checked: `g1gui` built and opened with a scratch `HOME`, the panel looked at in a screenshot (grey, no red).

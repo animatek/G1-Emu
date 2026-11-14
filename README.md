@@ -37,7 +37,7 @@ hello in an issue.
 - **No ROMs, now or ever.** No ROM or firmware is included, and none will be provided. Please do
   not ask for them in issues, e-mails or messages: you will not find them here. You need the 512 KB
   ROM of a Nord Modular rack with OS 3.03 (`Roms/NORD-MODULAR-RACK-VER-3.03.BIN`), dumped from
-  your own unit. `Roms/` is ignored by Git and must stay that way.
+  your own unit, **also for the Micro Modular model**. `Roms/` is ignored by Git and must stay that way.
 - **No support.** This is a pre-alpha community project, made in spare time by its maintainer and
   whoever wants to join. There is no support: please do not ask for help, builds or ROMs. Bug
   reports with details, and contributions, are welcome (see [`CONTRIBUTING.md`](CONTRIBUTING.md)).
@@ -215,9 +215,12 @@ want to hear about it.
   (BellsMorph 8 → 16, 4VoiceChoir 16 → 32). It costs more CPU, and the change takes effect on the
   next start or Restart (`model =` in the settings file, `G1_MODEL=expanded`).
 - **Micro Modular:** the third model, one DSP and its own OS, light on the CPU (about a third of
-  a Regular's) for small patches and slower computers. G1-Emu does not ship that OS: point
-  Settings' **Micro OS** at Clavia's Micro Modular OS updater (the `.exe`; it is read as it is, nothing to
-  extract) or leave it in the ROM folder. It has its own box (volume, three edit knobs and the
+  a Regular's) for small patches and slower computers. **It still needs the rack ROM above**: the
+  Micro's OS starts on the rack's boot ROM, and the Micro OS updater holds only the OS, so with the
+  updater alone G1-Emu stays on the screen asking for the ROM. A Micro's own ROM cannot be used
+  instead. G1-Emu does not ship the Micro's OS either: with the rack ROM in place and G1-Emu
+  started, point Settings' **Micro OS** at Clavia's Micro Modular OS updater (the `.exe`; it is read
+  as it is, nothing to extract) or leave it in the ROM folder, beside the rack ROM. It has its own box (volume, three edit knobs and the
   two-digit display; its buttons work, Shift also from the computer's Shift key; below it, Presets with its one bank, Restart and About) and its own flash (`flash-micro.bin`). Start or
   Restart to switch (`model = micro`, `G1_MODEL=micro`). In a DAW the Micro is a plugin of its own, **G1-Emu Micro**.
   An OS picked in the ROM box by mistake is offered as the Micro OS.
@@ -290,7 +293,8 @@ VST3 is built.
 - **Regular or Expanded** in the plugin's Settings, saved with the project: changing it restarts that
   instance's G1, which keeps its patches. A new instance takes the last model chosen.
 - **G1-Emu Micro** is the Micro Modular as a plugin of its own: one DSP, its own OS (Clavia's Micro
-  OS updater in the ROM folder, or picked in its Settings, as in the standalone), its own box and
+  OS updater in the ROM folder, or picked in its Settings, as in the standalone; the rack ROM is
+  needed too), its own box and
   memory (`flash-micro.bin`), bank 1 only, as the real one. G1-Emu is never a Micro and G1-Emu Micro
   never a rack: put the one you want on the track.
 - **G1-Emu FX** is the same G1 as an effect, to put on an audio track: its **In L/R** is on from the
