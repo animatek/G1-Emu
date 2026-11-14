@@ -21,6 +21,36 @@ namespace g1plugin
 	{
 		// G1-Emu Micro is always a Micro; G1-Emu (and G1-Emu FX) a Regular or an Expanded, never a Micro.
 		constexpr bool g_microPlugin = G1_PLUGIN_MICRO != 0;
+
+		// Where a knob parameter lives (#91). The rack reads its 18 knobs and its volume from the
+		// panel's ADC; the Micro reads its three knobs and its volume from a serial ADC on the QSPI
+		// (the same entries as MicroPanel), so a Micro instance's parameters go there, and knobs 4-18,
+		// which it does not have, stay where they are.
+		constexpr std::array<uint8_t, 3> g_microKnobEntry{{2, 1, 0}};
+		uint8_t readKnob(const g1::Microcontroller& _mc, const size_t _k)
+		{
+			if(g_microPlugin)
+				return _k < g_microKnobEntry.size() ? _mc.qspiAdc(g_microKnobEntry[_k]) : 0;
+			return _mc.adc(g1::KnobMap::KnobAdc[_k]);
+		}
+		void writeKnob(g1::Microcontroller& _mc, const size_t _k, const uint8_t _v)
+		{
+			if(!g_microPlugin)
+				_mc.setAdc(g1::KnobMap::KnobAdc[_k], _v);
+			else if(_k < g_microKnobEntry.size())
+				_mc.setQspiAdc(g_microKnobEntry[_k], _v);
+		}
+		uint8_t readVolume(const g1::Microcontroller& _mc)
+		{
+			return g_microPlugin ? _mc.qspiAdc(g1::g_qspiVolume) : _mc.adc(g1::g_adcVolume);
+		}
+		void writeVolume(g1::Microcontroller& _mc, const uint8_t _v)
+		{
+			if(g_microPlugin)
+				_mc.setQspiAdc(g1::g_qspiVolume, _v);
+			else
+				_mc.setAdc(g1::g_adcVolume, _v);
+		}
 		Processor::Model allowed(const Processor::Model _m)
 		{
 			if(g_microPlugin)
@@ -567,12 +597,12 @@ namespace g1plugin
 		auto& mc = m_engine->mc();
 		for(size_t k = 0; k < 18; ++k)
 		{
-			const auto adc = mc.adc(g1::KnobMap::KnobAdc[k]);
+			const auto adc = readKnob(mc, k);
 			m_lastAdc[k] = adc;
 			m_knobParams[k]->setValueNotifyingHost(KnobParameter::toParam(adc));
 			m_lastParam[k] = m_knobParams[k]->get();
 		}
-		m_lastVolumeAdc = mc.adc(g1::g_adcVolume);
+		m_lastVolumeAdc = readVolume(mc);
 		m_volumeParam->setNotifyingHost(VolumeParameter::fromAdc(m_lastVolumeAdc));
 		m_lastVolumeParam = m_volumeParam->get();
 		m_knobGeneration = m_generation.load();
@@ -949,9 +979,9 @@ namespace g1plugin
 			m_unstarted = true;
 			const auto knobs = juce::StringArray::fromTokens(xml->getStringAttribute("knobs"), " ", {});
 			for(int k = 0; k < knobs.size() && k < 18; ++k)
-				_engine.mc().setAdc(g1::KnobMap::KnobAdc[static_cast<size_t>(k)], static_cast<uint8_t>(juce::jlimit(0, 255, knobs[k].getIntValue())));
+				writeKnob(_engine.mc(), static_cast<size_t>(k), static_cast<uint8_t>(juce::jlimit(0, 255, knobs[k].getIntValue())));
 			if(xml->hasAttribute("volume"))
-				_engine.mc().setAdc(g1::g_adcVolume, static_cast<uint8_t>(juce::jlimit(0, 255, xml->getIntAttribute("volume"))));
+				writeVolume(_engine.mc(), static_cast<uint8_t>(juce::jlimit(0, 255, xml->getIntAttribute("volume"))));
 			if(xml->hasAttribute("qspi"))
 				qspiFromString(_engine.mc(), xml->getStringAttribute("qspi"));
 			return true;
@@ -1203,14 +1233,14 @@ namespace g1plugin
 				continue;
 			m_lastParam[k] = v;
 			const auto adc = KnobParameter::toAdc(v);
-			mc.setAdc(g1::KnobMap::KnobAdc[k], adc);
+			writeKnob(mc, k, adc);
 			m_lastAdc[k] = adc;
 		}
 		if(const int v = m_volumeParam->get(); v != m_lastVolumeParam && !m_toHost[VolumeIndex].load(std::memory_order_acquire))
 		{
 			m_lastVolumeParam = v;
 			m_lastVolumeAdc = VolumeParameter::toAdc(v);
-			mc.setAdc(g1::g_adcVolume, static_cast<uint8_t>(m_lastVolumeAdc));
+			writeVolume(mc, static_cast<uint8_t>(m_lastVolumeAdc));
 		}
 	}
 
@@ -1419,7 +1449,7 @@ namespace g1plugin
 		std::lock_guard<std::mutex> lock(m_knobMutex);
 		for(size_t k = 0; k < 18; ++k)
 		{
-			const int adc = _mc.adc(g1::KnobMap::KnobAdc[k]);
+			const int adc = readKnob(_mc, k);
 			if(adc == m_lastAdc[k])
 				continue;
 			m_lastAdc[k] = adc;
@@ -1429,7 +1459,7 @@ namespace g1plugin
 			_edits.emplace_back(k, v);
 		}
 		// The volume's parameter moves by whole steps: a position that keeps the step tells nothing.
-		const int adc = _mc.adc(g1::g_adcVolume);
+		const int adc = readVolume(_mc);
 		if(adc == m_lastVolumeAdc)
 			return;
 		m_lastVolumeAdc = adc;

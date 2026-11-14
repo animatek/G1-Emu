@@ -1165,6 +1165,41 @@ namespace
 			std::printf("FAIL: the Micro's knobs do not come back with the project\n");
 			return 1;
 		}
+
+		// #91: the knobs are the host's parameters too. Knob 1-3 are QSPI entries 2, 1, 0 and the
+		// volume entry 3 (MicroPanel): the restored project shows in them, and a parameter the
+		// host moves reaches the knob the OS reads.
+		// The plugin adds knobs 1-18 first and the volume after them (Processor's constructor).
+		const auto params = b.plugin->getParameters();
+		auto* k1 = params.size() > 18 ? params[0] : nullptr;
+		auto* k3 = params.size() > 18 ? params[2] : nullptr;
+		auto* vol = params.size() > 18 ? params[18] : nullptr;
+		if(!k1 || !k3 || !vol)
+		{
+			std::printf("FAIL: the plugin has fewer than 19 parameters\n");
+			return 1;
+		}
+		const auto adcOf = [](const float _v) { return 1 + juce::roundToInt(_v * 253.0f); };
+		const int k1Adc = adcOf(k1->getValue()), k3Adc = adcOf(k3->getValue());
+		const int volume = juce::roundToInt(vol->getValue() * 127.0f);
+		std::printf("micro knobs: as parameters knob1 %d, knob3 %d (ADC), volume %d (want 51, 17, 49)\n", k1Adc, k3Adc, volume);
+		bool ok = k1Adc == 51 && k3Adc == 17 && volume == 49;
+		k1->setValueNotifyingHost(0.5f);
+		const int wantEntry2 = adcOf(k1->getValue());	// the parameter keeps one of the knob's 254 positions
+		drone(*b.plugin, 2.0);
+		juce::MessageManager::getInstance()->runDispatchLoopUntil(300);
+		juce::MemoryBlock moved;
+		b.plugin->getStateInformation(moved);
+		const auto movedXml = pluginXml(moved);
+		const auto entries = juce::StringArray::fromTokens(movedXml ? movedXml->getStringAttribute("qspi") : juce::String(), " ", {});
+		const int entry2 = entries.size() > 2 ? entries[2].getIntValue() : -1;
+		std::printf("micro knobs: knob1 set to 0.5 by the host: QSPI entry 2 = %d (want %d)\n", entry2, wantEntry2);
+		ok = ok && entry2 == wantEntry2 && wantEntry2 != 51;
+		if(!ok)
+		{
+			std::printf("FAIL: the Micro's knobs are not its parameters\n");
+			return 1;
+		}
 		return 0;
 	}
 
