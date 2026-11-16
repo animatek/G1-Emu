@@ -4,6 +4,7 @@
 #include "hostlog.h"
 
 #include "g1Lib/g1thread.h"
+#include "dsp56kBase/audioworkgroup.h"
 
 #include <algorithm>
 #include <string>
@@ -201,6 +202,8 @@ namespace g1app
 	{
 		auto& mc = m_engine.mc();
 		g1::keepThreadAtFullSpeed();
+		// macOS: joins the host's audio workgroup, as the DSP workers do (hostaudioworkgroup.h, #81, #85).
+		dsp56k::AudioWorkgroup::Member workgroup;
 		using clock = std::chrono::steady_clock;
 		auto lastStats = clock::now();
 		uint64_t lastCycles = mc.ucCycles();
@@ -243,6 +246,7 @@ namespace g1app
 
 		while(!m_quit.load(std::memory_order_acquire))
 		{
+			workgroup.update();
 			const auto t0 = clock::now();
 			const auto* restoreFlag = m_restoreFlag.load(std::memory_order_relaxed);
 			const bool restoring = restoreFlag && restoreFlag->load(std::memory_order_relaxed);

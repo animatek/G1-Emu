@@ -49,7 +49,7 @@ function(g1_add_plugin _target _name _code _fx _micro)
 		VST3_AUTO_MANIFEST FALSE
 		FORMATS ${formats})
 
-	target_sources(${_target} PRIVATE Processor.cpp Processor.h Editor.cpp Editor.h runner.cpp runner.h
+	target_sources(${_target} PRIVATE Processor.cpp Processor.h Editor.cpp Editor.h runner.cpp runner.h hostaudioworkgroup.cpp hostaudioworkgroup.h
 		../gui/Panel.cpp ../gui/Panel.h ../gui/MicroPanel.cpp ../gui/MicroPanel.h ../gui/SynthSettingsView.cpp ../gui/SynthSettingsView.h ../gui/Overlay.cpp ../gui/Overlay.h ../gui/LcdFont.h)
 	target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ../gui)
 	target_compile_definitions(${_target} PUBLIC
@@ -64,6 +64,9 @@ function(g1_add_plugin _target _name _code _fx _micro)
 	target_include_directories(${_target} PRIVATE ${G1_NME_INCLUDE})
 	target_link_libraries(${_target} PRIVATE g1Core g1Skin g1NmeData juce::juce_audio_utils
 		PUBLIC juce::juce_recommended_config_flags)
+	if(APPLE)
+		target_link_libraries(${_target} PRIVATE "-framework CoreAudio")	# hostaudioworkgroup.cpp
+	endif()
 
 	# The same plugin as CLAP (G1-Emu.clap), when the Gearmulator clone has clap-juce-extensions.
 	if(G1_HAVE_CLAP)

@@ -1,6 +1,7 @@
 #include "g1mc.h"
 
 #include "g1thread.h"
+#include "dsp56kBase/audioworkgroup.h"
 
 #include "mc68k/memoryOps.h"
 
@@ -112,8 +113,13 @@ namespace g1
 	{
 		std::array<uint64_t, g_maxDsps> seenBy{};
 		keepThreadAtFullSpeed();
+		// macOS: in the host's audio workgroup once the plugin has found it (app/plugin/hostaudioworkgroup.h,
+		// #81, #85), or Apple Silicon keeps this thread on the efficiency cores while the host looks idle.
+		// A no-op elsewhere, and while nothing set one (the standalone, the tools).
+		dsp56k::AudioWorkgroup::Member workgroup;
 		for(uint32_t dsp = _worker; ; dsp = dsp + m_workerCount < m_dspCount ? dsp + m_workerCount : _worker)
 		{
+			workgroup.update();	// one relaxed load unless the workgroup changed
 			auto& job = m_jobs[dsp];
 			auto& seen = seenBy[dsp];
 			std::chrono::steady_clock::time_point waitStart;
