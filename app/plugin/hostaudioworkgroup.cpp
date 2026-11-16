@@ -11,20 +11,7 @@
 
 namespace g1app
 {
-	HostAudioWorkgroup::HostAudioWorkgroup()
-	{
-#ifdef __APPLE__
-		timerCallback();	// the first instance's threads join from the start, not a second later
-		startTimer(1000);
-#endif
-	}
-
-	HostAudioWorkgroup::~HostAudioWorkgroup()
-	{
-		stopTimer();
-	}
-
-	void HostAudioWorkgroup::timerCallback()
+	void HostAudioWorkgroup::poll()
 	{
 #ifdef __APPLE__
 		if(__builtin_available(macOS 11.0, *))

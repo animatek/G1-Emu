@@ -1248,6 +1248,11 @@ namespace g1plugin
 	// names follow what the knobs are assigned to.
 	void Processor::timerCallback()
 	{
+		if(++m_workgroupTicks >= 20)	// about once a second at 20 Hz
+		{
+			m_workgroupTicks = 0;
+			m_hostAudioWorkgroup.poll();
+		}
 		bool renamed = false, changed = false;
 		std::vector<std::pair<size_t, float>> edits;
 		std::vector<std::pair<size_t, int>> octaveEdits;

@@ -17,7 +17,6 @@
 // when there is one, so the banks and the patches in the slots are the ones already there. It is
 // a copy: the standalone's file is never written from here.
 
-#include "hostaudioworkgroup.h"
 #include "hostclock.h"
 #include "hostgestures.h"
 #include "runner.h"
@@ -25,6 +24,7 @@
 #include "filelock.h"
 #include "jucemidi.h"
 #include "g1Lib/g1knobs.h"
+#include "hostaudioworkgroup.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -377,8 +377,10 @@ namespace g1plugin
 		std::atomic<int> m_hostProgram{-1};		// set by the host's program parameter, sent by processBlock
 		// The host's transport as MIDI clock for the G1 (issue #20); audio thread only.
 		g1app::HostClock m_hostClock;
-		// macOS: the emulation threads join the host's audio workgroup (#81, #85). No-op elsewhere.
+		// macOS: the emulation threads join the host's audio workgroup (#81, #85); polled about once a
+		// second from timerCallback. No-op elsewhere.
 		g1app::HostAudioWorkgroup m_hostAudioWorkgroup;
+		uint32_t m_workgroupTicks = 0;
 		g1app::HostClock::Block m_clockBlock;
 		void replayPrograms();
 		std::string programsToString() const;
