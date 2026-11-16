@@ -1,35 +1,43 @@
-# G1-Emu v0.1.0-alpha.30
+# G1-Emu v0.1.0-alpha.31
 
-**Fixes for the plugin in DAWs.** Dropouts in Nuendo and Cubase, and patches the synth rejected at
-random while uploading. Please use it with **Animatek NME 0.26** or later.
+**For Mac users, and the Micro's knobs in the DAW.** A fix for the dropouts on Apple Silicon that
+needs your testing, the Micro's knobs as automation, and smaller things you asked for. Please use it
+with **Animatek NME 0.27** or later.
 
-**No more dropouts in Nuendo and Cubase (#86).** Their ASIO-Guard, like REAPER's anticipative
-processing, runs a plugin ahead of real time: it rests, then asks for several blocks back to back.
-G1-Emu only ran a few milliseconds ahead, so from the second block of each burst the sound was not
-ready yet and came out as silence, however idle the CPU was: dropouts at 20-35 % load, never in the
-standalone. Now a block asked for early waits for the emulator instead. Timing and latency do not
-change, and with an ordinary sound card nothing waits. The log says when the host processes ahead of
-real time.
+**macOS: the plugin's threads join the DAW's audio work (#81, #85), please test.** On Apple Silicon,
+macOS puts the threads a plugin starts on its own onto the efficiency cores whenever the DAW looks
+idle, and the DAW then waits for audio that comes late: dropouts with the load well below 100 %, in
+the plugin and not in the standalone, worse on macOS 27. The emulator's threads now join the DAW's
+audio workgroup, the same fix Gearmulator made for its plugins. We could not try it on a Mac
+ourselves, so tell us whether the dropouts, and the uploads rejected with "Unfinished bubble"
+(code 6), are gone. Nothing changes on Windows and Linux.
 
-**Uploads are no longer rejected at random (#81).** A MIDI driver hands a long SysEx over in pieces,
-and the plugin's own background requests (reading the slots and the synth settings to keep them with
-the project) could land between two pieces of the editor's message: the synth then answered
-"Unfinished bubble error" (code 6) or "Error in synth" (code 3). They now wait until the editor's
-message is whole, in the plugin and in the standalone.
+**G1-Emu Micro: its knobs are automation parameters (#91).** Knob 1-3 and Master Volume are the
+Micro's own knobs, both ways: what you turn on the Micro's box reaches the DAW, and the DAW's
+automation turns the Micro's knobs. Knob 4-18 still show up but do nothing on a Micro, which has only
+three.
 
-**Smaller things.** The status bar's "CPU n cores" now works on Windows and macOS (it read 0). The
-emulator is a little lighter at rest, with the same output to the bit.
+**A new instance keeps the last output level (#88).** Set the level once (on the Settings card or from
+the DAW) and the next instance you add starts there instead of at 48 dB. A project's own level still
+wins.
+
+**A MIDI keyboard in the standalone (#84).** Settings has a **MIDI keyboard** row: pick your keyboard
+and it plays the G1 at once, next to NME, and it is opened again on the next start.
+
+**OCT SHIFT off looks off (#92).** With Octave Shift Disabled (the default since alpha.24) the OCT SHIFT
+keys are now drawn in grey, and hovering them says how to turn them on (right-click, or the Synth
+Settings page).
+
+**README:** the Micro Modular model needs the rack ROM too: the Micro's OS starts on the rack's boot ROM.
 
 Your ROM, banks and settings are kept.
 
 ## Please test
 
-- **Nuendo / Cubase with ASIO-Guard on:** play a project for a few minutes. Any dropouts? The log's
-  `dropout` lines now also say how many blocks waited.
-- **Sending patches from NME:** send several patches in a row, to the plugin and the standalone. Is
-  any rejected?
-- **G1-Emu FX (#85):** an audio track through AudioIn while you add modules to the patch. Does it
-  keep working? We could not reproduce the error on Windows.
+- **On a Mac with Apple Silicon (#81, #85):** play a project with G1-Emu for a few minutes and send
+  patches from NME. Any dropouts? Any upload rejected? G1-Emu FX on an audio track while you add
+  modules: does it keep working?
+- **G1-Emu Micro in your DAW:** do Knob 1-3 and Master Volume record and play back as automation?
 
 If something breaks up, stays silent or is rejected, attach the log (`%APPDATA%\Animatek\G1-Emu\g1-emu.log`
 on Windows, `~/.local/share/Animatek/G1-Emu/g1-emu.log` on Linux and macOS), with your CPU and DAW.
